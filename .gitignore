@@ -1,0 +1,40 @@
+# OS cruft
+.DS_Store
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+*.egg-info/
+.eggs/
+*.egg
+
+# Build output
+build/
+dist/
+
+# Databases and caches
+*.sqlite
+*.sqlite3
+*.db
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Node.js dependencies
+node_modules/
+.pnp*
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editors
+.idea/
+.vscode/
