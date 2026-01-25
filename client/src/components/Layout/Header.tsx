@@ -102,13 +102,13 @@ const Header = () => {
                         OneOffFeatures
                     </Link>
                     <Link
-                        to="/pipelines"
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname === '/pipelines'
+                        to="/pipelines/ingestion"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname.startsWith('/pipelines')
                             ? 'text-primary bg-surface-light'
                             : 'text-text-sub hover:text-text-main hover:bg-surface-light'
                             } ${!isAuthenticated ? 'opacity-50 pointer-events-none grayscale' : ''}`}
                     >
-                        <span className={`material-symbols-outlined ${location.pathname === '/pipelines' ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
+                        <span className={`material-symbols-outlined ${location.pathname.startsWith('/pipelines') ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
                             linear_scale
                         </span>
                         Pipelines

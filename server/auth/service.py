@@ -67,6 +67,7 @@ async def get_access_control(user_token: str) -> AccessResponse:
 
     has_chat = settings.GROUP_CHAT_ACCESS in group_ids
     has_dashboard = settings.GROUP_DASHBOARD_ACCESS in group_ids
+    has_pipelines_ingestion = settings.GROUP_PIPELINES_INGESTION_ACCESS in group_ids
 
     logger.info("--- Access Check for User: %s (%s) ---", user_name, user_id)
     logger.info("User Groups (%d): %s", len(group_ids), group_ids)
@@ -80,10 +81,16 @@ async def get_access_control(user_token: str) -> AccessResponse:
         settings.GROUP_DASHBOARD_ACCESS,
         "GRANTED" if has_dashboard else "DENIED",
     )
+    logger.info(
+        "Checking Pipelines Ingestion Access (Required: %s): %s",
+        settings.GROUP_PIPELINES_INGESTION_ACCESS,
+        "GRANTED" if has_pipelines_ingestion else "DENIED",
+    )
     logger.info("---------------------------------------------------")
 
     return AccessResponse(
         hasChatAccess=has_chat,
         hasDashboardAccess=has_dashboard,
+        hasPipelinesIngestionAccess=has_pipelines_ingestion,
         user=user_name,
     )

@@ -33,6 +33,10 @@ if not GRAPH_SCOPES:
 
 GROUP_CHAT_ACCESS = _get_required_env("GROUP_CHAT_ACCESS")
 GROUP_DASHBOARD_ACCESS = _get_required_env("GROUP_DASHBOARD_ACCESS")
+GROUP_PIPELINES_INGESTION_ACCESS = _get_required_env("GROUP_PIPELINES_INGESTION_ACCESS")
+
+# Data Ingestion settings
+DATA_INGESTION_PATH = Path(_get_required_env("DATA_INGESTION_PATH")).resolve()
 
 # CORS / app settings
 ALLOWED_ORIGINS = _split_csv(_get_required_env("ALLOWED_ORIGINS"))

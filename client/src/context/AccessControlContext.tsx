@@ -6,6 +6,7 @@ import { appConfig } from "../config/appConfig";
 interface AccessState {
     hasChatAccess: boolean;
     hasDashboardAccess: boolean;
+    hasPipelinesIngestionAccess: boolean;
     user: string;
     isLoading: boolean;
     error: string | null;
@@ -14,6 +15,7 @@ interface AccessState {
 const AccessControlContext = createContext<AccessState>({
     hasChatAccess: false,
     hasDashboardAccess: false,
+    hasPipelinesIngestionAccess: false,
     user: "",
     isLoading: true,
     error: null,
@@ -29,6 +31,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
     const [accessState, setAccessState] = useState<AccessState>({
         hasChatAccess: false,
         hasDashboardAccess: false,
+        hasPipelinesIngestionAccess: false,
         user: "",
         isLoading: false,
         error: null,
@@ -63,6 +66,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
                 setAccessState({
                     hasChatAccess: data.hasChatAccess,
                     hasDashboardAccess: data.hasDashboardAccess,
+                    hasPipelinesIngestionAccess: data.hasPipelinesIngestionAccess,
                     user: data.user,
                     isLoading: false,
                     error: null,

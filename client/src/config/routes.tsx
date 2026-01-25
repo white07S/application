@@ -3,6 +3,7 @@ import Home from '../pages/Home/Home';
 import MockPage from '../pages/MockPage';
 import Unauthorized from '../pages/Unauthorized';
 import DocsPage from '../pages/Docs/DocsPage';
+import Pipelines from '../pages/Pipelines/Pipelines';
 
 export interface RouteConfig {
     path: string;
@@ -61,10 +62,11 @@ export const routes: RouteConfig[] = [
         protected: true,
     },
     {
-        path: "/pipelines",
-        component: () => <MockPage title="Pipelines" />,
+        path: "/pipelines/ingestion",
+        component: Pipelines,
         name: "Pipelines",
         protected: true,
+        accessRight: "hasPipelinesIngestionAccess",
     },
     {
         path: "/unauthorized",
