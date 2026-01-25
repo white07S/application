@@ -43,12 +43,12 @@ const Header = () => {
                     </Link>
                     <Link
                         to="/docs"
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname === '/docs'
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname.startsWith('/docs')
                             ? 'text-primary bg-surface-light'
                             : 'text-text-sub hover:text-text-main hover:bg-surface-light'
                             }`}
                     >
-                        <span className={`material-symbols-outlined ${location.pathname === '/docs' ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
+                        <span className={`material-symbols-outlined ${location.pathname.startsWith('/docs') ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
                             article
                         </span>
                         Docs

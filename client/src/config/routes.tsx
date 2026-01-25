@@ -2,8 +2,7 @@ import React from 'react';
 import Home from '../pages/Home/Home';
 import MockPage from '../pages/MockPage';
 import Unauthorized from '../pages/Unauthorized';
-// Determine if we should lazy load real components or use mocks based on file existence/requirement
-// For now, implementing requested structure
+import DocsPage from '../pages/Docs/DocsPage';
 
 export interface RouteConfig {
     path: string;
@@ -24,9 +23,16 @@ export const routes: RouteConfig[] = [
     },
     {
         path: "/docs",
-        component: () => <MockPage title="Documentation" />,
+        component: DocsPage,
         name: "Docs",
-        protected: false, // Public as requested
+        protected: false,
+    },
+    {
+        path: "/docs/*",
+        component: DocsPage,
+        name: "Docs",
+        protected: false,
+        hideInNav: true,
     },
     {
         path: "/dashboard",

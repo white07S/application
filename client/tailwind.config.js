@@ -17,6 +17,13 @@ module.exports = {
         "text-sub": "#4b5563",
         "border-light": "#e5e7eb",
         "border-dark": "#d1d5db",
+        // Docs-specific semantic colors
+        "surface": "#ffffff",
+        "surface-alt": "#f9f9f7",
+        "text-primary": "#1c1c1c",
+        "text-secondary": "#4b5563",
+        "text-tertiary": "#9ca3af",
+        "border": "#e5e7eb",
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],

@@ -35,3 +35,90 @@
 .icon-filled {
   font-variation-settings: 'FILL' 1;
 }
+
+/* Docs-specific styles */
+.docs-content {
+  @apply text-text-secondary leading-relaxed;
+}
+
+.docs-content h1,
+.docs-content h2,
+.docs-content h3,
+.docs-content h4,
+.docs-content h5,
+.docs-content h6 {
+  @apply text-text-primary;
+}
+
+.docs-content a {
+  @apply text-primary hover:text-primary/80 underline underline-offset-2;
+}
+
+.docs-content code:not(pre code) {
+  @apply px-1.5 py-0.5 bg-surface-alt text-primary rounded text-sm font-mono;
+}
+
+.docs-content pre {
+  @apply my-4 rounded-lg overflow-hidden;
+}
+
+.docs-content blockquote {
+  @apply border-l-4 border-primary/50 pl-4 italic;
+}
+
+.docs-content table {
+  @apply w-full text-sm;
+}
+
+.docs-content th {
+  @apply text-left font-semibold px-4 py-3 bg-surface-alt border-b border-border;
+}
+
+.docs-content td {
+  @apply px-4 py-3 border-b border-border;
+}
+
+.docs-content img {
+  @apply rounded-lg max-w-full h-auto;
+}
+
+.docs-content hr {
+  @apply my-8 border-border;
+}
+
+/* Line clamp utility for search results */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* KaTeX overrides */
+.katex {
+  font-size: 1.1em;
+}
+
+.katex-display {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+}
+
+.katex-display > .katex {
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  text-align: center;
+}
+
+/* Mermaid diagram styles */
+.mermaid {
+  text-align: center;
+}
+
+/* Code block improvements */
+.docs-content pre {
+  margin: 0 !important;
+}

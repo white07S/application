@@ -1,0 +1,166 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-01-25T10:36:15.935Z",
+  "defaultDoc": "getting-started/introduction",
+  "categories": [
+    {
+      "id": "getting-started",
+      "label": "Getting Started",
+      "icon": "rocket_launch",
+      "position": 1,
+      "items": [
+        {
+          "slug": "getting-started/introduction",
+          "title": "Introduction",
+          "description": "Welcome to NFR Connect Documentation",
+          "sidebarPosition": 1,
+          "filePath": "getting-started/introduction.md"
+        },
+        {
+          "slug": "getting-started/installation",
+          "title": "Installation",
+          "description": "Set up your NFR Connect development environment",
+          "sidebarPosition": 2,
+          "filePath": "getting-started/installation.md"
+        },
+        {
+          "slug": "getting-started/authentication",
+          "title": "Authentication",
+          "description": "Configure Azure AD authentication for NFR Connect",
+          "sidebarPosition": 3,
+          "filePath": "getting-started/authentication.md"
+        }
+      ]
+    },
+    {
+      "id": "core-concepts",
+      "label": "Core Concepts",
+      "icon": "school",
+      "position": 2,
+      "items": [
+        {
+          "slug": "core-concepts/risk-taxonomy",
+          "title": "Risk Taxonomy",
+          "description": "Understanding the NFR Connect risk classification system",
+          "sidebarPosition": 1,
+          "filePath": "core-concepts/risk-taxonomy.md"
+        },
+        {
+          "slug": "core-concepts/event-types",
+          "title": "Event Types",
+          "description": "Classification of risk events in NFR Connect",
+          "sidebarPosition": 2,
+          "filePath": "core-concepts/event-types.md"
+        },
+        {
+          "slug": "core-concepts/impact-analysis",
+          "title": "Impact Analysis",
+          "description": "Assessing and quantifying risk impact",
+          "sidebarPosition": 3,
+          "filePath": "core-concepts/impact-analysis.md"
+        }
+      ]
+    },
+    {
+      "id": "api-reference",
+      "label": "Api Reference",
+      "icon": "api",
+      "position": 3,
+      "items": [
+        {
+          "slug": "api-reference/endpoints",
+          "title": "API Endpoints",
+          "description": "Complete NFR Connect API reference",
+          "sidebarPosition": 1,
+          "filePath": "api-reference/endpoints.md"
+        },
+        {
+          "slug": "api-reference/rate-limits",
+          "title": "Rate Limits",
+          "description": "API rate limiting and quotas",
+          "sidebarPosition": 2,
+          "filePath": "api-reference/rate-limits.md"
+        },
+        {
+          "slug": "api-reference/error-codes",
+          "title": "Error Codes",
+          "description": "API error codes and troubleshooting",
+          "sidebarPosition": 3,
+          "filePath": "api-reference/error-codes.md"
+        }
+      ]
+    },
+    {
+      "id": "models",
+      "label": "Models",
+      "icon": "psychology",
+      "position": 4,
+      "items": [
+        {
+          "slug": "models/risk-model-integration",
+          "title": "Risk Model Integration",
+          "description": "Integrate external risk calculation models with NFR Connect",
+          "sidebarPosition": 1,
+          "filePath": "models/risk-model-integration.md"
+        },
+        {
+          "slug": "models/stress-testing",
+          "title": "Stress Testing",
+          "description": "Configure and run stress test scenarios",
+          "sidebarPosition": 2,
+          "filePath": "models/stress-testing.md"
+        },
+        {
+          "slug": "models/scenario-analysis",
+          "title": "Scenario Analysis",
+          "description": "Multi-factor scenario analysis and what-if modeling",
+          "sidebarPosition": 3,
+          "filePath": "models/scenario-analysis.md"
+        },
+        {
+          "slug": "models/monte-carlo-sims",
+          "title": "Monte Carlo Simulations",
+          "description": "Probabilistic risk modeling with Monte Carlo methods",
+          "sidebarPosition": 4,
+          "filePath": "models/monte-carlo-sims.md"
+        }
+      ]
+    },
+    {
+      "id": "test-pages",
+      "label": "Test Pages",
+      "icon": "science",
+      "position": 99,
+      "items": [
+        {
+          "slug": "test-pages/markdown-test",
+          "title": "Markdown Test",
+          "description": "Testing markdown rendering capabilities",
+          "sidebarPosition": 1,
+          "filePath": "test-pages/markdown-test.md"
+        },
+        {
+          "slug": "test-pages/math-katex-test",
+          "title": "Math Rendering Test",
+          "description": "Testing KaTeX math rendering capabilities",
+          "sidebarPosition": 2,
+          "filePath": "test-pages/math-katex-test.md"
+        },
+        {
+          "slug": "test-pages/mermaid-test",
+          "title": "Mermaid Diagrams Test",
+          "description": "Testing Mermaid diagram rendering",
+          "sidebarPosition": 3,
+          "filePath": "test-pages/mermaid-test.md"
+        },
+        {
+          "slug": "test-pages/code-highlight-test",
+          "title": "Code Highlighting Test",
+          "description": "Testing code syntax highlighting",
+          "sidebarPosition": 4,
+          "filePath": "test-pages/code-highlight-test.md"
+        }
+      ]
+    }
+  ]
+}
