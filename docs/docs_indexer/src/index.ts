@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 
 // Paths
 const DOCS_SOURCE = path.resolve(__dirname, '../../');
-const SERVER_DOCS_DIR = path.resolve(__dirname, '../../../server/docs_content');
+const DOCS_OUTPUT_DIR = path.resolve(DOCS_SOURCE, 'docs_content');
 
 async function main() {
   console.log('🔍 Starting documentation indexer...\n');
@@ -21,7 +21,7 @@ async function main() {
   // Find all markdown files
   const files = await glob('**/*.{md,mdx}', {
     cwd: DOCS_SOURCE,
-    ignore: ['**/node_modules/**', '**/docs_indexer/**']
+    ignore: ['**/node_modules/**', '**/docs_indexer/**', '**/docs_content/**']
   });
 
   console.log(`📄 Found ${files.length} documentation files:\n`);
@@ -55,15 +55,15 @@ async function main() {
   console.log(`🔎 Built search index: ${searchIndex.documents.length} entries`);
 
   // Ensure output directory exists
-  await fs.ensureDir(SERVER_DOCS_DIR);
+  await fs.ensureDir(DOCS_OUTPUT_DIR);
 
   // Write routes file
-  const routesPath = path.join(SERVER_DOCS_DIR, 'docs_routes.json');
+  const routesPath = path.join(DOCS_OUTPUT_DIR, 'docs_routes.json');
   await fs.writeJson(routesPath, routes, { spaces: 2 });
   console.log(`\n📝 Written: ${routesPath}`);
 
   // Write search index
-  const searchPath = path.join(SERVER_DOCS_DIR, 'search_index.json');
+  const searchPath = path.join(DOCS_OUTPUT_DIR, 'search_index.json');
   await fs.writeJson(searchPath, searchIndex, { spaces: 2 });
   console.log(`📝 Written: ${searchPath}`);
 
@@ -72,7 +72,7 @@ async function main() {
 
   for (const file of files) {
     const srcPath = path.join(DOCS_SOURCE, file);
-    const destPath = path.join(SERVER_DOCS_DIR, file);
+    const destPath = path.join(DOCS_OUTPUT_DIR, file);
 
     // Read and preprocess content
     let content = await fs.readFile(srcPath, 'utf-8');
@@ -87,7 +87,7 @@ async function main() {
   console.log('\n✨ Documentation indexing complete!\n');
   console.log('Summary:');
   console.log(`   📁 Source: ${DOCS_SOURCE}`);
-  console.log(`   📁 Output: ${SERVER_DOCS_DIR}`);
+  console.log(`   📁 Output: ${DOCS_OUTPUT_DIR}`);
   console.log(`   📄 Files: ${files.length}`);
   console.log(`   🗂️  Categories: ${routes.categories.length}`);
   console.log(`   🔍 Search entries: ${searchIndex.documents.length}`);
