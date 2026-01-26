@@ -54,7 +54,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
 
                 const response = await fetch(`${appConfig.api.baseUrl}/api/auth/access`, {
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        "X-MS-TOKEN-AAD": token,
                     },
                 });
 

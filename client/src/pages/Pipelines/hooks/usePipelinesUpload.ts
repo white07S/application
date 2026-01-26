@@ -34,7 +34,7 @@ export const usePipelinesUpload = () => {
 
             const response = await fetch(`${appConfig.api.baseUrl}/api/pipelines/history?limit=10`, {
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    "X-MS-TOKEN-AAD": token,
                 },
             });
 
@@ -182,7 +182,7 @@ export const usePipelinesUpload = () => {
             const response = await fetch(`${appConfig.api.baseUrl}/api/pipelines/ingest`, {
                 method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    "X-MS-TOKEN-AAD": token,
                 },
                 body: formData,
             });
