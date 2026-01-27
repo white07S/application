@@ -84,7 +84,14 @@ const Pipelines: React.FC = () => {
                                         <p className="text-sm font-medium text-red-800">
                                             Upload Error
                                         </p>
-                                        <p className="text-xs text-red-600 mt-1">{error}</p>
+                                        <p className="text-xs text-red-600 mt-1">{error.message}</p>
+                                        {error.details && error.details.length > 0 && (
+                                            <ul className="text-xs text-red-600 mt-2 list-disc list-inside space-y-1">
+                                                {error.details.map((detail, idx) => (
+                                                    <li key={idx}>{detail}</li>
+                                                ))}
+                                            </ul>
+                                        )}
                                     </div>
                                 </div>
                             </div>

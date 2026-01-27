@@ -9,6 +9,7 @@ import {
     IngestionRecord,
     IngestionHistoryResponse,
     VALIDATION_RULES,
+    UploadError,
 } from '../types';
 
 const initialState: UploadState = {
@@ -17,6 +18,11 @@ const initialState: UploadState = {
     isUploading: false,
     error: null,
     success: null,
+};
+
+const toUploadError = (message?: string | null, details?: string[]): UploadError | null => {
+    if (!message) return null;
+    return { message, ...(details && details.length ? { details } : {}) };
 };
 
 export const usePipelinesUpload = () => {
@@ -107,7 +113,7 @@ export const usePipelinesUpload = () => {
                 ...prev,
                 files: allFiles,
                 validations,
-                error,
+                error: toUploadError(error),
                 success: null,
             };
         });
@@ -121,7 +127,7 @@ export const usePipelinesUpload = () => {
                 ...prev,
                 files: newFiles,
                 validations,
-                error: newFiles.length === 0 ? null : error,
+                error: newFiles.length === 0 ? null : toUploadError(error),
                 success: null,
             };
         });
@@ -141,7 +147,7 @@ export const usePipelinesUpload = () => {
             return {
                 ...prev,
                 validations,
-                error,
+                error: toUploadError(error),
                 success: null,
             };
         });
@@ -154,14 +160,14 @@ export const usePipelinesUpload = () => {
         if (state.files.length !== rules.fileCount) {
             setState(prev => ({
                 ...prev,
-                error: `Please select exactly ${rules.fileCount} file(s) for ${dataType}.`,
+                error: toUploadError(`Please select exactly ${rules.fileCount} file(s) for ${dataType}.`),
             }));
             return;
         }
 
         const { isValid, error } = validateAllFiles(state.files, dataType);
         if (!isValid) {
-            setState(prev => ({ ...prev, error }));
+            setState(prev => ({ ...prev, error: toUploadError(error) }));
             return;
         }
 
@@ -189,7 +195,27 @@ export const usePipelinesUpload = () => {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || 'Upload failed');
+                const detail = errorData?.detail;
+                if (typeof detail === 'string') {
+                    throw new Error(detail);
+                }
+                if (detail && typeof detail === 'object') {
+                    const detailMessages = Array.isArray(detail.errors)
+                        ? detail.errors.map((err: any) => {
+                            const parts = [
+                                err?.fileName,
+                                err?.column && err?.column !== 'FILE' ? err.column : null,
+                                err?.code,
+                            ].filter(Boolean);
+                            const prefix = parts.length ? `[${parts.join(' / ')}] ` : '';
+                            return `${prefix}${err?.message || 'Validation error'}`;
+                        })
+                        : undefined;
+                    const message = detail.message || 'Upload failed';
+                    const error = toUploadError(message, detailMessages);
+                    throw Object.assign(new Error(message), { uploadError: error });
+                }
+                throw new Error('Upload failed');
             }
 
             const data: IngestResponse = await response.json();
@@ -208,10 +234,10 @@ export const usePipelinesUpload = () => {
             setState(prev => ({
                 ...prev,
                 isUploading: false,
-                error: err.message || 'Upload failed',
+                error: err.uploadError || toUploadError(err.message || 'Upload failed'),
             }));
         }
-    }, [state.files, dataType, getApiAccessToken, validateAllFiles]);
+    }, [state.files, dataType, getApiAccessToken, validateAllFiles, fetchHistory]);
 
     return {
         ...state,

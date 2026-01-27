@@ -26,11 +26,16 @@ export interface IngestResponse {
     dataType: string;
 }
 
+export interface UploadError {
+    message: string;
+    details?: string[];
+}
+
 export interface UploadState {
     files: File[];
     validations: FileValidation[];
     isUploading: boolean;
-    error: string | null;
+    error: UploadError | null;
     success: IngestResponse | null;
 }
 

@@ -1,5 +1,6 @@
-import os
 import json
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Tuple
@@ -8,6 +9,7 @@ from fastapi import HTTPException, UploadFile
 
 from server import settings
 from server.logging_config import get_logger
+from . import validation as validator
 
 logger = get_logger(name=__name__)
 
@@ -139,77 +141,100 @@ async def validate_files(
     return True, ""
 
 
-async def save_files(
-    files: List[UploadFile], data_type: DataType, ingestion_id: str, user: str
-) -> int:
-    """
-    Save uploaded files to the appropriate directory.
-    Returns number of files saved.
-    """
-    # Ensure directory exists
-    target_dir = settings.DATA_INGESTION_PATH / data_type
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    saved_count = 0
-
-    for file in files:
-        if not file.filename:
-            continue
-
-        # Create filename with ingestion ID prefix
-        new_filename = f"{ingestion_id}_{file.filename}"
-        file_path = target_dir / new_filename
-
-        # Read and save file content
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-
-        logger.info(
-            "File saved: %s (size: %d bytes) by user: %s",
-            file_path,
-            len(content),
-            user,
-        )
-        saved_count += 1
-
-    return saved_count
-
-
 async def ingest_files(
     files: List[UploadFile], data_type: DataType, user: str
 ) -> dict:
     """
     Main ingestion function that validates and saves files.
     """
-    # Validate files
+    # Validate basic file count and extension/size
     is_valid, error_message = await validate_files(files, data_type)
     if not is_valid:
         logger.warning("Validation failed for %s: %s", data_type, error_message)
         raise HTTPException(status_code=400, detail=error_message)
 
-    # Generate ingestion ID
     ingestion_id = generate_ingestion_id()
     logger.info("Generated ingestion ID: %s for data type: %s", ingestion_id, data_type)
 
-    # Calculate total size and collect file names before saving
-    file_names = []
+    # Read files into memory once for processing and persistence
+    file_payloads: List[Tuple[str, bytes]] = []
+    file_names: List[str] = []
     total_size = 0
     for file in files:
-        if file.filename:
-            file_names.append(file.filename)
         content = await file.read()
+        await file.seek(0)
+        name = file.filename or "uploaded.xlsx"
+        file_payloads.append((name, content))
+        file_names.append(name)
         total_size += len(content)
-        await file.seek(0)  # Reset for save_files
 
-    # Save files
-    saved_count = await save_files(files, data_type, ingestion_id, user)
+    # Validate and split into parquet tables
+    try:
+        if data_type == "controls":
+            validation_result, parquet_tables = validator.validate_and_split_controls(
+                file_payloads[0][1], file_payloads[0][0]
+            )
+        elif data_type == "issues":
+            validation_result, parquet_tables = validator.validate_and_split_issues(file_payloads)
+        elif data_type == "actions":
+            validation_result, parquet_tables = validator.validate_and_split_actions(
+                file_payloads[0][1], file_payloads[0][0]
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported data type: {data_type}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error during %s validation", data_type)
+        raise HTTPException(status_code=500, detail="Internal validation error") from exc
+
+    if not validation_result.is_valid or parquet_tables is None:
+        detail = {
+            "message": f"Validation failed for {data_type}",
+            "errors": [err.to_dict() for err in validation_result.errors],
+            "warnings": [warn.to_dict() for warn in validation_result.warnings],
+        }
+        logger.warning("Validation errors for %s: %s", data_type, detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+    # Persist raw uploads and parquet outputs atomically
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f"{ingestion_id}_", dir=settings.DATA_INGESTION_PATH))
+    raw_dir = tmp_dir / "raw"
+    parquet_dir = tmp_dir / "parquet"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    parquet_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Save raw uploads with ingestion prefix
+        for name, content in file_payloads:
+            raw_path = raw_dir / f"{ingestion_id}_{name}"
+            raw_path.write_bytes(content)
+
+        # Save parquet tables
+        for table_name, df in parquet_tables.items():
+            output_path = parquet_dir / f"{table_name}.parquet"
+            df.to_parquet(output_path, index=False, engine="pyarrow")
+
+        final_dir = settings.DATA_INGESTION_PATH / data_type / ingestion_id
+        final_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(tmp_dir), final_dir)
+        logger.info(
+            "Ingestion %s completed. Stored raw + parquet at %s",
+            ingestion_id,
+            final_dir,
+        )
+    except Exception as exc:
+        logger.exception("Failed to persist ingestion %s output", ingestion_id)
+        # Attempt cleanup of staging directory on failure
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="Failed to store processed data") from exc
 
     # Save history record
     history_record = {
         "ingestionId": ingestion_id,
         "dataType": data_type,
-        "filesCount": saved_count,
+        "filesCount": len(file_payloads),
         "fileNames": file_names,
         "totalSizeBytes": total_size,
         "uploadedBy": user,
@@ -222,7 +247,7 @@ async def ingest_files(
     return {
         "success": True,
         "ingestionId": ingestion_id,
-        "message": f"Successfully ingested {saved_count} file(s)",
-        "filesUploaded": saved_count,
+        "message": f"Successfully ingested {len(file_payloads)} file(s) and generated parquet outputs",
+        "filesUploaded": len(file_payloads),
         "dataType": data_type,
     }

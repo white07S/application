@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-msal
-python-jose
-httpx
-python-multipart
-requests
-python-dotenv
