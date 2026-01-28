@@ -106,10 +106,10 @@ async def upload_files(
     Processing is done separately (either automatically or via process endpoint).
 
     - **data_type**: Type of data being uploaded (issues, controls, or actions)
-    - **files**: Excel files to upload
-        - issues: exactly 4 xlsx files
-        - controls: exactly 1 xlsx file
-        - actions: exactly 1 xlsx file
+    - **files**: CSV files to upload
+        - issues: exactly 4 csv files
+        - controls: exactly 1 csv file
+        - actions: exactly 1 csv file
     """
     # Check authentication and authorization
     access = await get_access_control(token)
@@ -139,10 +139,10 @@ async def upload_files(
     min_size_bytes = 5 * 1024  # 5KB minimum
 
     for file in files:
-        if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        if not file.filename or not file.filename.lower().endswith(".csv"):
             raise HTTPException(
                 status_code=400,
-                detail=f"File '{file.filename}' must be an .xlsx file"
+                detail=f"File '{file.filename}' must be a .csv file"
             )
 
         # Check size
@@ -376,7 +376,7 @@ async def get_ingestion_history(
 
         if source_path.exists():
             for file_path in source_path.iterdir():
-                if file_path.is_file() and file_path.suffix.lower() == ".xlsx":
+                if file_path.is_file() and file_path.suffix.lower() == ".csv":
                     file_names.append(file_path.name)
                     total_size_bytes += file_path.stat().st_size
 

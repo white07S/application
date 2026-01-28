@@ -141,7 +141,7 @@ const Pipelines: React.FC = () => {
                                     <span className="font-medium text-text-main">Issues</span>
                                 </div>
                                 <ul className="text-text-sub space-y-1">
-                                    <li>4 Excel files (.xlsx)</li>
+                                    <li>4 CSV files (.csv)</li>
                                     <li>Minimum 5KB each</li>
                                 </ul>
                             </div>
@@ -151,7 +151,7 @@ const Pipelines: React.FC = () => {
                                     <span className="font-medium text-text-main">Controls</span>
                                 </div>
                                 <ul className="text-text-sub space-y-1">
-                                    <li>1 Excel file (.xlsx)</li>
+                                    <li>1 CSV file (.csv)</li>
                                     <li>Minimum 5KB</li>
                                 </ul>
                             </div>
@@ -161,7 +161,7 @@ const Pipelines: React.FC = () => {
                                     <span className="font-medium text-text-main">Actions</span>
                                 </div>
                                 <ul className="text-text-sub space-y-1">
-                                    <li>1 Excel file (.xlsx)</li>
+                                    <li>1 CSV file (.csv)</li>
                                     <li>Minimum 5KB</li>
                                 </ul>
                             </div>

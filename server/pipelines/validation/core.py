@@ -2,13 +2,13 @@
 
 This module provides schema validation and table splitting for uploaded data.
 Schemas are loaded from JSON config files in pipeline_config/{data_source}/schema.json.
+Initial parsing is handled by initial_validation.py modules in each data source folder.
 """
+import importlib
 import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from io import BytesIO
-from itertools import zip_longest
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -181,73 +181,86 @@ def normalize_column_name(name: Any) -> str:
 
 
 # ============================================================================
-# Excel reader
+# Initial Validation Module Loader
 # ============================================================================
 
 
-def read_excel_with_enterprise_format(
-    file_bytes: bytes, file_name: str, sheet_name: int | str = 0
-) -> Tuple[Optional[pd.DataFrame], ValidationResult]:
-    """Validate enterprise Excel format and return dataframe."""
+def load_initial_validator(data_source: str):
+    """Load the initial validator module for a data source.
+
+    Each data source has an initial_validation.py module that handles
+    CSV parsing and preprocessing before schema validation.
+
+    Args:
+        data_source: One of 'controls', 'issues', 'actions'
+
+    Returns:
+        The InitialValidator class from the module
+
+    Raises:
+        ImportError: If the module cannot be loaded
+    """
+    module_path = f"server.pipelines.pipeline_config.{data_source}.initial_validation"
+    try:
+        module = importlib.import_module(module_path)
+        return module.get_validator()
+    except ImportError as e:
+        logger.error("Failed to load initial_validation module for {}: {}", data_source, e)
+        raise ImportError(f"No initial_validation.py found for {data_source}") from e
+
+
+def run_initial_validation(
+    data_source: str, file_paths: List[Path]
+) -> Tuple[Optional[pd.DataFrame], ValidationResult, Dict[str, Any]]:
+    """Run initial validation using the data source's validator module.
+
+    This function:
+    1. Loads the appropriate initial_validation.py module
+    2. Validates file requirements (count, size, extension)
+    3. Parses CSV files into a DataFrame
+    4. Returns the DataFrame ready for schema validation
+
+    Args:
+        data_source: One of 'controls', 'issues', 'actions'
+        file_paths: List of uploaded file paths
+
+    Returns:
+        Tuple of (DataFrame or None, ValidationResult, metadata dict)
+    """
     result = ValidationResult(is_valid=True)
+    metadata: Dict[str, Any] = {}
 
     try:
-        raw_df = pd.read_excel(
-            BytesIO(file_bytes),
-            sheet_name=sheet_name,
-            header=None,
-            engine="openpyxl",
+        validator = load_initial_validator(data_source)
+        df, metadata = validator.parse_and_convert(file_paths)
+
+        result.row_count = len(df)
+        result.column_count = len(df.columns)
+
+        logger.info(
+            "Initial validation successful for {}: {} rows, {} columns",
+            data_source, result.row_count, result.column_count
         )
-    except Exception as exc:
+
+        return df, result, metadata
+
+    except Exception as e:
+        # Handle InitialValidationError or any other exception
+        error_type = getattr(e, 'error_type', 'PARSE_ERROR')
+        details = getattr(e, 'details', {})
+
         result.is_valid = False
         result.errors.append(
             ValidationError(
                 column="FILE",
-                error_type="READ_ERROR",
-                message=f"Failed to read Excel file: {exc}",
-                file_name=file_name,
+                error_type=error_type,
+                message=str(e),
+                file_name=details.get('file'),
             )
         )
-        return None, result
 
-    if raw_df.shape[0] < 11 or raw_df.shape[1] < 2:
-        result.is_valid = False
-        result.errors.append(
-            ValidationError(
-                column="FILE",
-                error_type="FORMAT_ERROR",
-                message=f"File too small for enterprise format (rows: {raw_df.shape[0]}, cols: {raw_df.shape[1]}).",
-                file_name=file_name,
-            )
-        )
-        return None, result
-
-    timestamp_cell = raw_df.iloc[9, 1]
-    if not isinstance(timestamp_cell, str) or "timestamp" not in timestamp_cell.lower():
-        result.is_valid = False
-        result.errors.append(
-            ValidationError(
-                column="FILE",
-                error_type="FORMAT_ERROR",
-                message=f"Row 10 Column B should contain 'Timestamp:'; found: {timestamp_cell}",
-                file_name=file_name,
-            )
-        )
-        return None, result
-
-    df_no_first_col = raw_df.iloc[:, 1:]
-    raw_headers = df_no_first_col.iloc[10].tolist()
-    normalized_headers = [normalize_column_name(h) for h in raw_headers]
-
-    data_df = df_no_first_col.iloc[11:].copy()
-    data_df.columns = normalized_headers
-    data_df.reset_index(drop=True, inplace=True)
-    data_df = data_df.loc[:, data_df.columns != '']
-
-    result.row_count = len(data_df)
-    result.column_count = len(data_df.columns)
-
-    return data_df, result
+        logger.error("Initial validation failed for {}: {}", data_source, e)
+        return None, result, metadata
 
 
 # ============================================================================
@@ -547,116 +560,85 @@ def split_tables_by_config(
 # ============================================================================
 
 
-def validate_and_split_controls(
-    file_bytes: bytes, file_name: str
+def validate_and_split(
+    data_source: str, file_paths: List[Path]
 ) -> Tuple[ValidationResult, Optional[Dict[str, pd.DataFrame]]]:
-    """Validate and split controls data."""
-    df, format_result = read_excel_with_enterprise_format(file_bytes, file_name)
-    if not format_result.is_valid or df is None:
-        return format_result, None
+    """Validate and split data for any data source.
 
-    schema = SchemaLoader.get_columns_schema("controls")
+    This is the unified entry point for validation that:
+    1. Runs initial validation (CSV parsing via initial_validation.py)
+    2. Runs schema validation (against schema.json)
+    3. Splits into multiple tables (per schema.json config)
+
+    Args:
+        data_source: One of 'controls', 'issues', 'actions'
+        file_paths: List of uploaded CSV file paths
+
+    Returns:
+        Tuple of (ValidationResult, dict of table DataFrames or None)
+    """
+    # Step 1: Initial validation - parse CSV files
+    df, initial_result, metadata = run_initial_validation(data_source, file_paths)
+
+    if not initial_result.is_valid or df is None:
+        return initial_result, None
+
+    # Step 2: Schema validation on the parsed DataFrame
+    schema = SchemaLoader.get_columns_schema(data_source)
     schema_result = validate_dataframe(df, schema)
+
+    # Preserve row/column counts from initial validation
+    schema_result.row_count = initial_result.row_count
+    schema_result.column_count = initial_result.column_count
+
     if not schema_result.is_valid:
         return schema_result, None
 
-    tables, split_errors = split_tables_by_config(df, "controls")
+    # Step 3: Split into multiple tables
+    tables, split_errors = split_tables_by_config(df, data_source)
     schema_result.errors.extend(split_errors)
     schema_result.is_valid = schema_result.is_valid and len(split_errors) == 0
+
     return schema_result, tables if schema_result.is_valid else None
+
+
+def validate_and_split_controls(
+    file_paths: List[Path]
+) -> Tuple[ValidationResult, Optional[Dict[str, pd.DataFrame]]]:
+    """Validate and split controls data.
+
+    Args:
+        file_paths: List of uploaded CSV file paths
+
+    Returns:
+        Tuple of (ValidationResult, dict of table DataFrames or None)
+    """
+    return validate_and_split("controls", file_paths)
 
 
 def validate_and_split_issues(
-    files: List[Tuple[str, bytes]]
+    file_paths: List[Path]
 ) -> Tuple[ValidationResult, Optional[Dict[str, pd.DataFrame]]]:
-    """Validate and split issues data from multiple files."""
-    combined_errors: List[ValidationError] = []
-    issue_dfs: Dict[str, pd.DataFrame] = {}
+    """Validate and split issues data from multiple files.
 
-    schema_config = SchemaLoader.get_schema("issues")
-    required_types = set(schema_config.get("required_issue_types", []))
+    Args:
+        file_paths: List of uploaded CSV file paths (4 files expected)
 
-    for file_name, content in files:
-        df, fmt_result = read_excel_with_enterprise_format(content, file_name)
-        if not fmt_result.is_valid or df is None:
-            combined_errors.extend(fmt_result.errors)
-            continue
-
-        issue_types = [val for val in df.get("issue_type", pd.Series()).dropna().unique()]
-        if len(issue_types) != 1:
-            combined_errors.append(
-                ValidationError(
-                    column="issue_type",
-                    error_type="INVALID_VALUE",
-                    message=f"Expected exactly one issue_type per file, found: {issue_types or ['<missing>']}",
-                    file_name=file_name,
-                )
-            )
-            continue
-
-        issue_type_value = issue_types[0]
-        if issue_type_value not in required_types:
-            combined_errors.append(
-                ValidationError(
-                    column="issue_type",
-                    error_type="INVALID_VALUE",
-                    message=f"Unexpected issue_type '{issue_type_value}' in file {file_name}",
-                    file_name=file_name,
-                )
-            )
-            continue
-
-        if issue_type_value in issue_dfs:
-            combined_errors.append(
-                ValidationError(
-                    column="issue_type",
-                    error_type="DUPLICATE_TYPE",
-                    message=f"Duplicate file for issue_type '{issue_type_value}'",
-                    file_name=file_name,
-                )
-            )
-            continue
-        issue_dfs[issue_type_value] = df
-
-    missing_types = required_types - set(issue_dfs.keys())
-    for missing in sorted(missing_types):
-        combined_errors.append(
-            ValidationError(
-                column="issue_type",
-                error_type="MISSING_FILE",
-                message=f"Missing file for issue_type '{missing}'",
-            )
-        )
-
-    if combined_errors:
-        return ValidationResult(is_valid=False, errors=combined_errors), None
-
-    combined_df = pd.concat(issue_dfs.values(), ignore_index=True)
-    schema = SchemaLoader.get_columns_schema("issues")
-    schema_result = validate_dataframe(combined_df, schema)
-    if not schema_result.is_valid:
-        return schema_result, None
-
-    tables, split_errors = split_tables_by_config(combined_df, "issues")
-    schema_result.errors.extend(split_errors)
-    schema_result.is_valid = schema_result.is_valid and len(split_errors) == 0
-    return schema_result, tables if schema_result.is_valid else None
+    Returns:
+        Tuple of (ValidationResult, dict of table DataFrames or None)
+    """
+    return validate_and_split("issues", file_paths)
 
 
 def validate_and_split_actions(
-    file_bytes: bytes, file_name: str
+    file_paths: List[Path]
 ) -> Tuple[ValidationResult, Optional[Dict[str, pd.DataFrame]]]:
-    """Validate and split actions data."""
-    df, format_result = read_excel_with_enterprise_format(file_bytes, file_name)
-    if not format_result.is_valid or df is None:
-        return format_result, None
+    """Validate and split actions data.
 
-    schema = SchemaLoader.get_columns_schema("actions")
-    schema_result = validate_dataframe(df, schema)
-    if not schema_result.is_valid:
-        return schema_result, None
+    Args:
+        file_paths: List of uploaded CSV file paths
 
-    tables, split_errors = split_tables_by_config(df, "actions")
-    schema_result.errors.extend(split_errors)
-    schema_result.is_valid = schema_result.is_valid and len(split_errors) == 0
-    return schema_result, tables if schema_result.is_valid else None
+    Returns:
+        Tuple of (ValidationResult, dict of table DataFrames or None)
+    """
+    return validate_and_split("actions", file_paths)

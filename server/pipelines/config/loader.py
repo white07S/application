@@ -1,7 +1,9 @@
 """Configuration loader for pipeline configs.
 
 Loads and validates JSON configuration files for each dataset type.
+Validation config is now loaded from initial_validation.py modules.
 """
+import importlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,12 +42,15 @@ class GraphConfig:
 
 @dataclass
 class ValidationConfig:
-    """Configuration for file validation."""
+    """Configuration for file validation.
+
+    Note: This is now loaded from initial_validation.py modules instead of validation.json.
+    The fields are populated by reading class attributes from the InitialValidator class.
+    """
     file_count: int
     file_patterns: List[str]
     min_file_size_kb: int
     allowed_extensions: List[str]
-    enterprise_format: Dict[str, Any]
     required_issue_types: Optional[List[str]] = None
 
 
@@ -117,13 +122,8 @@ class ConfigLoader:
         graph_data = json.loads(graph_file.read_text())
         graph_config = cls._parse_graph_config(graph_data)
 
-        # Load validation config
-        validation_file = config_path / "validation.json"
-        if not validation_file.exists():
-            raise FileNotFoundError(f"validation.json not found for {data_source}")
-
-        validation_data = json.loads(validation_file.read_text())
-        validation_config = cls._parse_validation_config(validation_data)
+        # Load validation config from initial_validation.py module
+        validation_config = cls._load_validation_from_module(data_source)
 
         # Load models config
         models_file = config_path / "models.json"
@@ -183,16 +183,47 @@ class ConfigLoader:
         )
 
     @classmethod
-    def _parse_validation_config(cls, data: Dict[str, Any]) -> ValidationConfig:
-        """Parse validation configuration from JSON data."""
-        return ValidationConfig(
-            file_count=data["file_count"],
-            file_patterns=data.get("file_patterns", []),
-            min_file_size_kb=data.get("min_file_size_kb", 5),
-            allowed_extensions=data.get("allowed_extensions", [".xlsx"]),
-            enterprise_format=data.get("enterprise_format", {}),
-            required_issue_types=data.get("required_issue_types"),
-        )
+    def _load_validation_from_module(cls, data_source: str) -> ValidationConfig:
+        """Load validation configuration from initial_validation.py module.
+
+        Args:
+            data_source: One of 'controls', 'issues', 'actions'
+
+        Returns:
+            ValidationConfig with settings from the InitialValidator class
+        """
+        module_path = f"server.pipelines.pipeline_config.{data_source}.initial_validation"
+        try:
+            module = importlib.import_module(module_path)
+            validator = module.get_validator()
+
+            # Extract configuration from validator class attributes
+            return ValidationConfig(
+                file_count=validator.expected_file_count,
+                file_patterns=validator.expected_file_patterns,
+                min_file_size_kb=validator.min_file_size_kb,
+                allowed_extensions=validator.allowed_extensions,
+                required_issue_types=getattr(validator, 'required_issue_types', None),
+            )
+        except ImportError as e:
+            logger.warning(
+                "Could not load initial_validation.py for {}, using defaults: {}",
+                data_source, e
+            )
+            # Fallback to defaults
+            defaults = {
+                "controls": {"file_count": 1},
+                "issues": {"file_count": 4, "required_issue_types": ["Audit", "Regulatory", "Restricted Regulatory", "Self-Identified"]},
+                "actions": {"file_count": 1},
+            }
+            ds_defaults = defaults.get(data_source, {"file_count": 1})
+            return ValidationConfig(
+                file_count=ds_defaults.get("file_count", 1),
+                file_patterns=[f"{data_source}*.csv"],
+                min_file_size_kb=5,
+                allowed_extensions=[".csv"],
+                required_issue_types=ds_defaults.get("required_issue_types"),
+            )
 
     @classmethod
     def _parse_models_config(cls, data: Dict[str, Any]) -> ModelsConfig:

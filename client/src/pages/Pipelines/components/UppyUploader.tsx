@@ -555,7 +555,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                 <p className="text-sm font-medium text-text-main">Drag & drop or click to upload</p>
                 <p className="text-xs text-text-sub mt-1">
                     {remainingFiles > 0
-                        ? `Select ${remainingFiles} more .xlsx file${remainingFiles > 1 ? 's' : ''} (min ${rules.minSizeKb}KB each)`
+                        ? `Select ${remainingFiles} more .csv file${remainingFiles > 1 ? 's' : ''} (min ${rules.minSizeKb}KB each)`
                         : 'All required files selected'}
                 </p>
                 <p className="text-[10px] text-text-sub mt-2 flex items-center gap-1">

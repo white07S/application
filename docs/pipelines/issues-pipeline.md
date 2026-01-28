@@ -12,15 +12,15 @@ The Issues pipeline processes issue data from four distinct source files represe
 
 ```mermaid
 flowchart TB
-    subgraph Input["Input: 4 Excel Files"]
-        AUDIT[issues_audit.xlsx]
-        REG[issues_regulatory.xlsx]
-        RRESTREG[issues_restricted_regulatory.xlsx]
-        SELF[issues_self_identified.xlsx]
+    subgraph Input["Input: 4 CSV Files"]
+        AUDIT[issues_audit.csv]
+        REG[issues_regulatory.csv]
+        RRESTREG[issues_restricted_regulatory.csv]
+        SELF[issues_self_identified.csv]
     end
 
     subgraph Validation["Validation & Merging"]
-        PARSE[Parse Enterprise Format]
+        PARSE[Parse CSV Format]
         VALIDATE[Schema Validation]
         MERGE[Merge by issue_type]
         SPLIT[Table Splitting]
@@ -59,20 +59,20 @@ flowchart TB
 | Requirement | Value |
 |-------------|-------|
 | **File Count** | 4 (all required) |
-| **Format** | Excel (.xlsx) |
+| **Format** | CSV (.csv) |
 | **Minimum Size** | 5 KB per file |
 | **Maximum Size** | 10 GB total |
-| **Header Row** | Row 10 (Enterprise format) |
-| **Data Start Row** | Row 11 |
+| **Header Row** | Row 1 |
+| **Data Start Row** | Row 2 |
 
 ### Required Files
 
 | File | Issue Type | Description |
 |------|------------|-------------|
-| `issues_audit.xlsx` | Audit | Internal and external audit findings |
-| `issues_regulatory.xlsx` | Regulatory | Regulatory examination findings |
-| `issues_restricted_regulatory.xlsx` | Restricted Regulatory | Confidential regulatory matters |
-| `issues_self_identified.xlsx` | Self-Identified | Self-identified control deficiencies |
+| `issues_audit.csv` | Audit | Internal and external audit findings |
+| `issues_regulatory.csv` | Regulatory | Regulatory examination findings |
+| `issues_restricted_regulatory.csv` | Restricted Regulatory | Confidential regulatory matters |
+| `issues_self_identified.csv` | Self-Identified | Self-identified control deficiencies |
 
 :::warning All Files Required
 All four issue files must be uploaded together in a single batch. The pipeline will fail validation if any file is missing.
@@ -568,10 +568,10 @@ Each source file must contain only issues matching its expected type:
 
 | File | Expected `issue_type` |
 |------|----------------------|
-| `issues_audit.xlsx` | `Audit` |
-| `issues_regulatory.xlsx` | `Regulatory` |
-| `issues_restricted_regulatory.xlsx` | `Restricted Regulatory` |
-| `issues_self_identified.xlsx` | `Self-Identified` |
+| `issues_audit.csv` | `Audit` |
+| `issues_regulatory.csv` | `Regulatory` |
+| `issues_restricted_regulatory.csv` | `Restricted Regulatory` |
+| `issues_self_identified.csv` | `Self-Identified` |
 
 ---
 
@@ -582,18 +582,18 @@ Each source file must contain only issues matching its expected type:
 ```mermaid
 sequenceDiagram
     participant Upload as Upload API
-    participant Parser as Enterprise Parser
+    participant Parser as CSV Parser
     participant Validator as Schema Validator
     participant Merger as File Merger
     participant Splitter as Table Splitter
 
-    Upload->>Parser: 4 Excel files
+    Upload->>Parser: 4 CSV files
 
     par Process each file
-        Parser->>Parser: Parse issues_audit.xlsx
-        Parser->>Parser: Parse issues_regulatory.xlsx
-        Parser->>Parser: Parse issues_restricted_regulatory.xlsx
-        Parser->>Parser: Parse issues_self_identified.xlsx
+        Parser->>Parser: Parse issues_audit.csv
+        Parser->>Parser: Parse issues_regulatory.csv
+        Parser->>Parser: Parse issues_restricted_regulatory.csv
+        Parser->>Parser: Parse issues_self_identified.csv
     end
 
     Parser->>Validator: 4 DataFrames
@@ -751,10 +751,10 @@ stateDiagram-v2
 curl -X POST /api/v2/pipelines/upload \
   -H "X-MS-TOKEN-AAD: <token>" \
   -F "data_type=issues" \
-  -F "files=@issues_audit.xlsx" \
-  -F "files=@issues_regulatory.xlsx" \
-  -F "files=@issues_restricted_regulatory.xlsx" \
-  -F "files=@issues_self_identified.xlsx"
+  -F "files=@issues_audit.csv" \
+  -F "files=@issues_regulatory.csv" \
+  -F "files=@issues_restricted_regulatory.csv" \
+  -F "files=@issues_self_identified.csv"
 ```
 
 ### 2. Check Validation Status

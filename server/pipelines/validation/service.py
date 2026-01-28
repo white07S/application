@@ -17,9 +17,7 @@ from server.logging_config import get_logger
 from .. import storage
 from .core import (
     ValidationResult,
-    validate_and_split_controls,
-    validate_and_split_issues,
-    validate_and_split_actions,
+    validate_and_split,
 )
 
 logger = get_logger(name=__name__)
@@ -152,73 +150,27 @@ def run_validation(
     db.flush()
 
     try:
-        # Read file contents
-        file_contents = []
-        for file_path in batch_path.iterdir():
-            if file_path.suffix.lower() == ".xlsx":
-                file_contents.append((file_path.name, file_path.read_bytes()))
-
-        # Validate file count
-        expected_count = _get_expected_file_count(db, data_type)
-
-        if len(file_contents) != expected_count:
-            error_msg = f"Expected {expected_count} file(s) for {data_type}, got {len(file_contents)}"
-            logger.warning("Validation failed for batch {}: {}", batch.upload_id, error_msg)
-
-            complete_validation_run(
-                db, run,
-                success=False,
-                error_details=json.dumps({"error": "FILE_COUNT_MISMATCH", "message": error_msg}),
-            )
-
-            batch.status = "failed"
-            batch.error_code = "FILE_COUNT_MISMATCH"
-            batch.error_details = error_msg
-            batch.completed_at = datetime.utcnow()
-            db.flush()
-
-            return False, None, run
-
-        # Run validation based on data type
-        validation_result: ValidationResult
-        parquet_tables: Optional[Dict[str, pd.DataFrame]] = None
+        # Collect file paths (CSV files)
+        file_paths = [
+            file_path for file_path in batch_path.iterdir()
+            if file_path.suffix.lower() == ".csv"
+        ]
 
         logger.info(
             "Running validation for batch {}: data_type={}, file_count={}, files={}",
-            batch.upload_id, data_type, len(file_contents), [f[0] for f in file_contents]
+            batch.upload_id, data_type, len(file_paths), [f.name for f in file_paths]
         )
 
-        if data_type == "controls":
-            file_name, file_bytes = file_contents[0]
-            logger.info("Validating controls file: {} ({} bytes)", file_name, len(file_bytes))
-            validation_result, parquet_tables = validate_and_split_controls(file_bytes, file_name)
-            logger.info(
-                "Controls validation complete: is_valid=%s, errors=%s",
-                validation_result.is_valid,
-                [e.to_dict() for e in validation_result.errors[:10]]
-            )
+        # Run unified validation (initial parsing + schema validation + table splitting)
+        # File count validation is handled by the initial_validation.py module
+        validation_result, parquet_tables = validate_and_split(data_type, file_paths)
 
-        elif data_type == "issues":
-            logger.info("Validating issues files: {}", [f[0] for f in file_contents])
-            validation_result, parquet_tables = validate_and_split_issues(file_contents)
-            logger.info(
-                "Issues validation complete: is_valid=%s, errors=%s",
-                validation_result.is_valid,
-                [e.to_dict() for e in validation_result.errors[:10]]
-            )
-
-        elif data_type == "actions":
-            file_name, file_bytes = file_contents[0]
-            logger.info("Validating actions file: {} ({} bytes)", file_name, len(file_bytes))
-            validation_result, parquet_tables = validate_and_split_actions(file_bytes, file_name)
-            logger.info(
-                "Actions validation complete: is_valid=%s, errors=%s",
-                validation_result.is_valid,
-                [e.to_dict() for e in validation_result.errors[:10]]
-            )
-
-        else:
-            raise ValueError(f"Unknown data type: {data_type}")
+        logger.info(
+            "{} validation complete: is_valid={}, errors={}",
+            data_type.capitalize(),
+            validation_result.is_valid,
+            [e.to_dict() for e in validation_result.errors[:10]]
+        )
 
         # Log validation result details
         logger.info(

@@ -237,10 +237,10 @@ async def tus_create(
         )
 
     # Validate file extension
-    if not filename.lower().endswith(".xlsx"):
+    if not filename.lower().endswith(".csv"):
         raise HTTPException(
             status_code=400,
-            detail=f"File '{filename}' must be an .xlsx file",
+            detail=f"File '{filename}' must be a .csv file",
         )
 
     # Parse expected_files

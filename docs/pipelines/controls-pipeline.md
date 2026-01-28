@@ -6,18 +6,18 @@ description: Detailed documentation for the Controls data ingestion pipeline
 
 # Controls Pipeline
 
-The Controls pipeline processes Key Performance Controls Inventory (KPCI) data. A single Excel file is validated, split into 8 normalized parquet tables, and loaded into the data layer with full versioning support.
+The Controls pipeline processes Key Performance Controls Inventory (KPCI) data. A single CSV file is validated, split into 8 normalized parquet tables, and loaded into the data layer with full versioning support.
 
 ## Overview
 
 ```mermaid
 flowchart TB
-    subgraph Input["Input: 1 Excel File"]
-        EXCEL[KPCI Controls Export<br/>~50 columns]
+    subgraph Input["Input: 1 CSV File"]
+        CSV[KPCI Controls Export<br/>~50 columns]
     end
 
     subgraph Validation["Validation & Splitting"]
-        PARSE[Parse Enterprise Format]
+        PARSE[Parse CSV]
         VALIDATE[Schema Validation]
         SPLIT[Table Splitting]
     end
@@ -33,7 +33,7 @@ flowchart TB
         LOC[controls_related_locations]
     end
 
-    EXCEL --> PARSE
+    CSV --> PARSE
     PARSE --> VALIDATE
     VALIDATE --> SPLIT
     SPLIT --> MAIN
@@ -51,19 +51,11 @@ flowchart TB
 | Requirement | Value |
 |-------------|-------|
 | **File Count** | 1 |
-| **Format** | Excel (.xlsx) |
+| **Format** | CSV (.csv) |
 | **Minimum Size** | 5 KB |
 | **Maximum Size** | 10 GB |
-| **Header Row** | Row 10 (Enterprise format) |
-| **Data Start Row** | Row 11 |
-
-:::info Enterprise Format
-The Controls export follows enterprise format where:
-- Rows 1-9 contain metadata headers
-- Row 10, Column B contains the export timestamp
-- Column headers start at Row 10, Column B
-- Data begins at Row 11
-:::
+| **Header Row** | Row 1 |
+| **Data Start Row** | Row 2 |
 
 ---
 
@@ -353,7 +345,7 @@ Risk theme assignments for each control. One-to-many relationship with `controls
 | `risk_theme_number` | string | Yes | Risk theme taxonomy number (e.g., "1.1", "1.2", "3.1") |
 
 :::info Multi-Value Splitting
-Risk themes are extracted from a comma-separated column in the source Excel file. Each theme is looked up against the NFR Taxonomy to populate taxonomy numbers.
+Risk themes are extracted from a pipe-separated column in the source CSV file. Each theme is looked up against the NFR Taxonomy to populate taxonomy numbers.
 
 **Example Source Value:** `"Technology Production Stability, Cyber and Information Security"`
 
@@ -426,9 +418,9 @@ Related functions for cross-functional controls. One-to-many relationship with `
 | `related_function_name` | string | Yes | No | Related function name |
 
 :::info Paired List Splitting
-Related functions and locations are stored as paired comma-separated lists in the source Excel:
-- `related_function_ids`: "F001, F002, F003"
-- `related_function_names`: "Finance, Operations, Risk"
+Related functions and locations are stored as paired pipe-separated lists in the source CSV:
+- `related_function_ids`: "F001|F002|F003"
+- `related_function_names`: "Finance|Operations|Risk"
 
 The pipeline pairs these by position index to create individual records.
 :::
@@ -490,14 +482,14 @@ Fields with restricted values are validated against their allowed value lists. I
 ```mermaid
 sequenceDiagram
     participant Upload as Upload API
-    participant Parser as Enterprise Parser
+    participant Parser as CSV Parser
     participant Validator as Schema Validator
     participant Splitter as Table Splitter
     participant Storage as Parquet Storage
 
-    Upload->>Parser: Excel file
-    Parser->>Parser: Extract header metadata
-    Parser->>Parser: Parse data from row 11
+    Upload->>Parser: CSV file
+    Parser->>Parser: Parse headers from row 1
+    Parser->>Parser: Parse data from row 2
     Parser->>Validator: DataFrame
     Validator->>Validator: Check column types
     Validator->>Validator: Validate patterns
@@ -634,7 +626,7 @@ After model execution, results are stored in `dl_controls_model_output`:
 curl -X POST /api/v2/pipelines/upload \
   -H "X-MS-TOKEN-AAD: <token>" \
   -F "data_type=controls" \
-  -F "files=@KPCI_Controls_Export.xlsx"
+  -F "files=@KPCI_Controls_Export.csv"
 ```
 
 ### 2. Check Validation Status

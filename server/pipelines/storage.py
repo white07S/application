@@ -65,20 +65,20 @@ def init_storage_directories() -> None:
         logger.info("Ensured storage directory exists: {}", directory)
 
 def cleanup_upload_batch(upload_id: str, data_type: str) -> None:
-    """Clean up files for a completed upload batch.
+    """Clean up preprocessed files for a completed upload batch.
 
-    Removes both uploads and preprocessed directories for the batch.
+    Only removes the preprocessed (parquet) directory for the batch.
+    The original uploads directory is preserved as the source of truth.
     Called after successful database ingestion.
     """
     import shutil
 
-    upload_path = get_upload_batch_path(upload_id, data_type)
+    # Only clean up preprocessed parquet files, keep original uploads
     preprocessed_path = get_preprocessed_batch_path(upload_id, data_type)
 
-    for path in [upload_path, preprocessed_path]:
-        if path.exists():
-            shutil.rmtree(path)
-            logger.info("Cleaned up directory: {}", path)
+    if preprocessed_path.exists():
+        shutil.rmtree(preprocessed_path)
+        logger.info("Cleaned up preprocessed directory: {}", preprocessed_path)
 
 def get_lock_file_path() -> Path:
     """Get path to the processing lock file."""

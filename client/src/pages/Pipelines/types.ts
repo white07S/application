@@ -7,9 +7,9 @@ export interface ValidationRules {
 }
 
 export const VALIDATION_RULES: Record<DataType, ValidationRules> = {
-    issues: { fileCount: 4, minSizeKb: 5, allowedExtensions: ['.xlsx'] },
-    controls: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.xlsx'] },
-    actions: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.xlsx'] },
+    issues: { fileCount: 4, minSizeKb: 5, allowedExtensions: ['.csv'] },
+    controls: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.csv'] },
+    actions: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.csv'] },
 };
 
 export interface SidebarCategory {
