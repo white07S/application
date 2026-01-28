@@ -1,0 +1,14 @@
+{
+  "nfr_taxonomy": {
+    "enabled": false
+  },
+  "enrichment": {
+    "enabled": false
+  },
+  "embeddings": {
+    "enabled": false
+  },
+  "nested_embeddings": {
+    "enabled": false
+  }
+}

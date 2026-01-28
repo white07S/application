@@ -4,6 +4,7 @@ import MockPage from '../pages/MockPage';
 import Unauthorized from '../pages/Unauthorized';
 import DocsPage from '../pages/Docs/DocsPage';
 import Pipelines from '../pages/Pipelines/Pipelines';
+import Processing from '../pages/Pipelines/Processing';
 
 export interface RouteConfig {
     path: string;
@@ -67,6 +68,14 @@ export const routes: RouteConfig[] = [
         name: "Pipelines",
         protected: true,
         accessRight: "hasPipelinesIngestionAccess",
+    },
+    {
+        path: "/pipelines/processing",
+        component: Processing,
+        name: "Processing",
+        protected: true,
+        accessRight: "hasPipelinesIngestionAccess",
+        hideInNav: true,
     },
     {
         path: "/unauthorized",

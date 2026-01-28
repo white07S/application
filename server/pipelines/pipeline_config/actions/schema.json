@@ -1,0 +1,54 @@
+{
+  "data_source": "actions",
+  "primary_key": "composite_key",
+  "primary_key_pattern": null,
+  "columns": {
+    "issue_id": {"type": "string", "required": true, "nullable": false, "pattern": "^ISSUE-\\d{10}$"},
+    "action_id": {"type": "string", "required": true, "nullable": false, "pattern": "^ACTION-\\d{10}$"},
+    "composite_key": {"type": "string", "required": true, "nullable": false},
+    "action_title": {"type": "string", "required": true, "nullable": false},
+    "action_description": {"type": "string", "required": true, "nullable": true},
+    "issue_type": {"type": "string", "required": true, "nullable": false, "allowed_values": ["Audit", "Self-Identified", "Regulatory", "Restricted Regulatory"]},
+    "action_status": {"type": "string", "required": true, "nullable": false, "allowed_values": ["Open", "In Progress", "Completed", "Closed", "Cancelled", "On Hold"]},
+    "action_rag_status": {"type": "string", "required": true, "nullable": false, "allowed_values": ["Red", "Amber", "Green"]},
+    "action_rag_justification": {"type": "string", "required": true, "nullable": true},
+    "current_due_date": {"type": "datetime", "required": true, "nullable": false},
+    "original_due_date": {"type": "datetime", "required": true, "nullable": false},
+    "extension_date": {"type": "datetime", "required": false, "nullable": true},
+    "extension_count": {"type": "int", "required": false, "nullable": true},
+    "closed_date": {"type": "datetime", "required": false, "nullable": true},
+    "reopening_date": {"type": "datetime", "required": false, "nullable": true},
+    "action_owner": {"type": "string", "required": true, "nullable": false},
+    "action_owner_gpn": {"type": "string", "required": true, "nullable": false, "pattern": "^\\d{8}$"},
+    "action_administrator": {"type": "string", "required": true, "nullable": false},
+    "action_administrator_gpn": {"type": "string", "required": true, "nullable": false, "pattern": "^\\d{8}$"},
+    "minimum_standards_for_closure_met": {"type": "bool", "required": false, "nullable": true},
+    "reopen_flag": {"type": "bool", "required": false, "nullable": true},
+    "program_id": {"type": "string", "required": false, "nullable": true},
+    "ubs_change_program": {"type": "bool", "required": false, "nullable": true},
+    "created_on": {"type": "datetime", "required": true, "nullable": false},
+    "last_modified_on": {"type": "datetime", "required": true, "nullable": false}
+  },
+  "table_splits": {
+    "issues_actions": [
+      "issue_id", "action_id", "composite_key", "action_title", "action_description",
+      "issue_type", "action_status", "action_rag_status", "action_rag_justification",
+      "current_due_date", "original_due_date", "extension_date", "extension_count",
+      "closed_date", "reopening_date", "action_owner", "action_owner_gpn",
+      "action_administrator", "action_administrator_gpn",
+      "minimum_standards_for_closure_met", "reopen_action", "reopen_flag",
+      "program_id", "ubs_change_program", "created_by", "created_by_gpn",
+      "originator", "originator_gpn", "created_on", "last_modified_on"
+    ],
+    "issues_actions_hierarchy": [
+      "issue_id", "action_id", "composite_key",
+      "group_id", "group_name", "division_id", "division_name",
+      "unit_id", "unit_name", "area_id", "area_name", "sector_id", "sector_name",
+      "segment_id", "segment_name", "function_id", "function_name",
+      "l0_location_id", "l0_location_name", "region_id", "region_name",
+      "sub_region_id", "sub_region_name", "country_id", "country_name",
+      "company_id", "company_short_name"
+    ]
+  },
+  "multi_value_splits": {}
+}

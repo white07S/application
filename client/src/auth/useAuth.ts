@@ -39,10 +39,11 @@ export const useAuth = () => {
       throw new Error("No active account");
     }
 
+    // Check if MSAL is ready for token acquisition
     if (inProgress !== InteractionStatus.None) {
-      // In redirect flow, we might want to wait or just return if interaction is in progress, 
-      // but for now throwing error is consistent with previous logic.
-      throw new Error("Interaction in progress");
+      // MSAL is still initializing (e.g., handling redirect after page refresh)
+      // Return null so caller can handle gracefully
+      return null;
     }
 
     try {

@@ -19,7 +19,7 @@ const sidebarSections: SidebarSection[] = [
         title: 'Categories',
         items: [
             { id: 'ingestion', label: 'Ingestion', icon: 'input', path: '/pipelines/ingestion' },
-            { id: 'processing', label: 'Processing', icon: 'settings_suggest', disabled: true },
+            { id: 'processing', label: 'Processing', icon: 'settings_suggest', path: '/pipelines/processing' },
             { id: 'exports', label: 'Exports', icon: 'output', disabled: true },
             { id: 'archival', label: 'Archival', icon: 'archive', disabled: true },
         ],

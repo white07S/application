@@ -1,0 +1,61 @@
+{
+  "data_source": "controls",
+  "batch_size": 10,
+  "max_retries": 3,
+  "primary_key": "control_id",
+  "last_modified_column": "last_modified_on",
+  "main_table": "dl_controls",
+  "child_tables": [
+    "dl_controls_hierarchy",
+    "dl_controls_metadata",
+    "dl_controls_category_flags",
+    "dl_controls_sox_assertions",
+    "dl_controls_risk_themes",
+    "dl_controls_related_functions",
+    "dl_controls_related_locations"
+  ],
+  "parquet_mapping": {
+    "dl_controls": "controls_main.parquet",
+    "dl_controls_hierarchy": "controls_hierarchy.parquet",
+    "dl_controls_metadata": "controls_metadata.parquet",
+    "dl_controls_category_flags": "controls_category_flags.parquet",
+    "dl_controls_sox_assertions": "controls_sox_assertions.parquet",
+    "dl_controls_risk_themes": "controls_risk_theme.parquet",
+    "dl_controls_related_functions": "controls_related_functions.parquet",
+    "dl_controls_related_locations": "controls_related_locations.parquet"
+  },
+  "stages": [
+    {
+      "name": "insert_main",
+      "type": "ingestion",
+      "target": "main"
+    },
+    {
+      "name": "insert_children",
+      "type": "ingestion",
+      "target": "children",
+      "depends_on": ["insert_main"]
+    },
+    {
+      "name": "nfr_taxonomy",
+      "type": "model",
+      "depends_on": ["insert_children"]
+    },
+    {
+      "name": "enrichment",
+      "type": "model",
+      "depends_on": ["nfr_taxonomy"]
+    },
+    {
+      "name": "embeddings",
+      "type": "model",
+      "depends_on": ["enrichment"]
+    },
+    {
+      "name": "nested_embeddings",
+      "type": "model",
+      "source": "enrichment_output",
+      "depends_on": ["enrichment"]
+    }
+  ]
+}

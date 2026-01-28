@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-01-25T13:03:37.858Z",
+  "generatedAt": "2026-01-28T09:16:34.870Z",
   "defaultDoc": "getting-started/introduction",
   "categories": [
     {
@@ -123,6 +123,42 @@
           "description": "Probabilistic risk modeling with Monte Carlo methods",
           "sidebarPosition": 4,
           "filePath": "models/monte-carlo-sims.md"
+        }
+      ]
+    },
+    {
+      "id": "pipelines",
+      "label": "Pipelines",
+      "icon": "folder",
+      "position": 50,
+      "items": [
+        {
+          "slug": "pipelines/overview",
+          "title": "Pipeline Overview",
+          "description": "Complete guide to the NFR Connect data ingestion and processing pipeline",
+          "sidebarPosition": 1,
+          "filePath": "pipelines/overview.md"
+        },
+        {
+          "slug": "pipelines/controls-pipeline",
+          "title": "Controls Pipeline",
+          "description": "Detailed documentation for the Controls data ingestion pipeline",
+          "sidebarPosition": 2,
+          "filePath": "pipelines/controls-pipeline.md"
+        },
+        {
+          "slug": "pipelines/issues-pipeline",
+          "title": "Issues Pipeline",
+          "description": "Detailed documentation for the Issues data ingestion pipeline",
+          "sidebarPosition": 3,
+          "filePath": "pipelines/issues-pipeline.md"
+        },
+        {
+          "slug": "pipelines/actions-pipeline",
+          "title": "Actions Pipeline",
+          "description": "Detailed documentation for the Actions data ingestion pipeline",
+          "sidebarPosition": 4,
+          "filePath": "pipelines/actions-pipeline.md"
         }
       ]
     },

@@ -27,6 +27,8 @@ dist/
 .coverage
 htmlcov/
 coverage/
+# Auth/token caches
+.msal_token_cache.bin
 
 # Node.js dependencies
 node_modules/

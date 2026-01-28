@@ -35,7 +35,7 @@ const RouteGuard = ({ route, children }: { route: RouteConfig, children: React.R
 };
 
 const AppRoutes = () => {
-  const { isLoading } = useAccessControl();
+  const { isLoading, error } = useAccessControl();
   const isAuthenticated = useIsAuthenticated();
 
   if (isAuthenticated && isLoading) {
@@ -45,6 +45,25 @@ const AppRoutes = () => {
         <div className="flex items-center gap-2 text-primary">
           <span className="material-symbols-outlined animate-spin">refresh</span>
           <span className="text-sm font-medium">Verifying access...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if access check failed
+  if (isAuthenticated && error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-light">
+        <div className="text-center p-6">
+          <span className="material-symbols-outlined text-4xl text-red-500 mb-2">error</span>
+          <p className="text-sm font-medium text-red-600">Access verification failed</p>
+          <p className="text-xs text-gray-500 mt-1">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-primary text-white rounded text-sm hover:bg-primary-dark"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

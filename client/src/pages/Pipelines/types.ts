@@ -1,11 +1,5 @@
 export type DataType = 'issues' | 'controls' | 'actions';
 
-export interface FileValidation {
-    file: File;
-    isValid: boolean;
-    error?: string;
-}
-
 export interface ValidationRules {
     fileCount: number;
     minSizeKb: number;
@@ -17,27 +11,6 @@ export const VALIDATION_RULES: Record<DataType, ValidationRules> = {
     controls: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.xlsx'] },
     actions: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.xlsx'] },
 };
-
-export interface IngestResponse {
-    success: boolean;
-    ingestionId: string;
-    message: string;
-    filesUploaded: number;
-    dataType: string;
-}
-
-export interface UploadError {
-    message: string;
-    details?: string[];
-}
-
-export interface UploadState {
-    files: File[];
-    validations: FileValidation[];
-    isUploading: boolean;
-    error: UploadError | null;
-    success: IngestResponse | null;
-}
 
 export interface SidebarCategory {
     id: string;

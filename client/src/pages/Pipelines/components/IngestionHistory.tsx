@@ -53,6 +53,52 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
         }
     };
 
+    const getStatusIcon = (status: string): string => {
+        switch (status) {
+            case 'validated':
+            case 'success':
+                return 'check_circle';
+            case 'failed':
+                return 'error';
+            case 'validating':
+            case 'processing':
+                return 'pending';
+            case 'pending':
+                return 'schedule';
+            default:
+                return 'help';
+        }
+    };
+
+    const getStatusColor = (status: string): string => {
+        switch (status) {
+            case 'validated':
+            case 'success':
+                return 'text-green-600 bg-green-50 border-green-200';
+            case 'failed':
+                return 'text-red-600 bg-red-50 border-red-200';
+            case 'validating':
+            case 'processing':
+                return 'text-blue-600 bg-blue-50 border-blue-200';
+            case 'pending':
+                return 'text-gray-500 bg-gray-50 border-gray-200';
+            default:
+                return 'text-gray-500 bg-gray-50 border-gray-200';
+        }
+    };
+
+    const getStatusLabel = (status: string): string => {
+        switch (status) {
+            case 'validated': return 'Validated';
+            case 'success': return 'Success';
+            case 'failed': return 'Failed';
+            case 'validating': return 'Validating';
+            case 'processing': return 'Processing';
+            case 'pending': return 'Pending';
+            default: return status;
+        }
+    };
+
     return (
         <div className="bg-white border border-border-light rounded shadow-card">
             {/* Header */}
@@ -92,14 +138,15 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
                         >
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-start gap-3 min-w-0">
-                                    <div className={`w-8 h-8 rounded flex items-center justify-center border ${getDataTypeColor(record.dataType)}`}>
-                                        <span className="material-symbols-outlined text-[16px]">
-                                            {getDataTypeIcon(record.dataType)}
+                                    {/* Status Icon */}
+                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border ${getStatusColor(record.status)}`}>
+                                        <span className={`material-symbols-outlined text-[18px] ${record.status === 'validating' || record.status === 'processing' ? 'animate-spin' : ''}`}>
+                                            {getStatusIcon(record.status)}
                                         </span>
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2 mb-0.5">
-                                            <span className="font-mono text-xs font-medium text-primary">
+                                            <span className={`font-mono text-xs font-medium ${record.status === 'failed' ? 'text-red-600' : 'text-primary'}`}>
                                                 {record.ingestionId}
                                             </span>
                                             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium uppercase border ${getDataTypeColor(record.dataType)}`}>
@@ -113,6 +160,13 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
                                             {record.fileNames.slice(0, 2).join(', ')}
                                             {record.fileNames.length > 2 && ` +${record.fileNames.length - 2} more`}
                                         </div>
+                                        {/* Status text for failed uploads */}
+                                        {record.status === 'failed' && (
+                                            <div className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-[12px]">warning</span>
+                                                Validation failed
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="text-right shrink-0">

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-01-25T13:03:37.859Z",
+  "generatedAt": "2026-01-28T09:16:34.871Z",
   "documents": [
     {
       "id": "doc-0",
@@ -500,6 +500,1645 @@
     {
       "id": "doc-45",
       "headingId": "",
+      "title": "Pipeline Overview",
+      "content": "Complete guide to the NFR Connect data ingestion and processing pipeline",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview",
+      "level": 0,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-46",
+      "headingId": "pipeline-overview",
+      "title": "Pipeline Overview",
+      "content": "The NFR Connect Pipeline is a comprehensive data ingestion and processing system designed for enterprise-scale non-financial risk data. It provides resumable uploads, schema validation, delta-based ingestion, and ML-powered enrichment.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#pipeline-overview",
+      "level": 1,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-47",
+      "headingId": "architecture-overview",
+      "title": "Architecture Overview",
+      "content": "flowchart TB subgraph Upload[\"1. Upload Layer\"] TUS[TUS Resumable Upload] BATCH[Batch Tracking] end subgraph Validation[\"2. Validation Layer\"] SCHEMA[Schema Validation] SPLIT[Table Splitting] PARQUET[Parquet Generation] end subgraph Ingestion[\"3. Ingestion Layer\"] DELTA[Delta Detection] VERSION[Versioning] DL[Data Layer Tables] end subgraph Models[\"4. Model Execution\"] NFR[NFR Taxonomy Classification] ENRICH[Enrichment] EMBED[Embeddings] end TUS --> BATCH BATCH --> SCHEMA SCHEMA --> SPLIT SPLIT...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#architecture-overview",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-48",
+      "headingId": "supported-data-sources",
+      "title": "Supported Data Sources",
+      "content": "Data Source Files Required Description Controls 1 Excel file Key Performance Controls Inventory (KPCI) data Issues 4 Excel files Audit, Regulatory, Restricted Regulatory, Self-Identified issues Actions 1 Excel file Issue action plans and remediation tracking",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#supported-data-sources",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-49",
+      "headingId": "stage-1-file-upload",
+      "title": "Stage 1: File Upload",
+      "content": "Files are uploaded using the TUS (resumable upload) protocol, ensuring reliability for large files and unstable network connections. Key Features: Chunk-based uploads (5MB chunks) Automatic resume on connection failure File size validation (minimum 5KB) Extension validation (.xlsx only) Batch session grouping for multi-file uploads",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#stage-1-file-upload",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-50",
+      "headingId": "stage-2-validation",
+      "title": "Stage 2: Validation",
+      "content": "Uploaded files undergo comprehensive validation: Enterprise Format Parsing - Header metadata at rows 1-9, column headers at row 10 Schema Validation - Column types, patterns, required fields, allowed values Table Splitting - Single Excel file split into multiple normalized parquet tables Multi-Value Parsing - Comma-separated fields expanded into junction tables",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#stage-2-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-51",
+      "headingId": "stage-3-ingestion",
+      "title": "Stage 3: Ingestion",
+      "content": "Validated data is loaded into the data layer with intelligent change detection: Delta Detection - Compare timestamps with existing records Versioning - Create new versions for changed records, preserve audit trail Relationship Linking - Connect child tables to main records via foreign keys",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#stage-3-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-52",
+      "headingId": "stage-4-model-execution",
+      "title": "Stage 4: Model Execution",
+      "content": "Three sequential ML stages enrich the ingested data: Stage Purpose Output NFR Taxonomy Classify records against risk taxonomy Risk theme options with reasoning Enrichment Generate summaries and complexity scores Structured analysis Embeddings Create vector representations Semantic search capability",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#stage-4-model-execution",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-53",
+      "headingId": "base-urls",
+      "title": "Base URLs",
+      "content": "Production: /api/v2/pipelines Processing: /api/v2/processing Configuration: /api/v2/config",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#base-urls",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-54",
+      "headingId": "authentication",
+      "title": "Authentication",
+      "content": "All pipeline endpoints require authentication via Azure AD token in a custom header: X-MS-TOKEN-AAD: <azure-ad-access-token> :::warning Admin Access Required Processing endpoints (ingestion, model runs) require access scope. :::",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#authentication",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-55",
+      "headingId": "upload-files",
+      "title": "Upload Files",
+      "content": "POST /api/v2/pipelines/upload Content-Type: multipart/form-data Upload Excel files for validation. Creates a batch and automatically triggers validation. Form Parameters: Parameter Type Required Description string Yes One of: , , File[] Yes Excel files (.xlsx) Response: { \"upload_id\": \"UPL-2026-0001\", \"batch_id\": \"batch-uuid-here\", \"data_type\": \"controls\", \"status\": \"validating\", \"file_count\": 1, \"total_size\": 524288, \"created_at\": \"2026-01-28T10:30:00Z\" }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#upload-files",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-56",
+      "headingId": "get-batch-status",
+      "title": "Get Batch Status",
+      "content": "GET /api/v2/pipelines/upload/{batch_id} Retrieve the current status of an upload batch. Path Parameters: Parameter Type Description string UUID of the upload batch Response: { \"batch_id\": \"batch-uuid-here\", \"upload_id\": \"UPL-2026-0001\", \"data_type\": \"controls\", \"status\": \"validated\", \"file_count\": 1, \"total_size\": 524288, \"created_at\": \"2026-01-28T10:30:00Z\", \"validated_at\": \"2026-01-28T10:31:00Z\", \"parquet_files\": [ \"controls_main.parquet\", \"controls_hierarchy.parquet\",...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-batch-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-57",
+      "headingId": "list-batches",
+      "title": "List Batches",
+      "content": "GET /api/v2/pipelines/batches List all upload batches with optional filtering. Query Parameters: Parameter Type Description string Filter by status string Filter by data source integer Max results (default: 50) integer Pagination offset Response: { \"batches\": [ { \"batch_id\": \"batch-uuid-here\", \"upload_id\": \"UPL-2026-0001\", \"data_type\": \"controls\", \"status\": \"validated\", \"file_count\": 1, \"created_at\": \"2026-01-28T10:30:00Z\" } ], \"total\": 15, \"limit\": 50, \"offset\": 0 }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#list-batches",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-58",
+      "headingId": "get-ingestion-history",
+      "title": "Get Ingestion History",
+      "content": "GET /api/v2/pipelines/history Get recent ingestion records in a summarized format. Query Parameters: Parameter Type Description integer Max results (default: 10) Response: { \"history\": [ { \"upload_id\": \"UPL-2026-0001\", \"data_type\": \"controls\", \"status\": \"validated\", \"file_count\": 1, \"total_size\": 524288, \"files\": [\"KPCI_Controls_Export.xlsx\"], \"created_at\": \"2026-01-28T10:30:00Z\" } ] }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-ingestion-history",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-59",
+      "headingId": "get-validation-details",
+      "title": "Get Validation Details",
+      "content": "GET /api/v2/pipelines/validation/{batch_id} Get detailed validation results including any errors. Response (Success): { \"batch_id\": \"batch-uuid-here\", \"status\": \"success\", \"records_total\": 1500, \"records_processed\": 1500, \"records_failed\": 0, \"parquet_files\": [\"controls_main.parquet\", \"...\"], \"completed_at\": \"2026-01-28T10:31:00Z\" } Response (Failure): { \"batch_id\": \"batch-uuid-here\", \"status\": \"failed\", \"records_total\": 1500, \"records_processed\": 1200, \"records_failed\": 300, \"error_details\": {...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-validation-details",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-60",
+      "headingId": "tus-resumable-upload-endpoints",
+      "title": "TUS Resumable Upload Endpoints",
+      "content": "The TUS protocol enables reliable large file uploads with resume capability.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#tus-resumable-upload-endpoints",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-61",
+      "headingId": "tus-capabilities",
+      "title": "TUS Capabilities",
+      "content": "OPTIONS /api/v2/pipelines/tus/ Response Headers: Tus-Resumable: 1.0.0 Tus-Version: 1.0.0 Tus-Extension: creation,creation-with-upload,termination Tus-Max-Size: 10737418240",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#tus-capabilities",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-62",
+      "headingId": "create-upload",
+      "title": "Create Upload",
+      "content": "POST /api/v2/pipelines/tus/ Upload-Length: 5242880 Upload-Metadata: data_type YWN0aW9ucw==,filename ZmlsZS54bHN4,batch_session_id dXVpZC1oZXJl Creates a new upload session. Metadata values are base64 encoded. Required Metadata: Key Description Data source type (issues, controls, actions) Original file name UUID to group multiple files in same batch Total files expected in this batch Response: HTTP/1.1 201 Created Location: /api/v2/pipelines/tus/upload-uuid-here",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#create-upload",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-63",
+      "headingId": "upload-chunk",
+      "title": "Upload Chunk",
+      "content": "PATCH /api/v2/pipelines/tus/{upload_id} Content-Type: application/offset+octet-stream Upload-Offset: 0 Content-Length: 5242880 <binary data> Upload a chunk of file data. Chunks can be any size up to 5MB. Response: HTTP/1.1 204 No Content Upload-Offset: 5242880",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#upload-chunk",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-64",
+      "headingId": "check-upload-progress",
+      "title": "Check Upload Progress",
+      "content": "HEAD /api/v2/pipelines/tus/{upload_id} Get current upload progress. Response Headers: Upload-Offset: 10485760 Upload-Length: 52428800",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#check-upload-progress",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-65",
+      "headingId": "abort-upload",
+      "title": "Abort Upload",
+      "content": "DELETE /api/v2/pipelines/tus/{upload_id} Cancel an in-progress upload and clean up temporary files.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#abort-upload",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-66",
+      "headingId": "get-validated-batches",
+      "title": "Get Validated Batches",
+      "content": "GET /api/v2/processing/batches List all batches that have passed validation and are ready for processing. Response: { \"batches\": [ { \"batch_id\": \"batch-uuid-here\", \"upload_id\": \"UPL-2026-0001\", \"data_type\": \"controls\", \"status\": \"validated\", \"file_count\": 1, \"validated_at\": \"2026-01-28T10:31:00Z\", \"parquet_files\": [\"controls_main.parquet\", \"...\"] } ] }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-validated-batches",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-67",
+      "headingId": "start-ingestion",
+      "title": "Start Ingestion",
+      "content": "POST /api/v2/processing/ingest Content-Type: application/json Start the ingestion pipeline for a validated batch. Request Body: { \"batch_id\": \"batch-uuid-here\" } Response: { \"job_id\": \"job-uuid-here\", \"batch_id\": \"batch-uuid-here\", \"job_type\": \"ingestion\", \"status\": \"pending\", \"created_at\": \"2026-01-28T10:35:00Z\" }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#start-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-68",
+      "headingId": "start-model-run",
+      "title": "Start Model Run",
+      "content": "POST /api/v2/processing/model-run Content-Type: application/json Start ML model execution on ingested data. Request Body: { \"batch_id\": \"batch-uuid-here\", \"stages\": [\"nfr_taxonomy\", \"enrichment\", \"embeddings\"] } Response: { \"job_id\": \"job-uuid-here\", \"batch_id\": \"batch-uuid-here\", \"job_type\": \"model_run\", \"stages\": [\"nfr_taxonomy\", \"enrichment\", \"embeddings\"], \"status\": \"pending\", \"created_at\": \"2026-01-28T10:40:00Z\" }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#start-model-run",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-69",
+      "headingId": "get-job-status",
+      "title": "Get Job Status",
+      "content": "GET /api/v2/processing/job/{job_id} Get real-time status of a processing job. Use this endpoint for polling. Response (In Progress): { \"job_id\": \"job-uuid-here\", \"batch_id\": \"batch-uuid-here\", \"job_type\": \"ingestion\", \"status\": \"running\", \"progress\": { \"current_step\": \"insert_children\", \"step_number\": 2, \"total_steps\": 5, \"percentage\": 40, \"records_total\": 1500, \"records_processed\": 600, \"records_new\": 450, \"records_updated\": 150, \"records_failed\": 0 }, \"started_at\": \"2026-01-28T10:35:01Z\" }...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-job-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-70",
+      "headingId": "get-batch-jobs",
+      "title": "Get Batch Jobs",
+      "content": "GET /api/v2/processing/batch/{batch_id}/jobs Get all jobs (ingestion and model runs) for a specific batch.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-batch-jobs",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-71",
+      "headingId": "get-pipeline-status",
+      "title": "Get Pipeline Status",
+      "content": "GET /api/v2/processing/batch/{batch_id}/status Get combined pipeline status showing progress across all stages. Response: { \"batch_id\": \"batch-uuid-here\", \"upload_id\": \"UPL-2026-0001\", \"data_type\": \"controls\", \"pipeline_status\": \"model_run_in_progress\", \"stages\": { \"validation\": { \"status\": \"completed\", \"completed_at\": \"2026-01-28T10:31:00Z\" }, \"ingestion\": { \"status\": \"completed\", \"records_new\": 1200, \"records_updated\": 300, \"completed_at\": \"2026-01-28T10:37:45Z\" }, \"nfr_taxonomy\": { \"status\":...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-pipeline-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-72",
+      "headingId": "list-ingestion-configs",
+      "title": "List Ingestion Configs",
+      "content": "GET /api/v2/config/ingestion List all ingestion configurations. Query Parameters: Parameter Type Description string Filter by data source",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#list-ingestion-configs",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-73",
+      "headingId": "get-ingestion-config",
+      "title": "Get Ingestion Config",
+      "content": "GET /api/v2/config/ingestion/{config_id} Get detailed configuration including field mappings.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-ingestion-config",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-74",
+      "headingId": "get-dataset-config",
+      "title": "Get Dataset Config",
+      "content": "GET /api/v2/config/dataset/{data_source} Get complete configuration for a data source including schema, ingestion, and model configs.",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-dataset-config",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-75",
+      "headingId": "get-ingestion-plan",
+      "title": "Get Ingestion Plan",
+      "content": "GET /api/v2/config/ingestion-plan/{batch_id} Get the ordered list of parquet files and their target tables for a batch. Response: { \"batch_id\": \"batch-uuid-here\", \"data_source\": \"controls\", \"plan\": [ { \"order\": 1, \"parquet_file\": \"controls_main.parquet\", \"target_table\": \"dl_controls\", \"is_main_table\": true }, { \"order\": 2, \"parquet_file\": \"controls_hierarchy.parquet\", \"target_table\": \"dl_controls_hierarchy\", \"is_main_table\": false } ] }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#get-ingestion-plan",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-76",
+      "headingId": "storage-structure",
+      "title": "Storage Structure",
+      "content": "The pipeline uses a structured directory layout: DATA_INGESTION_PATH/ ├── uploads/ # Original uploaded Excel files │ ├── UPL-2026-0001_controls/ │ │ └── KPCI_Controls_Export.xlsx │ └── UPL-2026-0002_issues/ │ ├── issues_audit.xlsx │ ├── issues_regulatory.xlsx │ ├── issues_restricted_regulatory.xlsx │ └── issues_self_identified.xlsx │ ├── preprocessed/ # Validated parquet files │ ├── UPL-2026-0001_controls/ │ │ ├── controls_main.parquet │ │ ├── controls_hierarchy.parquet │ │ └── ... │ └──...",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#storage-structure",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-77",
+      "headingId": "execution-graph",
+      "title": "Execution Graph",
+      "content": "Each data source defines an execution graph that controls processing order: flowchart LR subgraph Ingestion M[insert_main] --> C[insert_children] end subgraph Models C --> N[nfr_taxonomy] N --> E[enrichment] E --> V[embeddings] V --> NE[nested_embeddings] end Stage Dependencies: must complete before All ingestion stages must complete before model execution Model stages run sequentially: NFR → Enrichment → Embeddings",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#execution-graph",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-78",
+      "headingId": "validation-errors",
+      "title": "Validation Errors",
+      "content": "Validation errors are non-blocking per record. The system validates all records and reports all errors at once. { \"error_details\": { \"summary\": { \"total_errors\": 15, \"affected_rows\": 12, \"error_types\": [\"INVALID_PATTERN\", \"NULL_NOT_ALLOWED\"] }, \"errors\": [ { \"column\": \"control_id\", \"error_code\": \"INVALID_PATTERN\", \"row_indices\": [45, 67, 89], \"sample_values\": [\"CTRL-123\", \"CTR-1234567890\"] } ] } }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#validation-errors",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-79",
+      "headingId": "processing-errors",
+      "title": "Processing Errors",
+      "content": "Processing errors are captured per-record and logged for audit: { \"status\": \"completed_with_errors\", \"records_failed\": 5, \"failed_records\": [ { \"record_id\": \"CTRL-0000000045\", \"error\": \"Foreign key constraint violation\", \"stage\": \"insert_children\" } ] }",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#processing-errors",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-80",
+      "headingId": "concurrency-control",
+      "title": "Concurrency Control",
+      "content": "A global processing lock prevents concurrent pipeline runs: { \"locked\": true, \"upload_id\": \"UPL-2026-0001\", \"owner\": \"user@example.com\", \"pid\": 12345, \"acquired_at\": \"2026-01-28T10:35:00Z\", \"expires_at\": \"2026-01-28T12:35:00Z\" } Lock automatically expires after 2 hours (crash recovery) Only one ingestion/model run can execute at a time Validation can run concurrently with processing",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#concurrency-control",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-81",
+      "headingId": "related-documentation",
+      "title": "Related Documentation",
+      "content": "Controls Pipeline - Controls data source schema and processing Issues Pipeline - Issues data source schema and processing Actions Pipeline - Actions data source schema and processing",
+      "path": "/docs/pipelines/overview",
+      "anchor": "/docs/pipelines/overview#related-documentation",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Pipeline Overview"
+    },
+    {
+      "id": "doc-82",
+      "headingId": "",
+      "title": "Issues Pipeline",
+      "content": "Detailed documentation for the Issues data ingestion pipeline",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline",
+      "level": 0,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-83",
+      "headingId": "issues-pipeline",
+      "title": "Issues Pipeline",
+      "content": "The Issues pipeline processes issue data from four distinct source files representing different issue types. These are validated, normalized, and merged into 8 parquet tables for ingestion into the data layer.",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues-pipeline",
+      "level": 1,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-84",
+      "headingId": "overview",
+      "title": "Overview",
+      "content": "flowchart TB subgraph Input[\"Input: 4 Excel Files\"] AUDIT[issues_audit.xlsx] REG[issues_regulatory.xlsx] RRESTREG[issues_restricted_regulatory.xlsx] SELF[issues_self_identified.xlsx] end subgraph Validation[\"Validation & Merging\"] PARSE[Parse Enterprise Format] VALIDATE[Schema Validation] MERGE[Merge by issue_type] SPLIT[Table Splitting] end subgraph Output[\"Output: 8 Parquet Tables\"] MAIN[issues_main] HIER[issues_hierarchy] AUDIT_T[issues_audit] CTRL[issues_controls] REL[issues_related_issues]...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#overview",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-85",
+      "headingId": "file-requirements",
+      "title": "File Requirements",
+      "content": "Requirement Value File Count 4 (all required) Format Excel (.xlsx) Minimum Size 5 KB per file Maximum Size 10 GB total Header Row Row 10 (Enterprise format) Data Start Row Row 11",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#file-requirements",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-86",
+      "headingId": "required-files",
+      "title": "Required Files",
+      "content": "File Issue Type Description Audit Internal and external audit findings Regulatory Regulatory examination findings Restricted Regulatory Confidential regulatory matters Self-Identified Self-identified control deficiencies :::warning All Files Required All four issue files must be uploaded together in a single batch. The pipeline will fail validation if any file is missing. :::",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#required-files",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-87",
+      "headingId": "entity-relationship-diagram",
+      "title": "Entity Relationship Diagram",
+      "content": "erDiagram issues_main ||--|| issues_hierarchy : \"1:1\" issues_main ||--|| issues_audit : \"1:1\" issues_main ||--o{ issues_controls : \"1:N\" issues_main ||--o{ issues_related_issues : \"1:N\" issues_main ||--o{ issues_risk_theme : \"1:N\" issues_main ||--o{ issues_related_functions : \"1:N\" issues_main ||--o{ issues_related_locations : \"1:N\" issues_controls }o--|| controls_main : \"N:1\" issues_related_issues }o--|| issues_main : \"N:1\" issues_main { string issue_id PK string legacy_id string issue_type...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#entity-relationship-diagram",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-88",
+      "headingId": "issues_main",
+      "title": "issues_main",
+      "content": "The primary issues table containing core issue information from all four source files. Primary Key: Column Type Required Nullable Description string Yes No Unique issue identifier. Pattern: string No Yes Legacy system identifier (if migrated) string Yes No Issue classification by source string Yes No Short descriptive title string Yes No Description of the control weakness string Yes No Root cause category integer Yes No Root cause reference number string Yes No Detailed root cause explanation...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_main",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-89",
+      "headingId": "issues_hierarchy",
+      "title": "issues_hierarchy",
+      "content": "Organizational hierarchy information for each issue. One-to-one relationship with . Foreign Key: references",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_hierarchy",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-90",
+      "headingId": "function-hierarchy",
+      "title": "Function Hierarchy",
+      "content": "Column Type Required Description string Yes Reference to issues_main string Yes Top-level group identifier string Yes Group name string Yes Division identifier string Yes Division name string Yes Business unit identifier string Yes Business unit name string Yes Area identifier string Yes Area name string Yes Sector identifier string Yes Sector name string Yes Segment identifier string Yes Segment name string Yes Function identifier string Yes Function name",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#function-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-91",
+      "headingId": "location-hierarchy",
+      "title": "Location Hierarchy",
+      "content": "Column Type Required Description string Yes Top-level location identifier string Yes Top-level location name string Yes Region identifier string Yes Region name string Yes Sub-region identifier string Yes Sub-region name string Yes Country identifier string Yes Country name string Yes Legal entity identifier string Yes Legal entity short name",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#location-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-92",
+      "headingId": "issues_audit",
+      "title": "issues_audit",
+      "content": "Ownership, review chain, regulatory information, and audit trail. One-to-one relationship with . Foreign Key: references",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_audit",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-93",
+      "headingId": "ownership-fields",
+      "title": "Ownership Fields",
+      "content": "Column Type Required Nullable Description string Yes No Reference to issues_main string Yes No Name of the issue owner string Yes No 8-digit Global Personnel Number string No Yes Owner's rank/title string No Yes Previous owner name string No Yes Previous owner GPN string Yes No Administrator name string Yes No Administrator GPN string No Yes Delegate name string No Yes Delegate GPN",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#ownership-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-94",
+      "headingId": "review-chain",
+      "title": "Review Chain",
+      "content": "Column Type Required Nullable Description string No Yes First level reviewer name string No Yes First level reviewer GPN datetime No Yes First level review date string No Yes ORC responsible party string No Yes ORC reviewer name string No Yes ORC reviewer GPN datetime No Yes ORC review date",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#review-chain",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-95",
+      "headingId": "orc-review-details",
+      "title": "ORC Review Details",
+      "content": "Column Type Nullable Description string Yes Check result string Yes Review status string Yes Reviewer comments string Yes Rating check result string Yes Rating review status string Yes Rating comments string Yes Date check result string Yes Date review status string Yes Date comments string Yes Action plans check result string Yes Action plans review status string Yes Action plans comments string Yes Mappings check result string Yes Mappings review status string Yes Mappings comments",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#orc-review-details",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-96",
+      "headingId": "regulatory-information",
+      "title": "Regulatory Information",
+      "content": "Column Type Nullable Description string Yes Regulatory manager name string Yes Regulatory manager GPN string Yes Regulator's country string Yes Type of regulator string Yes Regulator name",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#regulatory-information",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-97",
+      "headingId": "audit-specific-fields",
+      "title": "Audit-Specific Fields",
+      "content": "Column Type Nullable Description string Yes Source of audit finding string Yes Audit rating assigned string Yes Audit report identifier string Yes Audit report title string Yes Specific finding identifier string Yes MRA/MRIA classification",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#audit-specific-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-98",
+      "headingId": "program-information",
+      "title": "Program Information",
+      "content": "Column Type Nullable Description string Yes DSORI program reference string Yes GSORI program reference boolean No E&Y relevance flag string Yes Operating committee string Yes Sub-operating committee string Yes Lead region oversight body",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#program-information",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-99",
+      "headingId": "risk-acceptance",
+      "title": "Risk Acceptance",
+      "content": "Column Type Nullable Description string Yes Justification for risk acceptance boolean No Extension requested datetime Yes Extension target date string Yes Extension comment boolean No Extension approved string Yes Approver information",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#risk-acceptance",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-100",
+      "headingId": "category-information",
+      "title": "Category Information",
+      "content": "Column Type Nullable Description string Yes Category flag string Yes Category type",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#category-information",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-101",
+      "headingId": "audit-trail-timestamps",
+      "title": "Audit Trail Timestamps",
+      "content": "Column Type Required Nullable Description datetime Yes No Issue creation timestamp string Yes No Creator name string Yes No Creator GPN string No Yes Person who raised the issue string No Yes Raiser GPN string No Yes Last modifier name string No Yes Last modifier GPN datetime No Yes Last modification timestamp datetime No Yes Last status change datetime No Yes When entered draft status datetime No Yes When entered grace period datetime No Yes When entered open status datetime No Yes Last RAG...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#audit-trail-timestamps",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-102",
+      "headingId": "comments",
+      "title": "Comments",
+      "content": "Column Type Nullable Description string Yes Latest comment text datetime Yes Comment timestamp string Yes Commenter name string Yes Commenter GPN",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#comments",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-103",
+      "headingId": "counters",
+      "title": "Counters",
+      "content": "Column Type Required Description integer Yes Number of times reopened",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#counters",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-104",
+      "headingId": "issues_controls",
+      "title": "issues_controls",
+      "content": "Junction table linking issues to related controls. One-to-many relationship with . Foreign Keys: references references Column Type Required Description string Yes Reference to issues_main string Yes Reference to controls_main :::info Cross-Reference This table enables linking issues to the controls that they impact. When both issues and controls datasets are ingested, this relationship allows navigation from issues to affected controls and vice versa. :::",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_controls",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-105",
+      "headingId": "issues_related_issues",
+      "title": "issues_related_issues",
+      "content": "Self-referential junction table for related issues. One-to-many relationship with . Foreign Keys: references references Column Type Required Description string Yes Source issue reference string Yes Related issue reference :::info Self-Referential Relationship This table captures relationships between issues, such as parent-child relationships or duplicate tracking. The must reference a valid issue in the same dataset. :::",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_related_issues",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-106",
+      "headingId": "issues_risk_theme",
+      "title": "issues_risk_theme",
+      "content": "Risk theme assignments for each issue. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to issues_main string Yes Risk theme name string Yes Top-level NFR taxonomy number string Yes Risk theme taxonomy number :::info Multi-Value Splitting Risk themes are extracted from a comma-separated column and looked up against the NFR Taxonomy. Example Source Value: Generated Records: issue_id risk_theme taxonomy_number risk_theme_number...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_risk_theme",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-107",
+      "headingId": "issues_related_functions",
+      "title": "issues_related_functions",
+      "content": "Related functions for cross-functional issues. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to issues_main string Yes Related function identifier string Yes Related function name",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_related_functions",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-108",
+      "headingId": "issues_related_locations",
+      "title": "issues_related_locations",
+      "content": "Related locations for multi-location issues. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to issues_main string Yes Related location identifier string Yes Related location name",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issues_related_locations",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-109",
+      "headingId": "column-pattern-validation",
+      "title": "Column Pattern Validation",
+      "content": "Column Pattern Example Valid Example Invalid , ,",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#column-pattern-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-110",
+      "headingId": "required-field-validation",
+      "title": "Required Field Validation",
+      "content": "The following fields must not be null or empty:",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#required-field-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-111",
+      "headingId": "file-specific-validation",
+      "title": "File-Specific Validation",
+      "content": "Each source file must contain only issues matching its expected type: File Expected",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#file-specific-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-112",
+      "headingId": "stage-1-multi-file-validation",
+      "title": "Stage 1: Multi-File Validation",
+      "content": "sequenceDiagram participant Upload as Upload API participant Parser as Enterprise Parser participant Validator as Schema Validator participant Merger as File Merger participant Splitter as Table Splitter Upload->>Parser: 4 Excel files par Process each file Parser->>Parser: Parse issues_audit.xlsx Parser->>Parser: Parse issues_regulatory.xlsx Parser->>Parser: Parse issues_restricted_regulatory.xlsx Parser->>Parser: Parse issues_self_identified.xlsx end Parser->>Validator: 4 DataFrames...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#stage-1-multi-file-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-113",
+      "headingId": "stage-2-ingestion-with-cross-references",
+      "title": "Stage 2: Ingestion with Cross-References",
+      "content": "sequenceDiagram participant API as Processing API participant Loader as Data Loader participant Delta as Delta Detector participant DB as Database API->>Loader: Start ingestion job Note over Loader: Process main table first Loader->>Loader: Read issues_main.parquet loop For each issue Loader->>Delta: Check existing Delta->>DB: Query by issue_id alt New or Modified Delta->>DB: Upsert with versioning end end Note over Loader: Process child tables loop For each child parquet Loader->>Loader: Read...",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#stage-2-ingestion-with-cross-references",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-114",
+      "headingId": "stage-3-model-execution",
+      "title": "Stage 3: Model Execution",
+      "content": "flowchart LR subgraph NFR[\"NFR Taxonomy\"] N1[Load issue text] N2[Classify risk themes] N3[Generate reasoning] N4[Store output] end subgraph Enrich[\"Enrichment\"] E1[Load issue + NFR output] E2[Generate summary] E3[Assess severity] E4[Update output] end subgraph Embed[\"Embeddings\"] V1[Load all outputs] V2[Generate vector] V3[Store embedding] end N1 --> N2 --> N3 --> N4 N4 --> E1 --> E2 --> E3 --> E4 E4 --> V1 --> V2 --> V3",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#stage-3-model-execution",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-115",
+      "headingId": "database-tables",
+      "title": "Database Tables",
+      "content": "After ingestion, data is stored in the following data layer tables: Parquet File Database Table Model",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#database-tables",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-116",
+      "headingId": "versioning-fields",
+      "title": "Versioning Fields",
+      "content": "All data layer tables include versioning fields: Column Type Description UUID Primary key (auto-generated) boolean Whether this is the active version datetime Version validity start datetime Version validity end (null if current) string Reference to upload batch datetime Record creation timestamp datetime Record last update timestamp",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#versioning-fields",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-117",
+      "headingId": "model-output",
+      "title": "Model Output",
+      "content": "After model execution, results are stored in : Column Type Description string Reference to issue JSON Array of risk theme classifications string Explanation of classification string AI-generated issue summary string Severity analysis string Suggested remediation steps vector 1536-dimension embedding vector string Version of models used string Hash of input for cache detection datetime Processing timestamp",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#model-output",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-118",
+      "headingId": "issue-status-lifecycle",
+      "title": "Issue Status Lifecycle",
+      "content": "stateDiagram-v2 [*] --> Draft Draft --> Open_Grace_Period: Submit Open_Grace_Period --> Open: Grace Period Expires Open --> Completed: Mitigation Complete Completed --> Closed: Verification Passed Open --> Open: Date Extension Completed --> Open: Reopened Closed --> Open: Reopened",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#issue-status-lifecycle",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-119",
+      "headingId": "1-upload-issue-files",
+      "title": "1. Upload Issue Files",
+      "content": "curl -X POST /api/v2/pipelines/upload \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -F \"data_type=issues\" \\ -F \"files=@issues_audit.xlsx\" \\ -F \"files=@issues_regulatory.xlsx\" \\ -F \"files=@issues_restricted_regulatory.xlsx\" \\ -F \"files=@issues_self_identified.xlsx\"",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#1-upload-issue-files",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-120",
+      "headingId": "2-check-validation-status",
+      "title": "2. Check Validation Status",
+      "content": "curl /api/v2/pipelines/upload/{batch_id} \\ -H \"X-MS-TOKEN-AAD: <token>\"",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#2-check-validation-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-121",
+      "headingId": "3-start-ingestion",
+      "title": "3. Start Ingestion",
+      "content": "curl -X POST /api/v2/processing/ingest \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -H \"Content-Type: application/json\" \\ -d '{\"batch_id\": \"{batch_id}\"}'",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#3-start-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-122",
+      "headingId": "4-monitor-progress",
+      "title": "4. Monitor Progress",
+      "content": "curl /api/v2/processing/job/{job_id} \\ -H \"X-MS-TOKEN-AAD: <token>\"",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#4-monitor-progress",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-123",
+      "headingId": "related-documentation",
+      "title": "Related Documentation",
+      "content": "Pipeline Overview - Architecture and API reference Controls Pipeline - Controls data source Actions Pipeline - Actions data source",
+      "path": "/docs/pipelines/issues-pipeline",
+      "anchor": "/docs/pipelines/issues-pipeline#related-documentation",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Issues Pipeline"
+    },
+    {
+      "id": "doc-124",
+      "headingId": "",
+      "title": "Controls Pipeline",
+      "content": "Detailed documentation for the Controls data ingestion pipeline",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline",
+      "level": 0,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-125",
+      "headingId": "controls-pipeline",
+      "title": "Controls Pipeline",
+      "content": "The Controls pipeline processes Key Performance Controls Inventory (KPCI) data. A single Excel file is validated, split into 8 normalized parquet tables, and loaded into the data layer with full versioning support.",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls-pipeline",
+      "level": 1,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-126",
+      "headingId": "overview",
+      "title": "Overview",
+      "content": "flowchart TB subgraph Input[\"Input: 1 Excel File\"] EXCEL[KPCI Controls Export<br/>~50 columns] end subgraph Validation[\"Validation & Splitting\"] PARSE[Parse Enterprise Format] VALIDATE[Schema Validation] SPLIT[Table Splitting] end subgraph Output[\"Output: 8 Parquet Tables\"] MAIN[controls_main] HIER[controls_hierarchy] META[controls_metadata] RISK[controls_risk_theme] CAT[controls_category_flags] SOX[controls_sox_assertions] FUNC[controls_related_functions] LOC[controls_related_locations] end...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#overview",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-127",
+      "headingId": "file-requirements",
+      "title": "File Requirements",
+      "content": "Requirement Value File Count 1 Format Excel (.xlsx) Minimum Size 5 KB Maximum Size 10 GB Header Row Row 10 (Enterprise format) Data Start Row Row 11 :::info Enterprise Format The Controls export follows enterprise format where: Rows 1-9 contain metadata headers Row 10, Column B contains the export timestamp Column headers start at Row 10, Column B Data begins at Row 11 :::",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#file-requirements",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-128",
+      "headingId": "entity-relationship-diagram",
+      "title": "Entity Relationship Diagram",
+      "content": "erDiagram controls_main ||--|| controls_hierarchy : \"1:1\" controls_main ||--|| controls_metadata : \"1:1\" controls_main ||--o{ controls_risk_theme : \"1:N\" controls_main ||--o{ controls_category_flags : \"1:N\" controls_main ||--o{ controls_sox_assertions : \"1:N\" controls_main ||--o{ controls_related_functions : \"1:N\" controls_main ||--o{ controls_related_locations : \"1:N\" controls_main { string control_id PK string control_title string control_description boolean key_control string hierarchy_level...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#entity-relationship-diagram",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-129",
+      "headingId": "controls_main",
+      "title": "controls_main",
+      "content": "The primary controls table containing core control information. Primary Key: Column Type Required Nullable Description string Yes No Unique control identifier. Pattern: (10 digits) string Yes No Short descriptive title of the control string Yes No Detailed description of what the control does boolean Yes No Indicates if this is a key control string Yes No Control level in hierarchy. Allowed: , string No Yes Reference to parent control (for Level 2 controls) string Yes No Control type...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_main",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-130",
+      "headingId": "controls_hierarchy",
+      "title": "controls_hierarchy",
+      "content": "Organizational hierarchy information for each control. One-to-one relationship with . Foreign Key: references",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_hierarchy",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-131",
+      "headingId": "function-hierarchy",
+      "title": "Function Hierarchy",
+      "content": "Column Type Required Description string Yes Reference to controls_main string Yes Top-level group identifier string Yes Group name string Yes Division identifier string Yes Division name string Yes Business unit identifier string Yes Business unit name string Yes Area identifier string Yes Area name string Yes Sector identifier string Yes Sector name string Yes Segment identifier string Yes Segment name string Yes Function identifier string Yes Function name",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#function-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-132",
+      "headingId": "location-hierarchy",
+      "title": "Location Hierarchy",
+      "content": "Column Type Required Description string Yes Top-level location identifier string Yes Top-level location name string Yes Region identifier string Yes Region name string Yes Sub-region identifier string Yes Sub-region name string Yes Country identifier string Yes Country name string Yes Legal entity identifier string Yes Legal entity short name",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#location-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-133",
+      "headingId": "controls_metadata",
+      "title": "controls_metadata",
+      "content": "Ownership, compliance, and audit trail information. One-to-one relationship with . Foreign Key: references",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_metadata",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-134",
+      "headingId": "ownership-fields",
+      "title": "Ownership Fields",
+      "content": "Column Type Required Nullable Description string Yes No Reference to controls_main string Yes No Name of the control owner string Yes No 8-digit Global Personnel Number string Yes No Role of the instance owner string Yes No Name of the administrator string Yes No Administrator's GPN string No Yes Delegate name (if assigned) string No Yes Delegate's GPN string No Yes Assessor name (if assigned) string No Yes Assessor's GPN boolean Yes No Whether assessor is also owner",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#ownership-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-135",
+      "headingId": "compliance-flags",
+      "title": "Compliance Flags",
+      "content": "Column Type Required Description boolean Yes SOX compliance relevance boolean Yes CCAR compliance relevance boolean Yes BCBS239 compliance relevance boolean Yes EY reliance flag string No Rationale for SOX relevance",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#compliance-flags",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-136",
+      "headingId": "additional-information",
+      "title": "Additional Information",
+      "content": "Column Type Required Description string No Local functional context string Yes Governance forum assignment string No Related financial statement item string No Supporting IT systems string No Deactivation details",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#additional-information",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-137",
+      "headingId": "audit-trail",
+      "title": "Audit Trail",
+      "content": "Column Type Required Nullable Description string Yes No Creator name string Yes No Creator GPN datetime Yes No Creation timestamp string No Yes Last modifier name string No Yes Last modifier GPN datetime No Yes Last modification timestamp datetime No Yes Status change timestamp",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#audit-trail",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-138",
+      "headingId": "controls_risk_theme",
+      "title": "controls_risk_theme",
+      "content": "Risk theme assignments for each control. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to controls_main string Yes Risk theme name string Yes Top-level NFR taxonomy number (e.g., \"1\", \"2\", \"3\") string Yes Risk theme taxonomy number (e.g., \"1.1\", \"1.2\", \"3.1\") :::info Multi-Value Splitting Risk themes are extracted from a comma-separated column in the source Excel file. Each theme is looked up against the NFR Taxonomy to populate...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_risk_theme",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-139",
+      "headingId": "controls_category_flags",
+      "title": "controls_category_flags",
+      "content": "Category flag assignments for each control. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to controls_main string Yes Category flag value :::info Multi-Value Splitting Category flags are extracted from a comma-separated column. Each flag becomes a separate row. Example Source Value: Generated Records: control_id category_flag CTRL-0000000001 Critical CTRL-0000000001 High-Risk CTRL-0000000001 Regulatory :::",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_category_flags",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-140",
+      "headingId": "controls_sox_assertions",
+      "title": "controls_sox_assertions",
+      "content": "SOX assertion mappings for each control. One-to-many relationship with . Foreign Key: references Column Type Required Description string Yes Reference to controls_main string Yes SOX assertion type Common SOX Assertions: Existence/Occurrence Completeness Valuation/Allocation Rights and Obligations Presentation and Disclosure",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_sox_assertions",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-141",
+      "headingId": "controls_related_functions",
+      "title": "controls_related_functions",
+      "content": "Related functions for cross-functional controls. One-to-many relationship with . Foreign Key: references Column Type Required Nullable Description string Yes No Reference to controls_main string No Yes Comments about the relationship string Yes No Related function identifier string Yes No Related function name :::info Paired List Splitting Related functions and locations are stored as paired comma-separated lists in the source Excel: : \"F001, F002, F003\" : \"Finance, Operations, Risk\" The...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_related_functions",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-142",
+      "headingId": "controls_related_locations",
+      "title": "controls_related_locations",
+      "content": "Related locations for multi-location controls. One-to-many relationship with . Foreign Key: references Column Type Required Nullable Description string Yes No Reference to controls_main string No Yes Comments about the relationship string Yes No Related location identifier string Yes No Related location name",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#controls_related_locations",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-143",
+      "headingId": "column-pattern-validation",
+      "title": "Column Pattern Validation",
+      "content": "Column Pattern Example Valid Example Invalid , ,",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#column-pattern-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-144",
+      "headingId": "required-field-validation",
+      "title": "Required Field Validation",
+      "content": "The following fields must not be null or empty:",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#required-field-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-145",
+      "headingId": "enum-validation",
+      "title": "Enum Validation",
+      "content": "Fields with restricted values are validated against their allowed value lists. Invalid values result in validation errors with the row indices and sample values reported.",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#enum-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-146",
+      "headingId": "stage-1-validation",
+      "title": "Stage 1: Validation",
+      "content": "sequenceDiagram participant Upload as Upload API participant Parser as Enterprise Parser participant Validator as Schema Validator participant Splitter as Table Splitter participant Storage as Parquet Storage Upload->>Parser: Excel file Parser->>Parser: Extract header metadata Parser->>Parser: Parse data from row 11 Parser->>Validator: DataFrame Validator->>Validator: Check column types Validator->>Validator: Validate patterns Validator->>Validator: Check allowed values Validator->>Validator:...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#stage-1-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-147",
+      "headingId": "stage-2-ingestion",
+      "title": "Stage 2: Ingestion",
+      "content": "sequenceDiagram participant API as Processing API participant Loader as Data Loader participant Delta as Delta Detector participant DB as Database API->>Loader: Start ingestion job loop For each parquet file Loader->>Loader: Read parquet Loader->>Delta: Check records Delta->>DB: Query existing by control_id Delta->>Delta: Compare last_modified_on alt New Record Delta->>DB: INSERT new record else Modified Record Delta->>DB: UPDATE old.is_current = false Delta->>DB: INSERT new version else...",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#stage-2-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-148",
+      "headingId": "stage-3-model-execution",
+      "title": "Stage 3: Model Execution",
+      "content": "flowchart LR subgraph NFR[\"NFR Taxonomy\"] N1[Load control text] N2[Classify risk themes] N3[Generate reasoning] N4[Store output] end subgraph Enrich[\"Enrichment\"] E1[Load control + NFR output] E2[Generate summary] E3[Calculate complexity] E4[Update output] end subgraph Embed[\"Embeddings\"] V1[Load all outputs] V2[Generate vector] V3[Store embedding] end N1 --> N2 --> N3 --> N4 N4 --> E1 --> E2 --> E3 --> E4 E4 --> V1 --> V2 --> V3",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#stage-3-model-execution",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-149",
+      "headingId": "database-tables",
+      "title": "Database Tables",
+      "content": "After ingestion, data is stored in the following data layer tables: Parquet File Database Table Model",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#database-tables",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-150",
+      "headingId": "versioning-fields",
+      "title": "Versioning Fields",
+      "content": "All data layer tables include versioning fields: Column Type Description UUID Primary key (auto-generated) boolean Whether this is the active version datetime Version validity start datetime Version validity end (null if current) string Reference to upload batch datetime Record creation timestamp datetime Record last update timestamp",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#versioning-fields",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-151",
+      "headingId": "model-output",
+      "title": "Model Output",
+      "content": "After model execution, results are stored in : Column Type Description string Reference to control JSON Array of risk theme classifications string Explanation of classification string AI-generated control summary integer Complexity rating (1-5) string Suggested improvements vector 1536-dimension embedding vector string Version of models used string Hash of input for cache detection datetime Processing timestamp",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#model-output",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-152",
+      "headingId": "1-upload-control-file",
+      "title": "1. Upload Control File",
+      "content": "curl -X POST /api/v2/pipelines/upload \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -F \"data_type=controls\" \\ -F \"files=@KPCI_Controls_Export.xlsx\"",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#1-upload-control-file",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-153",
+      "headingId": "2-check-validation-status",
+      "title": "2. Check Validation Status",
+      "content": "curl /api/v2/pipelines/upload/{batch_id} \\ -H \"X-MS-TOKEN-AAD: <token>\"",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#2-check-validation-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-154",
+      "headingId": "3-start-ingestion",
+      "title": "3. Start Ingestion",
+      "content": "curl -X POST /api/v2/processing/ingest \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -H \"Content-Type: application/json\" \\ -d '{\"batch_id\": \"{batch_id}\"}'",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#3-start-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-155",
+      "headingId": "4-monitor-progress",
+      "title": "4. Monitor Progress",
+      "content": "curl /api/v2/processing/job/{job_id} \\ -H \"X-MS-TOKEN-AAD: <token>\"",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#4-monitor-progress",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-156",
+      "headingId": "related-documentation",
+      "title": "Related Documentation",
+      "content": "Pipeline Overview - Architecture and API reference Issues Pipeline - Issues data source Actions Pipeline - Actions data source",
+      "path": "/docs/pipelines/controls-pipeline",
+      "anchor": "/docs/pipelines/controls-pipeline#related-documentation",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Controls Pipeline"
+    },
+    {
+      "id": "doc-157",
+      "headingId": "",
+      "title": "Actions Pipeline",
+      "content": "Detailed documentation for the Actions data ingestion pipeline",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline",
+      "level": 0,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-158",
+      "headingId": "actions-pipeline",
+      "title": "Actions Pipeline",
+      "content": "The Actions pipeline processes issue action plan data. A single Excel file containing all action plans is validated and split into 2 normalized parquet tables for ingestion into the data layer.",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#actions-pipeline",
+      "level": 1,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-159",
+      "headingId": "overview",
+      "title": "Overview",
+      "content": "flowchart TB subgraph Input[\"Input: 1 Excel File\"] EXCEL[Issue Actions Export<br/>~35 columns] end subgraph Validation[\"Validation & Splitting\"] PARSE[Parse Enterprise Format] VALIDATE[Schema Validation] SPLIT[Table Splitting] end subgraph Output[\"Output: 2 Parquet Tables\"] MAIN[issues_actions] HIER[issues_actions_hierarchy] end EXCEL --> PARSE PARSE --> VALIDATE VALIDATE --> SPLIT SPLIT --> MAIN SPLIT --> HIER",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#overview",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-160",
+      "headingId": "file-requirements",
+      "title": "File Requirements",
+      "content": "Requirement Value File Count 1 Format Excel (.xlsx) Minimum Size 5 KB Maximum Size 10 GB Header Row Row 10 (Enterprise format) Data Start Row Row 11 :::info Relationship to Issues Actions are linked to issues via the foreign key. For full functionality, the Issues pipeline should be run first to ensure referential integrity. :::",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#file-requirements",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-161",
+      "headingId": "entity-relationship-diagram",
+      "title": "Entity Relationship Diagram",
+      "content": "erDiagram issues_main ||--o{ issues_actions : \"1:N\" issues_actions ||--|| issues_actions_hierarchy : \"1:1\" issues_actions { string issue_id FK string action_id PK string issue_type string action_title string action_description string action_status string action_rag_status string action_rag_justification string status_update_notes datetime current_due_date datetime original_due_date int no_of_due_date_changes datetime action_due_date_extension_date datetime action_closed_by_action_owner_date...",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#entity-relationship-diagram",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-162",
+      "headingId": "issues_actions",
+      "title": "issues_actions",
+      "content": "The primary actions table containing action plan information. Primary Key: Foreign Key: references",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#issues_actions",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-163",
+      "headingId": "primary-keys-and-references",
+      "title": "Primary Keys and References",
+      "content": "Column Type Required Nullable Description string Yes No Reference to parent issue. Pattern: string Yes No Unique action identifier. Pattern:",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#primary-keys-and-references",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-164",
+      "headingId": "core-fields",
+      "title": "Core Fields",
+      "content": "Column Type Required Nullable Description string Yes No Type of parent issue string Yes No Short descriptive title of the action string Yes No Detailed description of the remediation action",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#core-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-165",
+      "headingId": "status-fields",
+      "title": "Status Fields",
+      "content": "Column Type Required Nullable Description string Yes No Current status of the action string Yes No RAG (Red/Amber/Green) status string No Yes Justification for RAG status string No Yes Latest status update notes Allowed Values: Column Allowed Values , , , , , , , , ,",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#status-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-166",
+      "headingId": "date-fields",
+      "title": "Date Fields",
+      "content": "Column Type Required Nullable Description datetime Yes No Current target completion date datetime Yes No Original target completion date integer Yes No Count of due date changes datetime No Yes Date of last extension datetime No Yes Date action was closed by owner datetime No Yes Date action was reopened (if applicable)",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#date-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-167",
+      "headingId": "ownership-fields",
+      "title": "Ownership Fields",
+      "content": "Column Type Required Nullable Description string Yes No Name of the action owner string Yes No 8-digit Global Personnel Number string Yes No Administrator name string Yes No Administrator GPN",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#ownership-fields",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-168",
+      "headingId": "closure-and-reopening",
+      "title": "Closure and Reopening",
+      "content": "Column Type Required Nullable Description boolean Yes No Whether closure standards are met boolean Yes No Whether action has been reopened boolean Yes No Flag indicating reopen status",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#closure-and-reopening",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-169",
+      "headingId": "program-information",
+      "title": "Program Information",
+      "content": "Column Type Required Nullable Description string No Yes Associated program identifier string No Yes UBS change program reference",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#program-information",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-170",
+      "headingId": "audit-trail",
+      "title": "Audit Trail",
+      "content": "Column Type Required Nullable Description datetime Yes No Action creation timestamp string Yes No Name of person who created the action string Yes No Originator GPN datetime No Yes Last status change timestamp datetime No Yes Last RAG update timestamp datetime Yes No Last modification timestamp (used for delta detection)",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#audit-trail",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-171",
+      "headingId": "issues_actions_hierarchy",
+      "title": "issues_actions_hierarchy",
+      "content": "Organizational hierarchy information for each action. One-to-one relationship with . Foreign Key: references",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#issues_actions_hierarchy",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-172",
+      "headingId": "function-hierarchy",
+      "title": "Function Hierarchy",
+      "content": "Column Type Required Description string Yes Reference to issues_actions string Yes Top-level group identifier string Yes Group name string Yes Division identifier string Yes Division name string Yes Business unit identifier string Yes Business unit name string Yes Area identifier string Yes Area name string Yes Sector identifier string Yes Sector name string Yes Segment identifier string Yes Segment name string Yes Function identifier string Yes Function name",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#function-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-173",
+      "headingId": "location-hierarchy",
+      "title": "Location Hierarchy",
+      "content": "Column Type Required Description string Yes Top-level location identifier string Yes Top-level location name string Yes Region identifier string Yes Region name string Yes Sub-region identifier string Yes Sub-region name string Yes Country identifier string Yes Country name string Yes Legal entity identifier string Yes Legal entity short name",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#location-hierarchy",
+      "level": 4,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-174",
+      "headingId": "column-pattern-validation",
+      "title": "Column Pattern Validation",
+      "content": "Column Pattern Example Valid Example Invalid , ,",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#column-pattern-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-175",
+      "headingId": "required-field-validation",
+      "title": "Required Field Validation",
+      "content": "The following fields must not be null or empty:",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#required-field-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-176",
+      "headingId": "referential-integrity",
+      "title": "Referential Integrity",
+      "content": ":::warning Foreign Key Validation During ingestion, the field is validated against existing issues in the data layer. Actions referencing non-existent issues will be flagged but still ingested, with a warning in the job output. :::",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#referential-integrity",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-177",
+      "headingId": "stage-1-validation",
+      "title": "Stage 1: Validation",
+      "content": "sequenceDiagram participant Upload as Upload API participant Parser as Enterprise Parser participant Validator as Schema Validator participant Splitter as Table Splitter participant Storage as Parquet Storage Upload->>Parser: Excel file Parser->>Parser: Extract header metadata Parser->>Parser: Parse data from row 11 Parser->>Validator: DataFrame Validator->>Validator: Check column types Validator->>Validator: Validate ID patterns Validator->>Validator: Check required fields...",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#stage-1-validation",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-178",
+      "headingId": "stage-2-ingestion",
+      "title": "Stage 2: Ingestion",
+      "content": "sequenceDiagram participant API as Processing API participant Loader as Data Loader participant Delta as Delta Detector participant DB as Database API->>Loader: Start ingestion job Note over Loader: Process main table Loader->>Loader: Read issues_actions.parquet loop For each action Loader->>Delta: Check existing by action_id Delta->>DB: Query current version Delta->>Delta: Compare last_modified_on alt New Action Delta->>DB: INSERT new record else Modified Action Delta->>DB: UPDATE...",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#stage-2-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-179",
+      "headingId": "database-tables",
+      "title": "Database Tables",
+      "content": "After ingestion, data is stored in the following data layer tables: Parquet File Database Table Model",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#database-tables",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-180",
+      "headingId": "versioning-fields",
+      "title": "Versioning Fields",
+      "content": "All data layer tables include versioning fields: Column Type Description UUID Primary key (auto-generated) boolean Whether this is the active version datetime Version validity start datetime Version validity end (null if current) string Reference to upload batch datetime Record creation timestamp datetime Record last update timestamp",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#versioning-fields",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-181",
+      "headingId": "action-status-lifecycle",
+      "title": "Action Status Lifecycle",
+      "content": "stateDiagram-v2 [*] --> Draft Draft --> Open: Submit Open --> Completed: Work Complete Completed --> Closed: Verification Passed Open --> Cancelled: Cancel Completed --> Open: Reopened Closed --> Open: Reopened note right of Open Can change due date RAG status updates end note note right of Completed Closure standards must be met end note",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#action-status-lifecycle",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-182",
+      "headingId": "relationship-to-issues",
+      "title": "Relationship to Issues",
+      "content": "Actions are child records of issues, with a many-to-one relationship: flowchart LR subgraph Issues[\"Issues Data Layer\"] I1[ISSUE-0000000001] I2[ISSUE-0000000002] end subgraph Actions[\"Actions Data Layer\"] A1[ACTION-0000000001] A2[ACTION-0000000002] A3[ACTION-0000000003] A4[ACTION-0000000004] end A1 --> I1 A2 --> I1 A3 --> I1 A4 --> I2",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#relationship-to-issues",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-183",
+      "headingId": "aggregation-in-issues",
+      "title": "Aggregation in Issues",
+      "content": "The Issues pipeline tracks action counts: issues_main Column Description Count of actions with status Total count of all actions",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#aggregation-in-issues",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-184",
+      "headingId": "recommended-processing-order",
+      "title": "Recommended Processing Order",
+      "content": "For complete data integrity: Controls Pipeline - Independent, can run first Issues Pipeline - Independent, can run parallel with Controls Actions Pipeline - Should run after Issues for FK validation flowchart TB subgraph Independent C[Controls Pipeline] I[Issues Pipeline] end subgraph Dependent A[Actions Pipeline] end C --> A I --> A",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#recommended-processing-order",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-185",
+      "headingId": "cross-pipeline-relationships",
+      "title": "Cross-Pipeline Relationships",
+      "content": "From To Relationship Actions Issues → Issues Controls → Issues Issues →",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#cross-pipeline-relationships",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-186",
+      "headingId": "1-upload-action-file",
+      "title": "1. Upload Action File",
+      "content": "curl -X POST /api/v2/pipelines/upload \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -F \"data_type=actions\" \\ -F \"files=@Issue_Actions_Export.xlsx\"",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#1-upload-action-file",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-187",
+      "headingId": "2-check-validation-status",
+      "title": "2. Check Validation Status",
+      "content": "curl /api/v2/pipelines/upload/{batch_id} \\ -H \"X-MS-TOKEN-AAD: <token>\" Response: { \"batch_id\": \"batch-uuid-here\", \"upload_id\": \"UPL-2026-0003\", \"data_type\": \"actions\", \"status\": \"validated\", \"file_count\": 1, \"parquet_files\": [ \"issues_actions.parquet\", \"issues_actions_hierarchy.parquet\" ] }",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#2-check-validation-status",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-188",
+      "headingId": "3-start-ingestion",
+      "title": "3. Start Ingestion",
+      "content": "curl -X POST /api/v2/processing/ingest \\ -H \"X-MS-TOKEN-AAD: <token>\" \\ -H \"Content-Type: application/json\" \\ -d '{\"batch_id\": \"{batch_id}\"}'",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#3-start-ingestion",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-189",
+      "headingId": "4-monitor-progress",
+      "title": "4. Monitor Progress",
+      "content": "curl /api/v2/processing/job/{job_id} \\ -H \"X-MS-TOKEN-AAD: <token>\" Response (Complete): { \"job_id\": \"job-uuid-here\", \"batch_id\": \"batch-uuid-here\", \"job_type\": \"ingestion\", \"status\": \"completed\", \"progress\": { \"current_step\": \"complete\", \"percentage\": 100, \"records_total\": 850, \"records_processed\": 850, \"records_new\": 720, \"records_updated\": 130, \"records_failed\": 0 }, \"warnings\": [ { \"type\": \"orphaned_reference\", \"count\": 5, \"message\": \"5 actions reference non-existent issues\" } ],...",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#4-monitor-progress",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-190",
+      "headingId": "action-status-summary",
+      "title": "Action Status Summary",
+      "content": "Query to get action status breakdown by issue type: SELECT issue_type, action_status, COUNT(*) as count FROM dl_issue_actions WHERE is_current = true GROUP BY issue_type, action_status ORDER BY issue_type, action_status",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#action-status-summary",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-191",
+      "headingId": "overdue-actions",
+      "title": "Overdue Actions",
+      "content": "Query to identify overdue open actions: SELECT action_id, issue_id, action_title, current_due_date, action_owner FROM dl_issue_actions WHERE is_current = true AND action_status = 'Open' AND current_due_date < CURRENT_DATE ORDER BY current_due_date",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#overdue-actions",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-192",
+      "headingId": "rag-status-distribution",
+      "title": "RAG Status Distribution",
+      "content": "Query for RAG status distribution: SELECT action_rag_status, COUNT(*) as count, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage FROM dl_issue_actions WHERE is_current = true AND action_status = 'Open' GROUP BY action_rag_status",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#rag-status-distribution",
+      "level": 3,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-193",
+      "headingId": "related-documentation",
+      "title": "Related Documentation",
+      "content": "Pipeline Overview - Architecture and API reference Controls Pipeline - Controls data source Issues Pipeline - Issues data source",
+      "path": "/docs/pipelines/actions-pipeline",
+      "anchor": "/docs/pipelines/actions-pipeline#related-documentation",
+      "level": 2,
+      "category": "Pipelines",
+      "docTitle": "Actions Pipeline"
+    },
+    {
+      "id": "doc-194",
+      "headingId": "",
       "title": "Stress Testing",
       "content": "Configure and run stress test scenarios",
       "path": "/docs/models/stress-testing",
@@ -509,7 +2148,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-46",
+      "id": "doc-195",
       "headingId": "stress-testing",
       "title": "Stress Testing",
       "content": "NFR Connect provides comprehensive stress testing capabilities for assessing risk resilience under adverse conditions.",
@@ -520,7 +2159,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-47",
+      "id": "doc-196",
       "headingId": "scenario-types",
       "title": "Scenario Types",
       "content": "Type Description Use Case Historical Based on actual past events Market crash, pandemic Hypothetical Custom adverse scenarios Cyber attack, system failure Reverse Find breaking points Capital adequacy testing",
@@ -531,7 +2170,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-48",
+      "id": "doc-197",
       "headingId": "define-a-scenario",
       "title": "Define a Scenario",
       "content": "{ \"name\": \"Market Stress Q4 2024\", \"type\": \"hypothetical\", \"parameters\": { \"market_shock\": -0.25, \"volatility_multiplier\": 2.5, \"correlation_breakdown\": true }, \"duration_days\": 30 }",
@@ -542,7 +2181,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-49",
+      "id": "doc-198",
       "headingId": "execute-via-api",
       "title": "Execute via API",
       "content": "const result = await fetch('/api/stress-tests/execute', { method: 'POST', body: JSON.stringify({ scenario_id: 'market-stress-q4-2024', portfolios: ['trading', 'banking-book'], output_format: 'detailed' }) });",
@@ -553,7 +2192,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-50",
+      "id": "doc-199",
       "headingId": "results-analysis",
       "title": "Results Analysis",
       "content": "Stress test results include: P&L Impact: Projected profit/loss under stress Capital Impact: Effect on regulatory capital ratios Liquidity Impact: Cash flow stress analysis Operational Impact: Process and system resilience :::info Regulatory Compliance Stress testing results are automatically formatted for regulatory submissions including CCAR, DFAST, and EBA requirements. :::",
@@ -564,7 +2203,7 @@
       "docTitle": "Stress Testing"
     },
     {
-      "id": "doc-51",
+      "id": "doc-200",
       "headingId": "",
       "title": "Scenario Analysis",
       "content": "Multi-factor scenario analysis and what-if modeling",
@@ -575,7 +2214,7 @@
       "docTitle": "Scenario Analysis"
     },
     {
-      "id": "doc-52",
+      "id": "doc-201",
       "headingId": "scenario-analysis",
       "title": "Scenario Analysis",
       "content": "Scenario analysis enables exploration of risk outcomes under different assumptions and conditions.",
@@ -586,7 +2225,7 @@
       "docTitle": "Scenario Analysis"
     },
     {
-      "id": "doc-53",
+      "id": "doc-202",
       "headingId": "multi-factor-scenarios",
       "title": "Multi-Factor Scenarios",
       "content": "NFR Connect supports complex scenarios with multiple interacting factors: flowchart LR subgraph Inputs A[Economic Factors] B[Market Conditions] C[Operational State] end subgraph Model D[Scenario Engine] end subgraph Outputs E[Risk Metrics] F[Capital Impact] G[Action Items] end A --> D B --> D C --> D D --> E D --> F D --> G",
@@ -597,7 +2236,7 @@
       "docTitle": "Scenario Analysis"
     },
     {
-      "id": "doc-54",
+      "id": "doc-203",
       "headingId": "scenario-definition",
       "title": "Scenario Definition",
       "content": "scenario: name: \"Rate Shock + Ops Failure\" factors: - type: market parameter: interest_rate shock: +200bps - type: operational parameter: system_availability shock: -50% correlation_matrix: - [1.0, 0.3] - [0.3, 1.0]",
@@ -608,7 +2247,7 @@
       "docTitle": "Scenario Analysis"
     },
     {
-      "id": "doc-55",
+      "id": "doc-204",
       "headingId": "what-if-analysis",
       "title": "What-If Analysis",
       "content": "The what-if analysis tool allows real-time exploration: Parameter Range Step Interest Rate -100 to +300 bps 25 bps FX Volatility 0.5x to 3.0x 0.25x Credit Spread 0 to +500 bps 50 bps :::tip Interactive Mode Use the Dashboard's interactive scenario builder for real-time what-if analysis with instant visual feedback. :::",
@@ -619,7 +2258,7 @@
       "docTitle": "Scenario Analysis"
     },
     {
-      "id": "doc-56",
+      "id": "doc-205",
       "headingId": "",
       "title": "Risk Model Integration",
       "content": "Integrate external risk calculation models with NFR Connect",
@@ -630,7 +2269,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-57",
+      "id": "doc-206",
       "headingId": "risk-model-integration",
       "title": "Risk Model Integration",
       "content": "Learn how to programmatically integrate external risk calculation models with the NFR Connect ingestion engine using the standardized model definition schema. :::warning Deprecation Notice The schema will be deprecated on Dec 31, 2024. Please migrate to schema for all new integrations. :::",
@@ -641,7 +2280,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-58",
+      "id": "doc-207",
       "headingId": "overview",
       "title": "Overview",
       "content": "The integration process allows risk quant teams to push model outputs directly into the central operational risk database. This ensures that all Capital at Risk (CaR) calculations are synchronized across the dashboard in real-time. Models are identified by a unique URN and must be registered in the Model Inventory before data ingestion can occur. :::info Prerequisites API Token with scope Whitelisted IP address for the sourcing server :::",
@@ -652,7 +2291,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-59",
+      "id": "doc-208",
       "headingId": "configuration-object",
       "title": "Configuration Object",
       "content": "The configuration object defines the model's metadata and expected input parameters. { \"modelId\": \"urn:ubs:nfr:model:monte-carlo-oprisk-v4\", \"version\": \"2.1.0\", \"owner\": \"Group Risk Analytics\", \"parameters\": [ { \"name\": \"iterations\", \"type\": \"integer\", \"default\": 10000, \"description\": \"Number of simulation cycles\" }, { \"name\": \"confidence_interval\", \"type\": \"float\", \"default\": 0.999 } ] }",
@@ -663,7 +2302,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-60",
+      "id": "doc-209",
       "headingId": "field-definitions",
       "title": "Field Definitions",
       "content": "Field Type Description string The unique URN (Uniform Resource Name) assigned by the model governance committee string Semantic version following SemVer 2.0 specification string The business unit responsible for model maintenance array List of configurable input parameters float Statistical confidence level for the VaR calculation. Must be between 0.90 and 0.9999",
@@ -674,7 +2313,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-61",
+      "id": "doc-210",
       "headingId": "registration-workflow",
       "title": "Registration Workflow",
       "content": "flowchart TD A[Submit Model Schema] --> B{Validation} B -->|Pass| C[Generate URN] B -->|Fail| D[Return Errors] C --> E[Register in Inventory] E --> F[Enable Ingestion Endpoint] F --> G[Model Ready]",
@@ -685,7 +2324,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-62",
+      "id": "doc-211",
       "headingId": "register-a-model",
       "title": "Register a Model",
       "content": "const response = await fetch('/api/models/register', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: 'urn:ubs:nfr:model:my-custom-model', version: '1.0.0', owner: 'Risk Analytics Team', schema: modelSchema }) });",
@@ -696,7 +2335,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-63",
+      "id": "doc-212",
       "headingId": "push-model-output",
       "title": "Push Model Output",
       "content": "import httpx async def push_model_results(model_id: str, results: dict): async with httpx.AsyncClient() as client: response = await client.post( f\"/api/models/{model_id}/results\", json={ \"timestamp\": datetime.utcnow().isoformat(), \"outputs\": results, \"metadata\": { \"run_id\": str(uuid4()), \"environment\": \"production\" } }, headers={\"Authorization\": f\"Bearer {token}\"} ) return response.json()",
@@ -707,7 +2346,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-64",
+      "id": "doc-213",
       "headingId": "model-output-schema",
       "title": "Model Output Schema",
       "content": "All model outputs must conform to the standard output schema: { \"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"type\": \"object\", \"required\": [\"var\", \"expected_loss\", \"tail_risk\"], \"properties\": { \"var\": { \"type\": \"number\", \"description\": \"Value at Risk at specified confidence\" }, \"expected_loss\": { \"type\": \"number\", \"description\": \"Expected loss amount\" }, \"tail_risk\": { \"type\": \"number\", \"description\": \"Expected shortfall / CVaR\" } } } :::tip Best Practices Always include a for...",
@@ -718,7 +2357,7 @@
       "docTitle": "Risk Model Integration"
     },
     {
-      "id": "doc-65",
+      "id": "doc-214",
       "headingId": "",
       "title": "Monte Carlo Simulations",
       "content": "Probabilistic risk modeling with Monte Carlo methods",
@@ -729,7 +2368,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-66",
+      "id": "doc-215",
       "headingId": "monte-carlo-simulations",
       "title": "Monte Carlo Simulations",
       "content": "Monte Carlo simulations provide probabilistic estimates of risk metrics through repeated random sampling.",
@@ -740,7 +2379,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-67",
+      "id": "doc-216",
       "headingId": "methodology",
       "title": "Methodology",
       "content": "The Monte Carlo approach generates thousands of possible outcomes to estimate the distribution of risk: $$ \\hat{\\mu} = \\frac{1}{N} \\sum_{i=1}^{N} f(X_i) $$ Where: $\\hat{\\mu}$ is the estimated mean outcome $N$ is the number of simulation iterations $f(X_i)$ is the outcome function for sample $i$",
@@ -751,7 +2390,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-68",
+      "id": "doc-217",
       "headingId": "simulation-parameters",
       "title": "Simulation Parameters",
       "content": "Parameter Default Range Description 10,000 1,000 - 1,000,000 Number of simulation runs 99.9% 95% - 99.99% VaR confidence level random any integer Random seed for reproducibility normal normal, t, empirical Loss distribution type",
@@ -762,7 +2401,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-69",
+      "id": "doc-218",
       "headingId": "configuration-example",
       "title": "Configuration Example",
       "content": "{ \"model\": \"urn:ubs:nfr:model:mc-oprisk\", \"parameters\": { \"iterations\": 100000, \"confidence_levels\": [0.95, 0.99, 0.999], \"distribution\": { \"type\": \"generalized_pareto\", \"params\": { \"shape\": 0.5, \"scale\": 1000000 } }, \"correlation_method\": \"gaussian_copula\" } }",
@@ -773,7 +2412,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-70",
+      "id": "doc-219",
       "headingId": "output-metrics",
       "title": "Output Metrics",
       "content": "The simulation produces: pie title Loss Distribution Percentiles \"0-95th percentile\" : 950 \"95th-99th percentile\" : 40 \"99th-99.9th percentile\" : 9 \"Beyond 99.9th\" : 1",
@@ -784,7 +2423,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-71",
+      "id": "doc-220",
       "headingId": "key-outputs",
       "title": "Key Outputs",
       "content": "Metric Formula Description VaR $VaR_\\alpha = F^{-1}(\\alpha)$ Value at Risk at confidence α ES $ES_\\alpha = E[L | L > VaR_\\alpha]$ Expected Shortfall (CVaR) Std Dev $\\sigma = \\sqrt{Var(L)}$ Loss volatility",
@@ -795,7 +2434,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-72",
+      "id": "doc-221",
       "headingId": "performance-optimization",
       "title": "Performance Optimization",
       "content": "For large-scale simulations: Parallel Processing: Utilize multi-core execution Variance Reduction: Apply antithetic variates GPU Acceleration: Enable CUDA for matrix operations :::warning Computation Time Simulations with >100,000 iterations may take several minutes. Use the async API for long-running jobs. ::: # Submit async job job = await client.post('/api/simulations/submit', json=config) job_id = job['id'] # Poll for completion while True: status = await...",
@@ -806,7 +2445,7 @@
       "docTitle": "Monte Carlo Simulations"
     },
     {
-      "id": "doc-73",
+      "id": "doc-222",
       "headingId": "",
       "title": "Introduction",
       "content": "Welcome to NFR Connect Documentation",
@@ -817,7 +2456,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-74",
+      "id": "doc-223",
       "headingId": "introduction-to-nfr-connect",
       "title": "Introduction to NFR Connect",
       "content": "Welcome to NFR Connect - your comprehensive platform for Non-Financial Risk intelligence and management. :::info Prerequisites This documentation is publicly available and does not require authentication. For access to the Dashboard and Chat features, please sign in to the main application. :::",
@@ -828,7 +2467,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-75",
+      "id": "doc-224",
       "headingId": "what-is-nfr-connect",
       "title": "What is NFR Connect?",
       "content": "NFR Connect is an enterprise-grade platform designed to transform how organizations identify, assess, and manage non-financial risks. Built on cutting-edge AI and graph technologies, it provides: Agentic Reasoning - Autonomous LLM agents that reason over complex unstructured data to identify emerging risks Graph Visualization - Interactive knowledge graphs revealing hidden relationships and risk propagation paths Automated Taxonomy - DICE model for intelligent control-to-risk mapping Real-time...",
@@ -839,7 +2478,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-76",
+      "id": "doc-225",
       "headingId": "platform-components",
       "title": "Platform Components",
       "content": "Component Description Access Dashboard Visual analytics and KPI monitoring Requires authentication Chat Agentic AI assistant for risk queries Requires authentication Glossary NFR terminology and definitions Requires authentication Documentation Technical guides and API reference Public",
@@ -850,7 +2489,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-77",
+      "id": "doc-226",
       "headingId": "quick-links",
       "title": "Quick Links",
       "content": "Installation Guide - Set up your development environment Authentication - Configure Azure AD integration Risk Model Integration - Connect external risk models API Reference - Complete API documentation",
@@ -861,7 +2500,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-78",
+      "id": "doc-227",
       "headingId": "architecture-overview",
       "title": "Architecture Overview",
       "content": "NFR Connect follows a modern microservices architecture: ┌─────────────────────────────────────────────────────────┐ │ NFR Connect Platform │ ├─────────────────────────────────────────────────────────┤ │ Frontend (React) │ Backend (FastAPI) │ AI Models │ ├─────────────────────────────────────────────────────────┤ │ Azure AD Authentication │ ├─────────────────────────────────────────────────────────┤ │ SurrealDB │ Graph Store │ Vector DB │...",
@@ -872,7 +2511,7 @@
       "docTitle": "Introduction"
     },
     {
-      "id": "doc-79",
+      "id": "doc-228",
       "headingId": "",
       "title": "Installation",
       "content": "Set up your NFR Connect development environment",
@@ -883,7 +2522,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-80",
+      "id": "doc-229",
       "headingId": "installation",
       "title": "Installation",
       "content": "This guide walks you through setting up NFR Connect for local development.",
@@ -894,7 +2533,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-81",
+      "id": "doc-230",
       "headingId": "system-requirements",
       "title": "System Requirements",
       "content": "Requirement Minimum Version Node.js 18.0 or higher Python 3.12 or higher npm 9.0 or higher",
@@ -905,7 +2544,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-82",
+      "id": "doc-231",
       "headingId": "1-clone-the-repository",
       "title": "1. Clone the Repository",
       "content": "git clone https://github.com/ubs/nfr-connect.git cd nfr-connect",
@@ -916,7 +2555,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-83",
+      "id": "doc-232",
       "headingId": "2-install-client-dependencies",
       "title": "2. Install Client Dependencies",
       "content": "cd client npm install",
@@ -927,7 +2566,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-84",
+      "id": "doc-233",
       "headingId": "3-install-server-dependencies",
       "title": "3. Install Server Dependencies",
       "content": "cd ../server pip install -r requirements.txt",
@@ -938,7 +2577,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-85",
+      "id": "doc-234",
       "headingId": "4-configure-environment-variables",
       "title": "4. Configure Environment Variables",
       "content": "Create files in both and directories: REACT_APP_CLIENT_ID=your-azure-client-id REACT_APP_AUTHORITY=https://login.microsoftonline.com/your-tenant-id REACT_APP_REDIRECT_URI=http://localhost:3000 REACT_APP_API_BASE_URL=http://localhost:8000 REACT_APP_LOGIN_SCOPES=User.Read REACT_APP_API_SCOPES=api://your-api-scope/access_as_user TENANT_ID=your-tenant-id CLIENT_ID=your-client-id CLIENT_SECRET=your-client-secret GRAPH_SCOPES=User.Read,GroupMember.Read.All :::tip Azure AD Setup Contact your Azure...",
@@ -949,7 +2588,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-86",
+      "id": "doc-235",
       "headingId": "5-start-development-servers",
       "title": "5. Start Development Servers",
       "content": "# Start the backend server cd server uvicorn main:app --reload --port 8000 # In a new terminal, start the frontend cd client npm start The application will be available at .",
@@ -960,7 +2599,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-87",
+      "id": "doc-236",
       "headingId": "verify-installation",
       "title": "Verify Installation",
       "content": "After starting both servers, you should be able to: Access the home page at See the Microsoft Sign In button View the documentation at :::info Troubleshooting If you encounter CORS errors, ensure both servers are running and the in the server includes . :::",
@@ -971,7 +2610,7 @@
       "docTitle": "Installation"
     },
     {
-      "id": "doc-88",
+      "id": "doc-237",
       "headingId": "",
       "title": "Authentication",
       "content": "Configure Azure AD authentication for NFR Connect",
@@ -982,7 +2621,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-89",
+      "id": "doc-238",
       "headingId": "authentication",
       "title": "Authentication",
       "content": "NFR Connect uses Microsoft Azure Active Directory (Azure AD) for secure enterprise authentication.",
@@ -993,7 +2632,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-90",
+      "id": "doc-239",
       "headingId": "authentication-flow",
       "title": "Authentication Flow",
       "content": "sequenceDiagram participant U as User participant C as Client App participant A as Azure AD participant S as Backend API participant G as Graph API U->>C: Click Sign In C->>A: Redirect to login A->>U: Present login form U->>A: Enter credentials A->>C: Return access token C->>S: API request + token S->>G: Validate & get groups G-->>S: User groups S-->>C: Access rights C-->>U: Authorized view",
@@ -1004,7 +2643,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-91",
+      "id": "doc-240",
       "headingId": "access-control",
       "title": "Access Control",
       "content": "NFR Connect implements role-based access control through Azure AD groups: Access Right Azure AD Group Features NFR-Chat-Users Agentic chat interface NFR-Dashboard-Users Analytics dashboard",
@@ -1015,7 +2654,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-92",
+      "id": "doc-241",
       "headingId": "client-configuration",
       "title": "Client Configuration",
       "content": "The authentication configuration is managed in : export const msalConfig = { auth: { clientId: process.env.REACT_APP_CLIENT_ID, authority: process.env.REACT_APP_AUTHORITY, redirectUri: process.env.REACT_APP_REDIRECT_URI, }, cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false, }, }; export const loginRequest = { scopes: ['User.Read'], };",
@@ -1026,7 +2665,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-93",
+      "id": "doc-242",
       "headingId": "server-configuration",
       "title": "Server Configuration",
       "content": "The backend validates tokens and checks group membership: @app.get(\"/api/auth/access\") async def check_access(token: str = Depends(oauth2_scheme)): # Validate token and get user groups groups = await get_user_groups(token) return { \"hasChatAccess\": CHAT_GROUP_ID in groups, \"hasDashboardAccess\": DASHBOARD_GROUP_ID in groups, \"user\": get_user_display_name(token) }",
@@ -1037,7 +2676,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-94",
+      "id": "doc-243",
       "headingId": "troubleshooting",
       "title": "Troubleshooting",
       "content": ":::warning Common Issues \"AADSTS50011: The reply URL specified in the request does not match\" Ensure matches the registered redirect URI in Azure AD \"User is not authorized\" Verify the user is a member of the required Azure AD groups Check that group IDs in server are correct :::",
@@ -1048,7 +2687,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-95",
+      "id": "doc-244",
       "headingId": "security-best-practices",
       "title": "Security Best Practices",
       "content": "Never expose client secrets in frontend code Use secure token storage - NFR Connect uses sessionStorage Implement token refresh - Tokens are automatically refreshed before expiry Validate tokens server-side - All API requests are validated against Azure AD",
@@ -1059,7 +2698,7 @@
       "docTitle": "Authentication"
     },
     {
-      "id": "doc-96",
+      "id": "doc-245",
       "headingId": "",
       "title": "Risk Taxonomy",
       "content": "Understanding the NFR Connect risk classification system",
@@ -1070,7 +2709,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-97",
+      "id": "doc-246",
       "headingId": "risk-taxonomy",
       "title": "Risk Taxonomy",
       "content": "NFR Connect uses a hierarchical taxonomy to classify and organize non-financial risks across the enterprise.",
@@ -1081,7 +2720,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-98",
+      "id": "doc-247",
       "headingId": "taxonomy-structure",
       "title": "Taxonomy Structure",
       "content": "The risk taxonomy follows a four-level hierarchy: Level 1: Risk Category └── Level 2: Risk Type └── Level 3: Risk Sub-type └── Level 4: Risk Event",
@@ -1092,7 +2731,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-99",
+      "id": "doc-248",
       "headingId": "risk-categories",
       "title": "Risk Categories",
       "content": "Category Code Description Operational Risk OPR Risks from failed internal processes, people, or systems Compliance Risk CMP Risks from regulatory non-compliance Strategic Risk STR Risks from business decisions and external factors Reputational Risk REP Risks to brand and stakeholder trust",
@@ -1103,7 +2742,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-100",
+      "id": "doc-249",
       "headingId": "dice-model-integration",
       "title": "DICE Model Integration",
       "content": "The DICE (Data Insights Clustering Enrichment) model automatically maps control failures to the appropriate taxonomy nodes: $$ P(\\text{taxonomy}|\\text{event}) = \\frac{P(\\text{event}|\\text{taxonomy}) \\cdot P(\\text{taxonomy})}{P(\\text{event})} $$ Where: $P(\\text{taxonomy}|\\text{event})$ is the probability of a taxonomy classification given an event $P(\\text{event}|\\text{taxonomy})$ is the likelihood of the event under that taxonomy $P(\\text{taxonomy})$ is the prior probability of the taxonomy...",
@@ -1114,7 +2753,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-101",
+      "id": "doc-250",
       "headingId": "taxonomy-api",
       "title": "Taxonomy API",
       "content": "Query the risk taxonomy programmatically: const response = await fetch('/api/taxonomy/tree'); const taxonomy = await response.json(); // Response structure { \"id\": \"OPR\", \"label\": \"Operational Risk\", \"children\": [ { \"id\": \"OPR-001\", \"label\": \"Process Risk\", \"children\": [...] } ] }",
@@ -1125,7 +2764,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-102",
+      "id": "doc-251",
       "headingId": "related-documentation",
       "title": "Related Documentation",
       "content": "Event Types - Understanding risk event classification Impact Analysis - Assessing risk impact",
@@ -1136,7 +2775,7 @@
       "docTitle": "Risk Taxonomy"
     },
     {
-      "id": "doc-103",
+      "id": "doc-252",
       "headingId": "",
       "title": "Impact Analysis",
       "content": "Assessing and quantifying risk impact",
@@ -1147,7 +2786,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-104",
+      "id": "doc-253",
       "headingId": "impact-analysis",
       "title": "Impact Analysis",
       "content": "Impact analysis in NFR Connect quantifies the potential consequences of risk events across multiple dimensions.",
@@ -1158,7 +2797,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-105",
+      "id": "doc-254",
       "headingId": "impact-dimensions",
       "title": "Impact Dimensions",
       "content": "Dimension Metrics Weight Financial Direct loss, remediation cost 40% Operational Service disruption, productivity 25% Regulatory Fines, sanctions, compliance gaps 20% Reputational Client impact, media exposure 15%",
@@ -1169,7 +2808,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-106",
+      "id": "doc-255",
       "headingId": "quantitative-assessment",
       "title": "Quantitative Assessment",
       "content": "The total impact score is calculated as a weighted sum: $$ I_{total} = \\sum_{i=1}^{n} w_i \\cdot I_i $$ Where: $I_{total}$ is the total impact score $w_i$ is the weight for dimension $i$ $I_i$ is the impact score for dimension $i$ (1-5 scale)",
@@ -1180,7 +2819,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-107",
+      "id": "doc-256",
       "headingId": "example-calculation",
       "title": "Example Calculation",
       "content": "For a data breach event: Dimension Score Weight Weighted Financial 4 0.40 1.60 Operational 3 0.25 0.75 Regulatory 5 0.20 1.00 Reputational 4 0.15 0.60 Total 3.95",
@@ -1191,7 +2830,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-108",
+      "id": "doc-257",
       "headingId": "impact-propagation",
       "title": "Impact Propagation",
       "content": "NFR Connect uses graph analysis to identify cascading impacts: flowchart LR A[Primary Event] --> B[Control Failure] B --> C[System Outage] B --> D[Data Loss] C --> E[Client Impact] D --> E E --> F[Regulatory Reporting] :::info HALO Model The HALO (Hypergraph Analysis of Linked Objects) model identifies multi-hop risk propagation paths, revealing hidden dependencies and systemic risks. :::",
@@ -1202,7 +2841,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-109",
+      "id": "doc-258",
       "headingId": "capital-at-risk-car",
       "title": "Capital at Risk (CaR)",
       "content": "For significant events, NFR Connect calculates the Capital at Risk: $$ CaR = VaR_{99.9%} \\times \\sqrt{\\frac{t}{252}} $$ Where: $VaR_{99.9%}$ is the Value at Risk at 99.9% confidence $t$ is the time horizon in days 252 is the number of trading days per year This metric is used for regulatory capital allocation and stress testing scenarios.",
@@ -1213,7 +2852,7 @@
       "docTitle": "Impact Analysis"
     },
     {
-      "id": "doc-110",
+      "id": "doc-259",
       "headingId": "",
       "title": "Event Types",
       "content": "Classification of risk events in NFR Connect",
@@ -1224,7 +2863,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-111",
+      "id": "doc-260",
       "headingId": "event-types",
       "title": "Event Types",
       "content": "Risk events in NFR Connect are classified by type to enable consistent analysis and reporting.",
@@ -1235,7 +2874,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-112",
+      "id": "doc-261",
       "headingId": "event-classification",
       "title": "Event Classification",
       "content": "Type Description Example Loss Event Actual financial or operational loss Trading error resulting in $50K loss Near Miss Potential loss that was avoided Failed backup detected before data loss Control Failure Breakdown in control effectiveness Unauthorized access attempt blocked External Event External factor impacting operations Vendor service outage",
@@ -1246,7 +2885,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-113",
+      "id": "doc-262",
       "headingId": "event-lifecycle",
       "title": "Event Lifecycle",
       "content": "stateDiagram-v2 [*] --> Detected: Event Identified Detected --> Assessed: Initial Review Assessed --> InProgress: Action Required Assessed --> Closed: No Action Needed InProgress --> Remediated: Controls Updated Remediated --> Verified: Testing Complete Verified --> Closed: Resolution Confirmed Closed --> [*]",
@@ -1257,7 +2896,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-114",
+      "id": "doc-263",
       "headingId": "event-severity-matrix",
       "title": "Event Severity Matrix",
       "content": "Events are scored based on impact and likelihood: Likelihood / Impact Low (1-2) Medium (3-4) High (5) Rare Low Low Medium Unlikely Low Medium Medium Possible Medium Medium High Likely Medium High High Almost Certain High High Critical :::warning Severity Escalation Events classified as High or Critical trigger automatic escalation to the Risk Committee and require remediation within 48 hours. :::",
@@ -1268,7 +2907,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-115",
+      "id": "doc-264",
       "headingId": "event-ingestion",
       "title": "Event Ingestion",
       "content": "Events can be ingested through multiple channels: Manual Entry - Through the NFR Connect Dashboard API Integration - Programmatic submission via REST API Automated Detection - From monitoring systems and log analysis { \"type\": \"LOSS_EVENT\", \"severity\": 3, \"description\": \"Unauthorized transaction processed\", \"taxonomy_code\": \"OPR-002-001\", \"detected_at\": \"2024-01-15T10:30:00Z\", \"business_unit\": \"Trading Operations\" }",
@@ -1279,7 +2918,7 @@
       "docTitle": "Event Types"
     },
     {
-      "id": "doc-116",
+      "id": "doc-265",
       "headingId": "",
       "title": "Rate Limits",
       "content": "API rate limiting and quotas",
@@ -1290,7 +2929,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-117",
+      "id": "doc-266",
       "headingId": "rate-limits",
       "title": "Rate Limits",
       "content": "NFR Connect implements rate limiting to ensure fair usage and system stability.",
@@ -1301,7 +2940,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-118",
+      "id": "doc-267",
       "headingId": "limits-by-tier",
       "title": "Limits by Tier",
       "content": "Tier Requests/Minute Requests/Day Concurrent Standard 60 10,000 5 Professional 300 100,000 20 Enterprise 1,000 Unlimited 100",
@@ -1312,7 +2951,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-119",
+      "id": "doc-268",
       "headingId": "rate-limit-headers",
       "title": "Rate Limit Headers",
       "content": "All API responses include rate limit information: HTTP/1.1 200 OK X-RateLimit-Limit: 60 X-RateLimit-Remaining: 45 X-RateLimit-Reset: 1704067200 Header Description Maximum requests per window Requests remaining in window Unix timestamp when window resets",
@@ -1323,7 +2962,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-120",
+      "id": "doc-269",
       "headingId": "handling-rate-limits",
       "title": "Handling Rate Limits",
       "content": "When rate limited, you'll receive a response: { \"error\": \"rate_limit_exceeded\", \"message\": \"Too many requests. Please retry after 30 seconds.\", \"retry_after\": 30 }",
@@ -1334,7 +2973,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-121",
+      "id": "doc-270",
       "headingId": "best-practices",
       "title": "Best Practices",
       "content": "Implement exponential backoff for retries Cache responses where appropriate Use webhooks for real-time updates instead of polling Batch requests when possible async function fetchWithRetry(url: string, maxRetries = 3) { for (let i = 0; i < maxRetries; i++) { const response = await fetch(url); if (response.status === 429) { const retryAfter = response.headers.get('Retry-After') || Math.pow(2, i); await sleep(retryAfter * 1000); continue; } return response; } throw new Error('Max retries...",
@@ -1345,7 +2984,7 @@
       "docTitle": "Rate Limits"
     },
     {
-      "id": "doc-122",
+      "id": "doc-271",
       "headingId": "",
       "title": "Error Codes",
       "content": "API error codes and troubleshooting",
@@ -1356,7 +2995,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-123",
+      "id": "doc-272",
       "headingId": "error-codes",
       "title": "Error Codes",
       "content": "NFR Connect uses standard HTTP status codes along with detailed error responses.",
@@ -1367,7 +3006,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-124",
+      "id": "doc-273",
       "headingId": "error-response-format",
       "title": "Error Response Format",
       "content": "All errors follow a consistent structure: { \"error\": { \"code\": \"VALIDATION_ERROR\", \"message\": \"Invalid request parameters\", \"details\": [ { \"field\": \"severity\", \"message\": \"Must be between 1 and 5\" } ], \"request_id\": \"req-abc123\" } }",
@@ -1378,7 +3017,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-125",
+      "id": "doc-274",
       "headingId": "authentication-errors-401",
       "title": "Authentication Errors (401)",
       "content": "Code Description Resolution Token is malformed or expired Obtain a new token Token has expired Refresh the token No authorization header Include Bearer token",
@@ -1389,7 +3028,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-126",
+      "id": "doc-275",
       "headingId": "authorization-errors-403",
       "title": "Authorization Errors (403)",
       "content": "Code Description Resolution Token lacks required scope Request appropriate scopes User lacks permission Contact administrator IP address not allowed Add IP to whitelist",
@@ -1400,7 +3039,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-127",
+      "id": "doc-276",
       "headingId": "validation-errors-400",
       "title": "Validation Errors (400)",
       "content": "Code Description Resolution Request body validation failed Check array Query parameter invalid Review parameter format Required field missing Include all required fields",
@@ -1411,7 +3050,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-128",
+      "id": "doc-277",
       "headingId": "resource-errors-404409",
       "title": "Resource Errors (404/409)",
       "content": "Code Description Resolution Resource does not exist Verify resource ID Resource already exists Use update endpoint State conflict Retry with fresh data",
@@ -1422,7 +3061,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-129",
+      "id": "doc-278",
       "headingId": "server-errors-500",
       "title": "Server Errors (500)",
       "content": "Code Description Resolution Unexpected server error Retry with exponential backoff Temporary outage Check status page Database operation failed Retry later",
@@ -1433,7 +3072,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-130",
+      "id": "doc-279",
       "headingId": "common-issues",
       "title": "Common Issues",
       "content": ":::info Request ID Always include the from error responses when contacting support - it helps us trace the exact issue. ::: \"Token expired\" immediately after login Check that your system clock is synchronized Ensure the token issuer time is correct \"Insufficient scope\" with valid token Review the scopes requested during authentication Some endpoints require additional scopes like Intermittent 500 errors Implement retry logic with exponential backoff Check the status page for ongoing incidents",
@@ -1444,7 +3083,7 @@
       "docTitle": "Error Codes"
     },
     {
-      "id": "doc-131",
+      "id": "doc-280",
       "headingId": "",
       "title": "API Endpoints",
       "content": "Complete NFR Connect API reference",
@@ -1455,7 +3094,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-132",
+      "id": "doc-281",
       "headingId": "api-endpoints",
       "title": "API Endpoints",
       "content": "NFR Connect exposes a RESTful API for programmatic integration. All endpoints require authentication unless otherwise noted.",
@@ -1466,7 +3105,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-133",
+      "id": "doc-282",
       "headingId": "base-url",
       "title": "Base URL",
       "content": "Production: https://api.nfr-connect.example.com/v1 Development: http://localhost:8000/api",
@@ -1477,7 +3116,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-134",
+      "id": "doc-283",
       "headingId": "authentication",
       "title": "Authentication",
       "content": "All requests must include a valid Bearer token: curl -H \"Authorization: Bearer <token>\" https://api.nfr-connect.example.com/v1/risks",
@@ -1488,7 +3127,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-135",
+      "id": "doc-284",
       "headingId": "check-user-access",
       "title": "Check User Access",
       "content": "GET /api/auth/access Returns the current user's access rights. Response: { \"hasChatAccess\": true, \"hasDashboardAccess\": true, \"user\": \"John Doe\" }",
@@ -1499,7 +3138,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-136",
+      "id": "doc-285",
       "headingId": "list-risk-events",
       "title": "List Risk Events",
       "content": "GET /api/risks Query Parameters: Parameter Type Description string Filter by status (active, closed, all) integer Minimum severity level (1-5) datetime Start date (ISO 8601) datetime End date (ISO 8601) integer Max results (default: 100) integer Pagination offset Response: { \"data\": [ { \"id\": \"evt-12345\", \"type\": \"LOSS_EVENT\", \"severity\": 3, \"description\": \"Unauthorized transaction\", \"status\": \"active\", \"created_at\": \"2024-01-15T10:30:00Z\" } ], \"total\": 142, \"limit\": 100, \"offset\": 0 }",
@@ -1510,7 +3149,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-137",
+      "id": "doc-286",
       "headingId": "create-risk-event",
       "title": "Create Risk Event",
       "content": "POST /api/risks Request Body: { \"type\": \"LOSS_EVENT\", \"severity\": 3, \"description\": \"Description of the event\", \"taxonomy_code\": \"OPR-002-001\", \"business_unit\": \"Trading Operations\" }",
@@ -1521,7 +3160,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-138",
+      "id": "doc-287",
       "headingId": "list-registered-models",
       "title": "List Registered Models",
       "content": "GET /api/models",
@@ -1532,7 +3171,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-139",
+      "id": "doc-288",
       "headingId": "register-model",
       "title": "Register Model",
       "content": "POST /api/models/register",
@@ -1543,7 +3182,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-140",
+      "id": "doc-289",
       "headingId": "push-model-results",
       "title": "Push Model Results",
       "content": "POST /api/models/{model_id}/results",
@@ -1554,7 +3193,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-141",
+      "id": "doc-290",
       "headingId": "submit-simulation-job",
       "title": "Submit Simulation Job",
       "content": "POST /api/simulations/submit",
@@ -1565,7 +3204,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-142",
+      "id": "doc-291",
       "headingId": "get-simulation-status",
       "title": "Get Simulation Status",
       "content": "GET /api/simulations/{job_id}/status",
@@ -1576,7 +3215,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-143",
+      "id": "doc-292",
       "headingId": "get-simulation-results",
       "title": "Get Simulation Results",
       "content": "GET /api/simulations/{job_id}/results",
@@ -1587,7 +3226,7 @@
       "docTitle": "API Endpoints"
     },
     {
-      "id": "doc-144",
+      "id": "doc-293",
       "headingId": "response-codes",
       "title": "Response Codes",
       "content": "Code Description 200 Success 201 Created 400 Bad Request - Invalid parameters 401 Unauthorized - Invalid or missing token 403 Forbidden - Insufficient permissions 404 Not Found 429 Too Many Requests - Rate limit exceeded 500 Internal Server Error :::tip SDK Available For Python and TypeScript integrations, consider using our official SDKs which handle authentication and error handling automatically. :::",

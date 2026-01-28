@@ -1,0 +1,13 @@
+{
+  "file_count": 1,
+  "file_patterns": [
+    "controls*.xlsx"
+  ],
+  "min_file_size_kb": 5,
+  "allowed_extensions": [".xlsx"],
+  "enterprise_format": {
+    "header_row": 11,
+    "timestamp_cell": "B10",
+    "timestamp_keyword": "Timestamp"
+  }
+}

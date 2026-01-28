@@ -1,30 +1,60 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PipelinesSidebar from './components/PipelinesSidebar';
 import DataTypeSelector from './components/DataTypeSelector';
-import FileUploadZone from './components/FileUploadZone';
+import UppyUploader from './components/UppyUploader';
 import IngestionHistory from './components/IngestionHistory';
-import { usePipelinesUpload } from './hooks/usePipelinesUpload';
+import { useAuth } from '../../auth/useAuth';
+import { appConfig } from '../../config/appConfig';
+import { DataType, IngestionRecord, IngestionHistoryResponse, VALIDATION_RULES } from './types';
 
 const Pipelines: React.FC = () => {
-    const {
-        files,
-        validations,
-        isUploading,
-        error,
-        success,
-        dataType,
-        rules,
-        addFiles,
-        removeFile,
-        clearFiles,
-        changeDataType,
-        upload,
-        history,
-        historyLoading,
-        refreshHistory,
-    } = usePipelinesUpload();
+    const { getApiAccessToken } = useAuth();
+    const [dataType, setDataType] = useState<DataType>('issues');
+    const [history, setHistory] = useState<IngestionRecord[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
-    const canUpload = files.length === rules.fileCount && validations.every(v => v.isValid);
+    // Fetch history
+    const fetchHistory = useCallback(async () => {
+        setHistoryLoading(true);
+        try {
+            const token = await getApiAccessToken();
+            if (!token) return;
+
+            const response = await fetch(`${appConfig.api.baseUrl}/api/v2/pipelines/history?limit=10`, {
+                headers: {
+                    'X-MS-TOKEN-AAD': token,
+                },
+            });
+
+            if (response.ok) {
+                const data: IngestionHistoryResponse = await response.json();
+                setHistory(data.records);
+            }
+        } catch (err) {
+            console.error('Failed to fetch history:', err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [getApiAccessToken]);
+
+    useEffect(() => {
+        fetchHistory();
+    }, [fetchHistory]);
+
+    const handleUploadComplete = (result: { uploadId: string; filesUploaded: number }) => {
+        console.log('Upload complete:', result);
+        fetchHistory();
+    };
+
+    const handleUploadError = (error: Error) => {
+        console.error('Upload error:', error);
+    };
+
+    const handleDataTypeChange = (type: DataType) => {
+        setDataType(type);
+    };
+
+    const rules = VALIDATION_RULES[dataType];
 
     return (
         <main className="min-h-screen">
@@ -36,206 +66,122 @@ const Pipelines: React.FC = () => {
 
                 {/* Main Content */}
                 <div className="flex-1 min-w-0 p-6 flex flex-col gap-6">
-                        {/* Page Header */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h1 className="text-xl font-bold text-text-main flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-primary">cloud_upload</span>
-                                    Data Ingestion
-                                </h1>
-                                <p className="text-xs text-text-sub mt-1">
-                                    Upload risk management data files for processing
-                                </p>
-                            </div>
+                    {/* Page Header */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-xl font-bold text-text-main flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">cloud_upload</span>
+                                Data Ingestion
+                            </h1>
+                            <p className="text-xs text-text-sub mt-1">
+                                Upload risk management data files for processing
+                            </p>
                         </div>
+                        {/* TUS Badge */}
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                            <span className="material-symbols-outlined text-blue-600 text-[16px]">cloud_sync</span>
+                            <span className="text-xs font-medium text-blue-700">Resumable Uploads (TUS)</span>
+                        </div>
+                    </div>
 
-                        {/* Success Message */}
-                        {success && (
-                            <div className="bg-green-50 border border-green-200 rounded p-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-green-600">check_circle</span>
-                                    <div>
-                                        <p className="text-sm font-medium text-green-800">
-                                            Upload Successful
-                                        </p>
-                                        <p className="text-xs text-green-700 mt-1">
-                                            Ingestion ID: <span className="font-mono font-medium">{success.ingestionId}</span>
-                                        </p>
-                                        <p className="text-xs text-green-600 mt-0.5">
-                                            {success.filesUploaded} file(s) uploaded for {success.dataType}
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={clearFiles}
-                                        className="ml-auto text-green-600 hover:text-green-800"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">close</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Error Message */}
-                        {error && (
-                            <div className="bg-red-50 border border-red-200 rounded p-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-red-600">error</span>
-                                    <div>
-                                        <p className="text-sm font-medium text-red-800">
-                                            Upload Error
-                                        </p>
-                                        <p className="text-xs text-red-600 mt-1">{error.message}</p>
-                                        {error.details && error.details.length > 0 && (
-                                            <ul className="text-xs text-red-600 mt-2 list-disc list-inside space-y-1">
-                                                {error.details.map((detail, idx) => (
-                                                    <li key={idx}>{detail}</li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Two Column Layout */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* Upload Card - Takes 2 columns */}
-                            <div className="lg:col-span-2 bg-white border border-border-light rounded shadow-card">
-                                {/* Card Header */}
-                                <div className="px-5 py-3 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
-                                    <h2 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-text-sub text-[16px]">upload_file</span>
-                                        Upload Files
-                                    </h2>
-                                    {files.length > 0 && (
-                                        <button
-                                            onClick={clearFiles}
-                                            disabled={isUploading}
-                                            className="text-[10px] font-medium text-text-sub hover:text-red-600 flex items-center gap-1 transition-colors"
-                                        >
-                                            <span className="material-symbols-outlined text-[14px]">delete</span>
-                                            Clear All
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Card Body */}
-                                <div className="p-5 space-y-6">
-                                    {/* Data Type Selector */}
-                                    <DataTypeSelector
-                                        value={dataType}
-                                        onChange={changeDataType}
-                                        disabled={isUploading}
-                                    />
-
-                                    {/* File Upload Zone */}
-                                    <FileUploadZone
-                                        files={files}
-                                        validations={validations}
-                                        rules={rules}
-                                        onFilesAdded={addFiles}
-                                        onFileRemoved={removeFile}
-                                        disabled={isUploading}
-                                    />
-
-                                    {/* Upload Button */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-border-light">
-                                        <div className="text-xs text-text-sub">
-                                            {files.length === 0 ? (
-                                                <span>Select files to begin upload</span>
-                                            ) : files.length < rules.fileCount ? (
-                                                <span className="text-amber-600">
-                                                    <span className="material-symbols-outlined text-[14px] align-middle mr-1">warning</span>
-                                                    {rules.fileCount - files.length} more file(s) required
-                                                </span>
-                                            ) : !validations.every(v => v.isValid) ? (
-                                                <span className="text-red-600">
-                                                    <span className="material-symbols-outlined text-[14px] align-middle mr-1">error</span>
-                                                    Some files have validation errors
-                                                </span>
-                                            ) : (
-                                                <span className="text-green-600">
-                                                    <span className="material-symbols-outlined text-[14px] align-middle mr-1">check_circle</span>
-                                                    Ready to upload
-                                                </span>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={upload}
-                                            disabled={!canUpload || isUploading}
-                                            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded shadow-sm transition-all ${
-                                                canUpload && !isUploading
-                                                    ? 'bg-primary hover:bg-[#cc0000] text-white'
-                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                            }`}
-                                        >
-                                            {isUploading ? (
-                                                <>
-                                                    <span className="material-symbols-outlined text-[18px] animate-spin">refresh</span>
-                                                    Uploading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
-                                                    Upload Files
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
+                    {/* Two Column Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Upload Card - Takes 2 columns */}
+                        <div className="lg:col-span-2 bg-white border border-border-light rounded shadow-card">
+                            {/* Card Header */}
+                            <div className="px-5 py-3 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
+                                <h2 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-text-sub text-[16px]">
+                                        cloud_sync
+                                    </span>
+                                    Upload Files
+                                </h2>
                             </div>
 
-                            {/* History Section - Takes 1 column */}
-                            <div className="lg:col-span-1">
-                                <IngestionHistory
-                                    records={history}
-                                    isLoading={historyLoading}
-                                    onRefresh={refreshHistory}
+                            {/* Card Body */}
+                            <div className="p-5 space-y-6">
+                                {/* Data Type Selector */}
+                                <DataTypeSelector
+                                    value={dataType}
+                                    onChange={handleDataTypeChange}
+                                    disabled={false}
+                                />
+
+                                {/* TUS/Uppy Upload Zone */}
+                                <UppyUploader
+                                    dataType={dataType}
+                                    rules={rules}
+                                    onUploadComplete={handleUploadComplete}
+                                    onUploadError={handleUploadError}
+                                    disabled={false}
                                 />
                             </div>
                         </div>
 
-                        {/* Help Section */}
-                        <div className="bg-surface-light border border-border-light rounded p-4">
-                            <h3 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2 mb-3">
-                                <span className="material-symbols-outlined text-text-sub text-[16px]">help</span>
-                                File Requirements
-                            </h3>
-                            <div className="grid grid-cols-3 gap-4 text-xs">
-                                <div className="bg-white p-3 rounded border border-border-light">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="material-symbols-outlined text-amber-600 text-[16px]">report_problem</span>
-                                        <span className="font-medium text-text-main">Issues</span>
-                                    </div>
-                                    <ul className="text-text-sub space-y-1">
-                                        <li>4 Excel files (.xlsx)</li>
-                                        <li>Minimum 5KB each</li>
-                                    </ul>
+                        {/* History Section - Takes 1 column */}
+                        <div className="lg:col-span-1">
+                            <IngestionHistory
+                                records={history}
+                                isLoading={historyLoading}
+                                onRefresh={fetchHistory}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Help Section */}
+                    <div className="bg-surface-light border border-border-light rounded p-4">
+                        <h3 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2 mb-3">
+                            <span className="material-symbols-outlined text-text-sub text-[16px]">help</span>
+                            File Requirements
+                        </h3>
+                        <div className="grid grid-cols-3 gap-4 text-xs">
+                            <div className="bg-white p-3 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="material-symbols-outlined text-amber-600 text-[16px]">report_problem</span>
+                                    <span className="font-medium text-text-main">Issues</span>
                                 </div>
-                                <div className="bg-white p-3 rounded border border-border-light">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="material-symbols-outlined text-blue-600 text-[16px]">verified_user</span>
-                                        <span className="font-medium text-text-main">Controls</span>
-                                    </div>
-                                    <ul className="text-text-sub space-y-1">
-                                        <li>1 Excel file (.xlsx)</li>
-                                        <li>Minimum 5KB</li>
-                                    </ul>
+                                <ul className="text-text-sub space-y-1">
+                                    <li>4 Excel files (.xlsx)</li>
+                                    <li>Minimum 5KB each</li>
+                                </ul>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="material-symbols-outlined text-blue-600 text-[16px]">verified_user</span>
+                                    <span className="font-medium text-text-main">Controls</span>
                                 </div>
-                                <div className="bg-white p-3 rounded border border-border-light">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="material-symbols-outlined text-green-600 text-[16px]">task_alt</span>
-                                        <span className="font-medium text-text-main">Actions</span>
-                                    </div>
-                                    <ul className="text-text-sub space-y-1">
-                                        <li>1 Excel file (.xlsx)</li>
-                                        <li>Minimum 5KB</li>
-                                    </ul>
+                                <ul className="text-text-sub space-y-1">
+                                    <li>1 Excel file (.xlsx)</li>
+                                    <li>Minimum 5KB</li>
+                                </ul>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="material-symbols-outlined text-green-600 text-[16px]">task_alt</span>
+                                    <span className="font-medium text-text-main">Actions</span>
+                                </div>
+                                <ul className="text-text-sub space-y-1">
+                                    <li>1 Excel file (.xlsx)</li>
+                                    <li>Minimum 5KB</li>
+                                </ul>
+                            </div>
+                        </div>
+                        {/* TUS Info Banner */}
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded">
+                            <div className="flex items-start gap-2">
+                                <span className="material-symbols-outlined text-blue-600 text-[16px] mt-0.5">info</span>
+                                <div className="text-xs text-blue-800">
+                                    <p className="font-medium">Resumable Uploads Enabled</p>
+                                    <p className="mt-1 text-blue-700">
+                                        Using the TUS protocol for reliable file uploads. If your connection is interrupted,
+                                        the upload will automatically resume from where it left off.
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
         </main>
     );
 };

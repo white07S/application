@@ -14,8 +14,11 @@
     "@types/jest": "^27.5.2",
     "@types/katex": "^0.16.7",
     "@types/node": "^16.18.126",
-    "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
+    "@uppy/core": "^5.2.0",
+    "@uppy/dashboard": "^5.1.0",
+    "@uppy/react": "^5.1.1",
+    "@uppy/tus": "^5.1.0",
     "flexsearch": "^0.7.31",
     "katex": "^0.16.9",
     "mermaid": "^10.6.0",
@@ -58,6 +61,7 @@
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/react": "^19.2.9",
     "tailwindcss": "^3.4.19"
   }
 }
