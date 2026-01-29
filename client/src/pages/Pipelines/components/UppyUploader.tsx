@@ -441,11 +441,11 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
         <div className="space-y-4">
             {/* Success Message */}
             {uploadComplete && (
-                <div className="bg-green-50 border border-green-200 rounded p-4 animate-fade-in">
+                <div className="bg-green-50 border border-green-200 rounded p-3 animate-fade-in">
                     <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-green-600">check_circle</span>
                         <div>
-                            <p className="text-sm font-medium text-green-800">Upload & Validation Complete</p>
+                            <p className="text-xs font-medium text-green-800">Upload & Validation Complete</p>
                             <p className="text-xs text-green-700 mt-1">
                                 {fileStatuses.filter(f => f.status === 'complete').length} file(s) uploaded and validated successfully.
                             </p>
@@ -462,11 +462,11 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
             {/* Validating Message */}
             {isValidating && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-4 animate-pulse">
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 animate-pulse">
                     <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-blue-600 animate-spin">refresh</span>
                         <div>
-                            <p className="text-sm font-medium text-blue-800">Validating Files...</p>
+                            <p className="text-xs font-medium text-blue-800">Validating Files...</p>
                             <p className="text-xs text-blue-600 mt-1">
                                 Checking file format and schema. This may take a moment.
                             </p>
@@ -477,11 +477,11 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
             {/* Validation Errors */}
             {validationErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded p-4">
+                <div className="bg-red-50 border border-red-200 rounded p-3">
                     <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-red-600">error</span>
                         <div className="flex-1">
-                            <p className="text-sm font-medium text-red-800">Validation Failed</p>
+                            <p className="text-xs font-medium text-red-800">Validation Failed</p>
                             <ul className="text-xs text-red-600 mt-2 space-y-1">
                                 {validationErrors.map((err, idx) => (
                                     <li key={idx} className="flex items-start gap-1">
@@ -503,11 +503,11 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
             {/* Upload Error Message */}
             {uploadError && (
-                <div className="bg-red-50 border border-red-200 rounded p-4">
+                <div className="bg-red-50 border border-red-200 rounded p-3">
                     <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined text-red-600">error</span>
                         <div>
-                            <p className="text-sm font-medium text-red-800">Upload Error</p>
+                            <p className="text-xs font-medium text-red-800">Upload Error</p>
                             <p className="text-xs text-red-600 mt-1">{uploadError}</p>
                         </div>
                         <button
@@ -526,7 +526,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`relative border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                className={`relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                     isDragging
                         ? 'border-primary bg-red-50/50'
                         : 'border-border-light hover:border-primary/50 hover:bg-surface-light'
@@ -552,7 +552,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                 >
                     <span className="material-symbols-outlined text-[24px]">upload_file</span>
                 </div>
-                <p className="text-sm font-medium text-text-main">Drag & drop or click to upload</p>
+                <p className="text-xs font-medium text-text-main">Drag & drop or click to upload</p>
                 <p className="text-xs text-text-sub mt-1">
                     {remainingFiles > 0
                         ? `Select ${remainingFiles} more .csv file${remainingFiles > 1 ? 's' : ''} (min ${rules.minSizeKb}KB each)`
@@ -618,7 +618,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                                             </span>
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium text-text-main truncate" title={file.name}>
+                                            <p className="text-xs font-medium text-text-main truncate" title={file.name}>
                                                 {file.name}
                                             </p>
                                             <div className="flex items-center gap-2 text-xs text-text-sub">
@@ -705,7 +705,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                 <button
                     onClick={handleUpload}
                     disabled={!canUpload || disabled}
-                    className={`flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded shadow-sm transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded shadow-sm transition-all ${
                         canUpload && !disabled
                             ? 'bg-primary hover:bg-[#cc0000] text-white'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'

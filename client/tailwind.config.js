@@ -30,13 +30,22 @@ module.exports = {
         mono: ["Roboto Mono", "monospace"],
       },
       fontSize: {
-        xs: ['12px', '16px'],
-        sm: ['13px', '18px'],
-        base: ['14px', '20px'],
-        lg: ['18px', '24px'],
-        xl: ['20px', '28px'],
-        '2xl': ['24px', '32px'],
-        '3xl': ['30px', '36px'],
+        xs: ['10px', '14px'],      // --text-xs
+        sm: ['11px', '16px'],      // --text-sm
+        base: ['12px', '18px'],    // --text-base
+        md: ['13px', '20px'],      // --text-md
+        lg: ['14px', '20px'],      // --text-lg
+        xl: ['16px', '24px'],      // --text-xl
+        '2xl': ['18px', '26px'],   // --text-2xl
+        '3xl': ['24px', '32px'],   // --text-3xl
+        // Fluid typography that scales with viewport (for larger monitors)
+        'fluid-sm': 'clamp(0.6875rem, 0.65rem + 0.1vw, 0.75rem)',      // 11px → 12px
+        'fluid-base': 'clamp(0.75rem, 0.7rem + 0.15vw, 0.875rem)',     // 12px → 14px
+        'fluid-lg': 'clamp(0.875rem, 0.8rem + 0.2vw, 1rem)',           // 14px → 16px
+        'fluid-xl': 'clamp(1rem, 0.9rem + 0.25vw, 1.25rem)',           // 16px → 20px
+        'fluid-2xl': 'clamp(1.125rem, 1rem + 0.35vw, 1.5rem)',         // 18px → 24px
+        'fluid-3xl': 'clamp(1.5rem, 1.25rem + 0.5vw, 2rem)',           // 24px → 32px
+        'fluid-hero': 'clamp(2rem, 1.5rem + 1vw, 3rem)',               // 32px → 48px (for hero headings)
       },
       borderRadius: {
         DEFAULT: "2px",

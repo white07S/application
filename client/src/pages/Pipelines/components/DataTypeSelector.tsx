@@ -43,7 +43,7 @@ const DataTypeSelector: React.FC<DataTypeSelectorProps> = ({ value, onChange, di
                         value={value}
                         onChange={(e) => onChange(e.target.value as DataType)}
                         disabled={disabled}
-                        className="w-full text-sm font-medium bg-white border border-border-light rounded px-3 py-2.5 pr-10 focus:ring-1 focus:ring-primary focus:border-primary text-text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-xs font-medium bg-white border border-border-light rounded px-3 py-2 pr-10 focus:ring-1 focus:ring-primary focus:border-primary text-text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{
                             WebkitAppearance: 'none',
                             MozAppearance: 'none',
@@ -62,14 +62,14 @@ const DataTypeSelector: React.FC<DataTypeSelectorProps> = ({ value, onChange, di
                     </span>
                 </div>
                 {selectedType && (
-                    <div className="flex items-center gap-3 px-4 py-2.5 bg-surface-light rounded border border-border-light">
-                        <span className={`material-symbols-outlined text-[18px] ${
+                    <div className="flex items-center gap-2 px-3 py-2 bg-surface-light rounded border border-border-light">
+                        <span className={`material-symbols-outlined text-[16px] ${
                             value === 'issues' ? 'text-amber-600' :
                             value === 'controls' ? 'text-blue-600' : 'text-green-600'
                         }`}>
                             {selectedType.icon}
                         </span>
-                        <div className="text-xs text-text-sub">
+                        <div className="text-[11px] text-text-sub">
                             <span className="font-medium text-text-main">{rules.fileCount} file{rules.fileCount > 1 ? 's' : ''}</span>
                             {' '}required, min {rules.minSizeKb}KB each
                         </div>

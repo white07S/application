@@ -409,12 +409,12 @@ const Processing: React.FC = () => {
         <main className="min-h-screen">
             <div className="flex">
                 {/* Sidebar */}
-                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-6 pl-6">
+                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4 pl-3 sm:pl-4">
                     <PipelinesSidebar />
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 min-w-0 p-6 flex flex-col gap-6">
+                <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col gap-4 max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
                     {/* Page Header */}
                     <div className="flex items-center justify-between">
                         <div>
@@ -440,7 +440,7 @@ const Processing: React.FC = () => {
 
                     {/* Active Jobs Banner */}
                     {processingBatches.size > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
                             <span className="material-symbols-outlined text-blue-600 animate-spin">progress_activity</span>
                             <div className="flex-1">
                                 <p className="text-sm font-medium text-blue-800">
@@ -572,7 +572,7 @@ const Processing: React.FC = () => {
                                                                 </div>
 
                                                                 {getCompletedJob(batch.batch_id)?.status === 'completed' && (
-                                                                    <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-3">
                                                                         <div className="text-center p-2 bg-white rounded border border-gray-100">
                                                                             <div className="text-lg font-bold text-primary">
                                                                                 {getCompletedJob(batch.batch_id)?.db_total_records.toLocaleString()}
@@ -665,7 +665,7 @@ const Processing: React.FC = () => {
                                                             <h4 className="text-[10px] font-bold text-text-sub uppercase tracking-wider mb-2">
                                                                 Parquet Files
                                                             </h4>
-                                                        <div className="grid grid-cols-2 gap-2">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                                                             {batch.parquet_files.map(file => (
                                                                 <div
                                                                     key={file.filename}
@@ -684,7 +684,7 @@ const Processing: React.FC = () => {
                                                                 <h4 className="text-[10px] font-bold text-text-sub uppercase tracking-wider mb-2">
                                                                     Pipeline Status
                                                                 </h4>
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                                                     <div className="bg-white border border-border-light rounded p-2 text-xs">
                                                                         <div className="flex items-center justify-between">
                                                                             <span className="font-semibold">Ingestion</span>
@@ -779,8 +779,8 @@ const Processing: React.FC = () => {
                     </div>
 
                     {/* Info Banner */}
-                    <div className="bg-blue-50 border border-blue-100 rounded p-4">
-                        <div className="flex items-start gap-3">
+                    <div className="bg-blue-50 border border-blue-100 rounded p-3">
+                        <div className="flex items-start gap-2">
                             <span className="material-symbols-outlined text-blue-600">info</span>
                             <div className="text-xs text-blue-800">
                                 <p className="font-medium">End-to-End Processing Pipeline</p>

@@ -102,9 +102,9 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
     return (
         <div className="bg-white border border-border-light rounded shadow-card">
             {/* Header */}
-            <div className="px-5 py-3 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
-                <h2 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
-                    <span className="material-symbols-outlined text-text-sub text-[16px]">history</span>
+            <div className="px-3 py-2 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
+                <h2 className="text-[10px] font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
+                    <span className="material-symbols-outlined text-text-sub text-[14px]">history</span>
                     Recent Ingestions
                 </h2>
                 <button
@@ -121,26 +121,26 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
             {/* Content */}
             <div className="divide-y divide-border-light">
                 {isLoading && records.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-text-sub text-xs">
-                        <span className="material-symbols-outlined animate-spin text-[20px] mb-2 block">refresh</span>
+                    <div className="px-3 py-6 text-center text-text-sub text-[11px]">
+                        <span className="material-symbols-outlined animate-spin text-[18px] mb-2 block">refresh</span>
                         Loading history...
                     </div>
                 ) : records.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-text-sub text-xs">
-                        <span className="material-symbols-outlined text-[24px] mb-2 block text-border-dark">inbox</span>
+                    <div className="px-3 py-6 text-center text-text-sub text-[11px]">
+                        <span className="material-symbols-outlined text-[20px] mb-2 block text-border-dark">inbox</span>
                         No ingestion records yet
                     </div>
                 ) : (
                     records.map((record) => (
                         <div
                             key={record.ingestionId}
-                            className="px-5 py-3 hover:bg-surface-light transition-colors"
+                            className="px-3 py-2 hover:bg-surface-light transition-colors"
                         >
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-start gap-3 min-w-0">
                                     {/* Status Icon */}
-                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border ${getStatusColor(record.status)}`}>
-                                        <span className={`material-symbols-outlined text-[18px] ${record.status === 'validating' || record.status === 'processing' ? 'animate-spin' : ''}`}>
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center border ${getStatusColor(record.status)}`}>
+                                        <span className={`material-symbols-outlined text-[14px] ${record.status === 'validating' || record.status === 'processing' ? 'animate-spin' : ''}`}>
                                             {getStatusIcon(record.status)}
                                         </span>
                                     </div>

@@ -6,10 +6,15 @@ interface TableProps {
 
 export function Table({ children }: TableProps) {
   return (
-    <div className="my-4 overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        {children}
-      </table>
+    <div className="my-4 rounded-lg border border-border">
+      <div
+        className="table-scroll-container overflow-x-auto -mx-3 px-3"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <table className="min-w-full w-full text-sm">
+          {children}
+        </table>
+      </div>
     </div>
   );
 }

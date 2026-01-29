@@ -24,7 +24,7 @@ export default function DocsContent({ slug, routes, onHeadingsExtracted }: DocsC
   if (loading) {
     return (
       <div className="flex-1 min-w-0 py-8">
-        <div className="max-w-4xl mx-auto px-8">
+        <div className="max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto px-3 sm:px-4">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-surface-alt rounded w-48" />
             <div className="h-10 bg-surface-alt rounded w-3/4" />
@@ -41,7 +41,7 @@ export default function DocsContent({ slug, routes, onHeadingsExtracted }: DocsC
   if (error) {
     return (
       <div className="flex-1 min-w-0 py-8">
-        <div className="max-w-4xl mx-auto px-8">
+        <div className="max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto px-3 sm:px-4">
           <div className="text-center py-16">
             <span className="material-symbols-outlined text-6xl text-text-tertiary mb-4">
               error_outline
@@ -57,7 +57,7 @@ export default function DocsContent({ slug, routes, onHeadingsExtracted }: DocsC
   if (!content) {
     return (
       <div className="flex-1 min-w-0 py-8">
-        <div className="max-w-4xl mx-auto px-8">
+        <div className="max-w-4xl xl:max-w-5xl 2xl:max-w-6xl mx-auto px-3 sm:px-4">
           <div className="text-center py-16">
             <span className="material-symbols-outlined text-6xl text-text-tertiary mb-4">
               article

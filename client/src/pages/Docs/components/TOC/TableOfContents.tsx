@@ -1,4 +1,5 @@
 import React from 'react';
+import { Code, Bug } from 'lucide-react';
 import { useActiveHeading } from '../../hooks/useActiveHeading';
 import type { TocHeading } from '../../types';
 
@@ -17,7 +18,7 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
   }
 
   return (
-    <aside className="w-64 shrink-0 hidden xl:block">
+    <aside className="w-64 xl:w-72 2xl:w-80 shrink-0 hidden xl:block">
       <div className="sticky top-20 overflow-y-auto max-h-[calc(100vh-6rem)]">
         <div className="pl-4 border-l border-border">
           <h4 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
@@ -29,7 +30,7 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
                 key={heading.id}
                 href={`#${heading.id}`}
                 className={`
-                  block py-1 text-sm transition-colors
+                  block py-1.5 min-h-[32px] text-sm transition-colors
                   ${heading.level === 3 ? 'pl-3' : ''}
                   ${activeId === heading.id
                     ? 'text-primary font-medium'
@@ -52,16 +53,16 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
                 href="https://github.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
               >
-                <span className="material-symbols-outlined text-base">code</span>
+                <Code className="w-4 h-4 shrink-0" />
                 View Source
               </a>
               <a
                 href="#"
-                className="flex items-center gap-2 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
               >
-                <span className="material-symbols-outlined text-base">bug_report</span>
+                <Bug className="w-4 h-4 shrink-0" />
                 Report Issue
               </a>
             </nav>

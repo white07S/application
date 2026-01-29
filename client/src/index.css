@@ -41,13 +41,26 @@
   @apply text-text-secondary leading-relaxed;
 }
 
-.docs-content h1,
-.docs-content h2,
-.docs-content h3,
+.docs-content h1 {
+  @apply text-text-primary;
+  font-size: clamp(1.5rem, 1.25rem + 0.5vw, 2rem); /* fluid-3xl: 24px → 32px */
+}
+
+.docs-content h2 {
+  @apply text-text-primary;
+  font-size: clamp(1.125rem, 1rem + 0.35vw, 1.5rem); /* fluid-2xl: 18px → 24px */
+}
+
+.docs-content h3 {
+  @apply text-text-primary;
+  font-size: clamp(1rem, 0.9rem + 0.25vw, 1.25rem); /* fluid-xl: 16px → 20px */
+}
+
 .docs-content h4,
 .docs-content h5,
 .docs-content h6 {
   @apply text-text-primary;
+  font-size: clamp(0.875rem, 0.8rem + 0.2vw, 1rem); /* fluid-lg: 14px → 16px */
 }
 
 .docs-content a {
@@ -59,7 +72,12 @@
 }
 
 .docs-content pre {
-  @apply my-4 rounded-lg overflow-hidden;
+  @apply my-4 rounded-lg overflow-hidden overflow-x-auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.docs-content pre code {
+  @apply block overflow-x-auto;
 }
 
 .docs-content blockquote {
@@ -68,14 +86,37 @@
 
 .docs-content table {
   @apply w-full text-sm;
+  min-width: 500px;
+}
+
+/* Table scroll container with fade indicator */
+.table-scroll-container {
+  position: relative;
+}
+
+.table-scroll-container::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(to right, transparent, white);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.table-scroll-container.has-scroll::after {
+  opacity: 1;
 }
 
 .docs-content th {
-  @apply text-left font-semibold px-4 py-3 bg-surface-alt border-b border-border;
+  @apply text-left font-semibold px-3 py-2 bg-surface-alt border-b border-border;
 }
 
 .docs-content td {
-  @apply px-4 py-3 border-b border-border;
+  @apply px-3 py-2 border-b border-border;
 }
 
 .docs-content img {

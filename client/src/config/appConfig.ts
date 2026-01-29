@@ -129,10 +129,10 @@ export const appConfig = {
             role: 'Lead Developer',
             icon: 'person_4'
         },
-        {
-            name: 'James Wilson',
-            role: 'Data Scientist',
-            icon: 'person_2'
-        }
+        // {
+        //     name: 'James Wilson',
+        //     role: 'Data Scientist',
+        //     icon: 'person_2'
+        // }
     ]
 };

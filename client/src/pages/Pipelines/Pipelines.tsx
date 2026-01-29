@@ -60,38 +60,38 @@ const Pipelines: React.FC = () => {
         <main className="min-h-screen">
             <div className="flex">
                 {/* Sidebar */}
-                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-6 pl-6">
+                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4 pl-3 sm:pl-4">
                     <PipelinesSidebar />
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 min-w-0 p-6 flex flex-col gap-6">
+                <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col gap-4 max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
                     {/* Page Header */}
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-xl font-bold text-text-main flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">cloud_upload</span>
+                            <h1 className="text-sm font-bold text-text-main flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary text-[18px]">cloud_upload</span>
                                 Data Ingestion
                             </h1>
-                            <p className="text-xs text-text-sub mt-1">
+                            <p className="text-[11px] text-text-sub mt-0.5">
                                 Upload risk management data files for processing
                             </p>
                         </div>
                         {/* TUS Badge */}
-                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
-                            <span className="material-symbols-outlined text-blue-600 text-[16px]">cloud_sync</span>
-                            <span className="text-xs font-medium text-blue-700">Resumable Uploads (TUS)</span>
+                        <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 rounded px-2 py-1">
+                            <span className="material-symbols-outlined text-blue-600 text-[14px]">cloud_sync</span>
+                            <span className="text-[10px] font-medium text-blue-700">Resumable Uploads (TUS)</span>
                         </div>
                     </div>
 
                     {/* Two Column Layout */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Upload Card - Takes 2 columns */}
                         <div className="lg:col-span-2 bg-white border border-border-light rounded shadow-card">
                             {/* Card Header */}
-                            <div className="px-5 py-3 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
-                                <h2 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-text-sub text-[16px]">
+                            <div className="px-3 py-2 border-b border-border-light bg-surface-light/50 flex items-center justify-between">
+                                <h2 className="text-[10px] font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-text-sub text-[14px]">
                                         cloud_sync
                                     </span>
                                     Upload Files
@@ -99,7 +99,7 @@ const Pipelines: React.FC = () => {
                             </div>
 
                             {/* Card Body */}
-                            <div className="p-5 space-y-6">
+                            <div className="p-3 space-y-4">
                                 {/* Data Type Selector */}
                                 <DataTypeSelector
                                     value={dataType}
@@ -129,50 +129,50 @@ const Pipelines: React.FC = () => {
                     </div>
 
                     {/* Help Section */}
-                    <div className="bg-surface-light border border-border-light rounded p-4">
-                        <h3 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2 mb-3">
-                            <span className="material-symbols-outlined text-text-sub text-[16px]">help</span>
+                    <div className="bg-surface-light border border-border-light rounded p-3">
+                        <h3 className="text-[10px] font-bold text-text-main uppercase tracking-wide flex items-center gap-2 mb-2">
+                            <span className="material-symbols-outlined text-text-sub text-[14px]">help</span>
                             File Requirements
                         </h3>
-                        <div className="grid grid-cols-3 gap-4 text-xs">
-                            <div className="bg-white p-3 rounded border border-border-light">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="material-symbols-outlined text-amber-600 text-[16px]">report_problem</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                            <div className="bg-white p-2 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="material-symbols-outlined text-amber-600 text-[14px]">report_problem</span>
                                     <span className="font-medium text-text-main">Issues</span>
                                 </div>
-                                <ul className="text-text-sub space-y-1">
+                                <ul className="text-text-sub space-y-0.5 text-[10px]">
                                     <li>4 CSV files (.csv)</li>
                                     <li>Minimum 5KB each</li>
                                 </ul>
                             </div>
-                            <div className="bg-white p-3 rounded border border-border-light">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="material-symbols-outlined text-blue-600 text-[16px]">verified_user</span>
+                            <div className="bg-white p-2 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="material-symbols-outlined text-blue-600 text-[14px]">verified_user</span>
                                     <span className="font-medium text-text-main">Controls</span>
                                 </div>
-                                <ul className="text-text-sub space-y-1">
+                                <ul className="text-text-sub space-y-0.5 text-[10px]">
                                     <li>1 CSV file (.csv)</li>
                                     <li>Minimum 5KB</li>
                                 </ul>
                             </div>
-                            <div className="bg-white p-3 rounded border border-border-light">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="material-symbols-outlined text-green-600 text-[16px]">task_alt</span>
+                            <div className="bg-white p-2 rounded border border-border-light">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="material-symbols-outlined text-green-600 text-[14px]">task_alt</span>
                                     <span className="font-medium text-text-main">Actions</span>
                                 </div>
-                                <ul className="text-text-sub space-y-1">
+                                <ul className="text-text-sub space-y-0.5 text-[10px]">
                                     <li>1 CSV file (.csv)</li>
                                     <li>Minimum 5KB</li>
                                 </ul>
                             </div>
                         </div>
                         {/* TUS Info Banner */}
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded">
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded">
                             <div className="flex items-start gap-2">
-                                <span className="material-symbols-outlined text-blue-600 text-[16px] mt-0.5">info</span>
-                                <div className="text-xs text-blue-800">
+                                <span className="material-symbols-outlined text-blue-600 text-[14px] mt-0.5">info</span>
+                                <div className="text-[10px] text-blue-800">
                                     <p className="font-medium">Resumable Uploads Enabled</p>
-                                    <p className="mt-1 text-blue-700">
+                                    <p className="mt-0.5 text-blue-700">
                                         Using the TUS protocol for reliable file uploads. If your connection is interrupted,
                                         the upload will automatically resume from where it left off.
                                     </p>
