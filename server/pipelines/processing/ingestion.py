@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type
 from dataclasses import dataclass, field
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from server.database.models.data_layer import (

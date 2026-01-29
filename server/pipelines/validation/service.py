@@ -11,7 +11,7 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from server.database import PipelineRun, UploadBatch, DatasetConfig, DataSource
+from server.database import PipelineRun, UploadBatch
 from server.logging_config import get_logger
 
 from .. import storage
@@ -21,27 +21,6 @@ from .core import (
 )
 
 logger = get_logger(name=__name__)
-
-
-def _get_expected_file_count(db: Session, data_type: str) -> int:
-    """Fetch expected file count from dataset_config, fallback to defaults."""
-    source = db.query(DataSource).filter_by(source_code=data_type).first()
-    if source:
-        config = (
-            db.query(DatasetConfig)
-            .filter_by(data_source_id=source.id, config_key="file_count")
-            .first()
-        )
-        if config:
-            try:
-                return int(json.loads(config.config_value))
-            except Exception:
-                try:
-                    return int(config.config_value)
-                except Exception:
-                    pass
-    defaults = {"issues": 4, "controls": 1, "actions": 1}
-    return defaults.get(data_type, 1)
 
 
 def create_validation_run(db: Session, batch_id: int) -> PipelineRun:

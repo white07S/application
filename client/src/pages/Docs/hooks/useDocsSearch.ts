@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SearchIndex, SearchDocument } from '../types';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+import { appConfig } from '../../../config/appConfig';
 
 interface SearchResult extends SearchDocument {
   highlight?: string;
@@ -15,7 +14,7 @@ export function useDocsSearch() {
   useEffect(() => {
     async function fetchIndex() {
       try {
-        const response = await fetch(`${API_BASE}/api/docs/search-index`);
+        const response = await fetch(`${appConfig.api.baseUrl}/api/docs/search-index`);
         if (!response.ok) {
           throw new Error('Failed to fetch search index');
         }

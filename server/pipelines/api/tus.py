@@ -20,16 +20,15 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
-from fastapi.responses import Response as FastAPIResponse
 from sqlalchemy.orm import Session
 
 from server import settings
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
-from server.database import get_db, TusUpload, UploadBatch, DataSource
+from server.database import get_db, TusUpload, UploadBatch
 from server.logging_config import get_logger
 
 from .. import upload_tracker
@@ -312,7 +311,7 @@ async def tus_create(
     )
 
     # Build location URL
-    location = f"{request.base_url}api/v2/pipelines/tus/{tus_id}"
+    location = f"{tus_id}"
 
     response = create_tus_response(
         status_code=201,

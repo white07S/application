@@ -59,7 +59,8 @@ const Header = () => {
     };
 
     return (
-        <header className="fixed w-full top-0 z-50 bg-background-light/95 backdrop-blur-sm border-b border-border-light h-12 flex items-center justify-between px-6 shadow-sm">
+        <header className="fixed inset-x-0 top-0 z-50 bg-background-light/95 backdrop-blur-sm border-b border-border-light h-12 shadow-sm">
+            <div className="max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-3 sm:px-4 h-full flex items-center justify-between">
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3">
                     <img
@@ -322,6 +323,7 @@ const Header = () => {
                     </nav>
                 </div>
             )}
+            </div>
         </header>
     );
 };

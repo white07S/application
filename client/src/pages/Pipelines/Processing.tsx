@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PipelinesSidebar from './components/PipelinesSidebar';
 import { useAuth } from '../../auth/useAuth';
 import { appConfig } from '../../config/appConfig';
+import { formatBytes, formatDuration, getDataTypeColor } from '../../utils/formatters';
 
 interface ParquetFile {
     filename: string;
@@ -322,21 +323,8 @@ const Processing: React.FC = () => {
         }
     };
 
-    const formatBytes = (bytes: number): string => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    };
-
     const formatDate = (isoString: string): string => {
         return new Date(isoString).toLocaleString();
-    };
-
-    const formatDuration = (seconds: number): string => {
-        if (seconds < 60) return `${seconds.toFixed(1)}s`;
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}m ${secs}s`;
     };
 
     // Get completed job for a batch (for showing summary)
@@ -351,15 +339,6 @@ const Processing: React.FC = () => {
             delete next[batchId];
             return next;
         });
-    };
-
-    const getDataTypeColor = (dataType: string): string => {
-        switch (dataType) {
-            case 'issues': return 'text-amber-600 bg-amber-50 border-amber-200';
-            case 'controls': return 'text-blue-600 bg-blue-50 border-blue-200';
-            case 'actions': return 'text-green-600 bg-green-50 border-green-200';
-            default: return 'text-gray-600 bg-gray-50 border-gray-200';
-        }
     };
 
     const getStatusBadge = (status: string | null) => {
@@ -407,14 +386,15 @@ const Processing: React.FC = () => {
 
     return (
         <main className="min-h-screen">
-            <div className="flex">
-                {/* Sidebar */}
-                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4 pl-3 sm:pl-4">
-                    <PipelinesSidebar />
-                </div>
+            <div className="w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-3 sm:px-4">
+                <div className="flex">
+                    {/* Sidebar */}
+                    <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4">
+                        <PipelinesSidebar />
+                    </div>
 
-                {/* Main Content */}
-                <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col gap-4 max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
+                    {/* Main Content */}
+                    <div className="flex-1 min-w-0 py-4 pl-4 flex flex-col gap-4">
                     {/* Page Header */}
                     <div className="flex items-center justify-between">
                         <div>
@@ -800,6 +780,7 @@ const Processing: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </main>
     );

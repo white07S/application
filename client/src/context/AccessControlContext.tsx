@@ -95,8 +95,11 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
             let token: string | null = null;
             try {
                 token = await currentGetToken();
-            } catch (err) {
-                console.warn("Token acquisition error:", err);
+            } catch (err: any) {
+                // Only log unexpected errors (not block_iframe_reload which is handled in useAuth)
+                if (err?.errorCode !== "block_iframe_reload") {
+                    console.warn("Token acquisition error:", err);
+                }
             }
 
             if (cancelled) return;

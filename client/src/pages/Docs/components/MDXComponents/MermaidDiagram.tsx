@@ -290,8 +290,3 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     </>
   );
 }
-
-// Component to detect mermaid code blocks
-export function MermaidCodeBlock({ children }: { children: string }) {
-  return <MermaidDiagram chart={children} />;
-}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { IngestionRecord } from '../types';
+import { formatBytes, formatRelativeDate, getDataTypeColor } from '../../../utils/formatters';
 
 interface IngestionHistoryProps {
     records: IngestionRecord[];
@@ -8,51 +9,6 @@ interface IngestionHistoryProps {
 }
 
 const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading, onRefresh }) => {
-    const formatDate = (isoString: string): string => {
-        const date = new Date(isoString);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
-    const formatBytes = (bytes: number): string => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    };
-
-    const getDataTypeIcon = (dataType: string): string => {
-        switch (dataType) {
-            case 'issues': return 'report_problem';
-            case 'controls': return 'verified_user';
-            case 'actions': return 'task_alt';
-            default: return 'description';
-        }
-    };
-
-    const getDataTypeColor = (dataType: string): string => {
-        switch (dataType) {
-            case 'issues': return 'text-amber-600 bg-amber-50 border-amber-100';
-            case 'controls': return 'text-blue-600 bg-blue-50 border-blue-100';
-            case 'actions': return 'text-green-600 bg-green-50 border-green-100';
-            default: return 'text-gray-600 bg-gray-50 border-gray-100';
-        }
-    };
-
     const getStatusIcon = (status: string): string => {
         switch (status) {
             case 'validated':
@@ -171,7 +127,7 @@ const IngestionHistory: React.FC<IngestionHistoryProps> = ({ records, isLoading,
                                 </div>
                                 <div className="text-right shrink-0">
                                     <div className="text-[10px] text-text-sub font-mono">
-                                        {formatDate(record.uploadedAt)}
+                                        {formatRelativeDate(record.uploadedAt)}
                                     </div>
                                     <div className="text-[10px] text-text-sub/70 mt-0.5">
                                         by {record.uploadedBy}

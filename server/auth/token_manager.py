@@ -161,17 +161,3 @@ def get_trimmed_token(token: Optional[str], prefix_length: int = 10, suffix_leng
         return token
 
     return f"{token[:prefix_length]}...{token[-suffix_length:]}"
-
-
-def clear_cache() -> None:
-    """Clear the token cache (useful for testing or logout)."""
-    global _token_cache
-
-    with _cache_lock:
-        _token_cache = None
-        if CACHE_FILE.exists():
-            try:
-                CACHE_FILE.unlink()
-                logger.info("Cleared MSAL token cache")
-            except Exception as e:
-                logger.warning("Failed to delete token cache file: {}", e)

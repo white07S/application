@@ -12,21 +12,6 @@ export const VALIDATION_RULES: Record<DataType, ValidationRules> = {
     actions: { fileCount: 1, minSizeKb: 5, allowedExtensions: ['.csv'] },
 };
 
-export interface SidebarCategory {
-    id: string;
-    label: string;
-    icon: string;
-    items: SidebarItem[];
-}
-
-export interface SidebarItem {
-    id: string;
-    label: string;
-    icon: string;
-    path: string;
-    active?: boolean;
-}
-
 export interface IngestionRecord {
     ingestionId: string;
     dataType: string;

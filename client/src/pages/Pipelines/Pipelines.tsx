@@ -58,14 +58,15 @@ const Pipelines: React.FC = () => {
 
     return (
         <main className="min-h-screen">
-            <div className="flex">
-                {/* Sidebar */}
-                <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4 pl-3 sm:pl-4">
-                    <PipelinesSidebar />
-                </div>
+            <div className="w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-3 sm:px-4">
+                <div className="flex">
+                    {/* Sidebar */}
+                    <div className="sticky top-12 h-[calc(100vh-48px)] overflow-y-auto py-4">
+                        <PipelinesSidebar />
+                    </div>
 
-                {/* Main Content */}
-                <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col gap-4 max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]">
+                    {/* Main Content */}
+                    <div className="flex-1 min-w-0 py-4 pl-4 flex flex-col gap-4">
                     {/* Page Header */}
                     <div className="flex items-center justify-between">
                         <div>
@@ -181,6 +182,7 @@ const Pipelines: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </main>
     );

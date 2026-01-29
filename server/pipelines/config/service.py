@@ -4,12 +4,11 @@ This module provides functions to retrieve and manage ingestion configurations
 that define how parquet files map to data layer tables.
 """
 import json
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from server.database import DataSource, IngestionConfig, IngestionFieldMapping, UploadBatch
+from server.database import DataSource, IngestionConfig, UploadBatch
 from server.logging_config import get_logger
 
 from .. import storage

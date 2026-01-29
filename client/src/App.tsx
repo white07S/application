@@ -8,7 +8,6 @@ import { AccessControlProvider, useAccessControl } from "./context/AccessControl
 import { routes, RouteConfig } from "./config/routes";
 import Header from "./components/Layout/Header";
 import Footer from "./components/Layout/Footer";
-import "./App.css";
 
 const Layout = () => {
   return (

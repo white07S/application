@@ -83,7 +83,7 @@ export default function DocsLayout({ slug }: DocsLayoutProps) {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-48px)]">
+    <div className="w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-3 sm:px-4 flex min-h-[calc(100vh-48px)]">
       {/* Mobile sidebar toggle button */}
       <button
         onClick={handleOpenMobileSidebar}

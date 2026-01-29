@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .engine import engine
-from .models import Base, DataSource, DatasetConfig, ModelConfig, IngestionConfig, IngestionFieldMapping
+from .models import Base, DataSource, DatasetConfig, ModelConfig, IngestionConfig
 from .models.data_layer import DLNFRTaxonomy
 
 def create_tables():

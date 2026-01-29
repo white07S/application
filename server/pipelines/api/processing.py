@@ -189,47 +189,6 @@ async def start_ingestion(
         raise HTTPException(status_code=500, detail="Failed to start ingestion job")
 
 
-@router.post("/model-run", response_model=StartJobResponse)
-async def start_model_run(
-    request: StartJobRequest,
-    token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_db),
-):
-    """
-    Start model run job for a batch.
-
-    This triggers ML model processing (NFR taxonomy, enrichment, embeddings)
-    on the ingested data.
-
-    Requires:
-    - Pipelines admin access
-    - Ingestion to be completed first
-    """
-    access = await get_access_control(token)
-
-    if not access.hasPipelinesAdminAccess:
-        raise HTTPException(
-            status_code=403,
-            detail="Pipelines admin access required to start model run"
-        )
-
-    try:
-        job = processing_service.start_model_run_job(db, request.batch_id, user_token=token)
-
-        return StartJobResponse(
-            success=True,
-            message="Model run job started successfully",
-            job_id=job.job_id,
-            batch_id=job.batch_id,
-            upload_id=job.upload_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception("Failed to start model run job")
-        raise HTTPException(status_code=500, detail="Failed to start model run job")
-
-
 @router.get("/job/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: str,

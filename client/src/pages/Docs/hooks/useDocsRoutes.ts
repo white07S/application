@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { DocsRoutes, DocsNavigation, DocNavItem } from '../types';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+import { appConfig } from '../../../config/appConfig';
 
 export function useDocsRoutes() {
   const [routes, setRoutes] = useState<DocsRoutes | null>(null);
@@ -11,7 +10,7 @@ export function useDocsRoutes() {
   useEffect(() => {
     async function fetchRoutes() {
       try {
-        const response = await fetch(`${API_BASE}/api/docs/routes`);
+        const response = await fetch(`${appConfig.api.baseUrl}/api/docs/routes`);
         if (!response.ok) {
           throw new Error('Failed to fetch documentation routes');
         }

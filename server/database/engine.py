@@ -1,7 +1,6 @@
 """SQLAlchemy engine configuration for SQLite database."""
 
 from collections.abc import Generator
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, event

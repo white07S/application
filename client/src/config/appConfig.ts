@@ -128,11 +128,6 @@ export const appConfig = {
             name: 'Elena Rodriguez',
             role: 'Lead Developer',
             icon: 'person_4'
-        },
-        // {
-        //     name: 'James Wilson',
-        //     role: 'Data Scientist',
-        //     icon: 'person_2'
-        // }
+        }
     ]
 };
