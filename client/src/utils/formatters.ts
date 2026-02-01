@@ -36,6 +36,13 @@ export function formatRelativeDate(isoString: string): string {
 }
 
 /**
+ * Format a date string to locale-specific string.
+ */
+export function formatDate(isoString: string): string {
+    return new Date(isoString).toLocaleString();
+}
+
+/**
  * Format duration in seconds to human-readable string.
  */
 export function formatDuration(seconds: number): string {

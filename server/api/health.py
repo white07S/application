@@ -66,7 +66,9 @@ async def health_check(db: Session = Depends(get_jobs_db)):
             tables=tables
         )
     except Exception as e:
-        pass
+        # Log the error for debugging purposes
+        import logging
+        logging.warning("Failed to connect to jobs database: %s", e)
 
     # Test SurrealDB connection
     try:
@@ -81,8 +83,9 @@ async def health_check(db: Session = Depends(get_jobs_db)):
                 url=settings.surrealdb_url
             )
     except Exception as e:
-        from server.config.settings import get_settings
-        settings = get_settings()
+        # Log the error for debugging purposes
+        import logging
+        logging.warning("Failed to connect to SurrealDB: %s", e)
         surreal_status = SurrealDBStatus(
             connected=False,
             url=settings.surrealdb_url

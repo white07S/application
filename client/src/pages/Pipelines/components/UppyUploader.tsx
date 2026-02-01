@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { FC, DragEvent, ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Uppy, { UppyFile, UploadResult } from '@uppy/core';
 import Tus from '@uppy/tus';
 import { DataType, ValidationRules } from '../types';
@@ -56,7 +57,7 @@ const generateBatchSessionId = (): string => {
     });
 };
 
-const UppyUploader: React.FC<UppyUploaderProps> = ({
+const UppyUploader: FC<UppyUploaderProps> = ({
     dataType,
     rules,
     onUploadComplete,
@@ -76,6 +77,8 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
     const uppyRef = useRef<Uppy<FileMeta, Record<string, unknown>> | null>(null);
     const batchSessionIdRef = useRef<string>(generateBatchSessionId());
     const lastUploadIdRef = useRef<string | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const isPollingRef = useRef<boolean>(false);
 
     // TUS endpoint
     const tusEndpoint = `${appConfig.api.baseUrl}/api/v2/pipelines/tus/`;
@@ -97,6 +100,17 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
     const pollValidationStatus = useCallback(async (tusUploadId: string) => {
         if (!authTokenRef.current) return;
 
+        // Prevent overlapping polls
+        if (isPollingRef.current) return;
+        isPollingRef.current = true;
+
+        // Cancel any previous polling
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+
         setIsValidating(true);
         setValidationErrors([]);
 
@@ -104,6 +118,12 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
         let attempts = 0;
 
         const checkStatus = async (): Promise<void> => {
+            // Check if polling was cancelled
+            if (signal.aborted) {
+                isPollingRef.current = false;
+                return;
+            }
+
             try {
                 const response = await fetch(
                     `${appConfig.api.baseUrl}/api/v2/pipelines/tus/${tusUploadId}/status`,
@@ -111,6 +131,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                         headers: {
                             'X-MS-TOKEN-AAD': authTokenRef.current || '',
                         },
+                        signal,
                     }
                 );
 
@@ -125,6 +146,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
                 if (data.batch_status === 'validated') {
                     setIsValidating(false);
                     setUploadComplete(true);
+                    isPollingRef.current = false;
                     // Auto-close success message after 5 seconds
                     setTimeout(() => setUploadComplete(false), 5000);
                     return;
@@ -132,6 +154,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
                 if (data.batch_status === 'failed') {
                     setIsValidating(false);
+                    isPollingRef.current = false;
                     // Extract validation errors
                     const errors: string[] = [];
                     if (data.validation?.error_details) {
@@ -154,19 +177,26 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
                 // Still validating or pending - poll again
                 attempts++;
-                if (attempts < maxAttempts) {
+                if (attempts < maxAttempts && !signal.aborted) {
                     setTimeout(checkStatus, 1000);
-                } else {
+                } else if (!signal.aborted) {
                     setIsValidating(false);
+                    isPollingRef.current = false;
                     setValidationErrors(['Validation timed out. Please check status later.']);
                 }
             } catch (err) {
+                // Ignore abort errors
+                if (err instanceof Error && err.name === 'AbortError') {
+                    isPollingRef.current = false;
+                    return;
+                }
                 console.error('Error polling validation status:', err);
                 attempts++;
-                if (attempts < maxAttempts) {
+                if (attempts < maxAttempts && !signal.aborted) {
                     setTimeout(checkStatus, 1000);
-                } else {
+                } else if (!signal.aborted) {
                     setIsValidating(false);
+                    isPollingRef.current = false;
                     setValidationErrors(['Failed to check validation status.']);
                 }
             }
@@ -281,6 +311,11 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
         return () => {
             uppy.destroy();
+            // Cancel any ongoing polling
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            isPollingRef.current = false;
         };
     }, [dataType, rules, tusEndpoint, onUploadComplete, onUploadError, pollValidationStatus]);
 
@@ -304,7 +339,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
     // Drag and drop handlers
     const handleDragOver = useCallback(
-        (e: React.DragEvent) => {
+        (e: DragEvent) => {
             e.preventDefault();
             if (!disabled && !isUploading) {
                 setIsDragging(true);
@@ -313,13 +348,13 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
         [disabled, isUploading]
     );
 
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const handleDragLeave = useCallback((e: DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
     }, []);
 
     const handleDrop = useCallback(
-        (e: React.DragEvent) => {
+        (e: DragEvent) => {
             e.preventDefault();
             setIsDragging(false);
 
@@ -351,7 +386,7 @@ const UppyUploader: React.FC<UppyUploaderProps> = ({
 
     // File input handler
     const handleFileSelect = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
+        (e: ChangeEvent<HTMLInputElement>) => {
             if (!uppyRef.current) return;
 
             const selectedFiles: File[] = Array.from(e.target.files || []);

@@ -1,0 +1,101 @@
+control_id,l0_location_id,l0_location_name,region_id,region_name,sub_region_id,sub_region_name,country_id,country_name,company_id,company_short_name
+CTRL-3746317213,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-9697354961,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-2181241943,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-1958682846,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-4163119785,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-9963334018,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-2812140441,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-1127978094,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-1939042955,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-9703905715,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-7635473142,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-6241752544,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-7825844140,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-4460967357,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-8293453178,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-6756332150,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-1667779376,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-2445662585,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-5693307665,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-5710360983,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-8934927891,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-7887950851,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-4466589567,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-8429141456,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-3303082117,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-2625792787,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-7665963761,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-8995970241,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-3479708607,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-4026113008,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-9786748825,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-5728765136,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-6488854841,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-2566942273,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-6884882440,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-3783290795,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-4131575764,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-5996775663,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-6924716023,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-3392080953,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-8235363119,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-4332894265,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-6649827836,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-2149938334,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-2351531223,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-8110054933,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-2970753705,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-2137651678,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-7805745017,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-7010379415,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-5284391408,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-7483366056,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-1470939445,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-3694860228,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-5567816720,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-9573276057,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-7567496105,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-9639245200,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-4095476665,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-8047877267,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-5774080233,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-2867302554,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-2948728483,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-4919706735,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-3615507143,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-5951406973,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-4274958945,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-9592390865,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-6687206971,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-1083651970,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-9285415473,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-2320763135,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-1248786714,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-5067116918,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-9957813353,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-4289233844,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-3361388464,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-6633778586,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-8086172302,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-7517938612,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-1519709079,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-1965067727,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-2452066459,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-1945826486,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-9894847574,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SB,UK & Ireland,C782,United Kingdom,2100,UBS AG London Branch
+CTRL-3710566582,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-1983297492,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-4888749350,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-8987073217,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-9894264595,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3200,UBS Financial Services Inc
+CTRL-6317189421,N0000,UBS Group AG (Regional),AMER,Americas,SNA,North America,C840,United States,3100,UBS Securities LLC
+CTRL-8168204967,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-3030106617,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-8664882079,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch
+CTRL-8763140509,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C702,Singapore,4200,UBS AG Singapore Branch
+CTRL-1817804383,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SCH,Switzerland,C756,Switzerland,1000,UBS AG Zurich
+CTRL-7146318035,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C392,Japan,4300,UBS Securities Japan Co Ltd
+CTRL-7114223633,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-4131356954,N0000,UBS Group AG (Regional),EMEA,Europe Middle East Africa,SGE,Germany & Austria,C276,Germany,2210,UBS Europe SE Frankfurt
+CTRL-1422701550,N0000,UBS Group AG (Regional),APAC,Asia Pacific,SAP,Asia Pacific,C344,Hong Kong,4100,UBS AG Hong Kong Branch

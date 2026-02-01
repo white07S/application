@@ -171,12 +171,6 @@ const Header = () => {
 
                 {isAuthenticated ? (
                     <>
-                        <button className="h-7 w-7 rounded bg-surface-light border border-border-light flex items-center justify-center text-text-sub hover:text-primary hover:border-primary transition-colors">
-                            <span className="material-symbols-outlined">notifications</span>
-                        </button>
-                        <button className="h-7 w-7 rounded bg-surface-light border border-border-light flex items-center justify-center text-text-sub hover:text-primary hover:border-primary transition-colors">
-                            <span className="material-symbols-outlined">settings</span>
-                        </button>
                         <div
                             className="h-7 w-7 rounded bg-primary text-white flex items-center justify-center text-[10px] font-bold cursor-default shadow-sm"
                             title={account?.name || 'User'}

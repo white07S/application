@@ -1,6 +1,10 @@
 export const appConfig = {
     appName: 'NFR Connect',
     appVersion: 'v3.1.0 Connected Intelligence',
+    externalLinks: {
+        github: process.env.REACT_APP_GITHUB_URL || "",
+        issueTracker: process.env.REACT_APP_ISSUE_TRACKER_URL || "",
+    },
     auth: {
         clientId: process.env.REACT_APP_CLIENT_ID || "6c0e6344-99f5-49ee-b089-a754f3f1e807",
         authority: process.env.REACT_APP_AUTHORITY || "https://login.microsoftonline.com/cd047842-758c-4a08-84eb-36bed37ec49e",

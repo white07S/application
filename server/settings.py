@@ -1,48 +1,36 @@
-import os
-from pathlib import Path
-from typing import List
+"""Legacy settings module - redirects to unified config/settings.py.
 
-from dotenv import load_dotenv
+DEPRECATED: Import settings from server.config.settings instead:
+    from server.config.settings import get_settings
+    settings = get_settings()
 
-load_dotenv()
+This module exists for backward compatibility only.
+"""
 
+from server.config.settings import get_settings, PROJECT_ROOT
 
-def _get_required_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+# Get unified settings
+_settings = get_settings()
 
-
-def _split_csv(value: str) -> List[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
+# Export backward-compatible module-level variables
+BASE_DIR = PROJECT_ROOT / "server"
 
 # Auth settings
-TENANT_ID = _get_required_env("TENANT_ID")
-CLIENT_ID = _get_required_env("CLIENT_ID")
-CLIENT_SECRET = _get_required_env("CLIENT_SECRET")
-AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+TENANT_ID = _settings.tenant_id
+CLIENT_ID = _settings.client_id
+CLIENT_SECRET = _settings.client_secret
+AUTHORITY = _settings.authority
+GRAPH_SCOPES = _settings.graph_scopes_list
+GROUP_CHAT_ACCESS = _settings.group_chat_access
+GROUP_DASHBOARD_ACCESS = _settings.group_dashboard_access
+GROUP_PIPELINES_INGESTION_ACCESS = _settings.group_pipelines_ingestion_access
+GROUP_PIPELINES_ADMIN_ACCESS = _settings.group_pipelines_admin_access
 
-GRAPH_SCOPES = _split_csv(os.getenv("GRAPH_SCOPES", ""))
-if not GRAPH_SCOPES:
-    raise RuntimeError("GRAPH_SCOPES must contain at least one scope")
+# Data paths
+DATA_INGESTION_PATH = _settings.data_ingestion_path
+DOCS_CONTENT_DIR = _settings.docs_content_dir
 
-GROUP_CHAT_ACCESS = _get_required_env("GROUP_CHAT_ACCESS")
-GROUP_DASHBOARD_ACCESS = _get_required_env("GROUP_DASHBOARD_ACCESS")
-GROUP_PIPELINES_INGESTION_ACCESS = _get_required_env("GROUP_PIPELINES_INGESTION_ACCESS")
-GROUP_PIPELINES_ADMIN_ACCESS = os.getenv("GROUP_PIPELINES_ADMIN_ACCESS", "ad51a2ff-5627-45c1-882f-659a424bb87c")
-
-# Data Ingestion settings
-DATA_INGESTION_PATH = Path(_get_required_env("DATA_INGESTION_PATH")).resolve()
-
-# CORS / app settings
-ALLOWED_ORIGINS = _split_csv(_get_required_env("ALLOWED_ORIGINS"))
-
-DOCS_CONTENT_DIR = (PROJECT_ROOT / "docs" / "docs_content").resolve()
-
-UVICORN_HOST = os.getenv("UVICORN_HOST", "0.0.0.0")
-UVICORN_PORT = int(os.getenv("UVICORN_PORT", "8000"))
+# Server settings
+ALLOWED_ORIGINS = _settings.allowed_origins_list
+UVICORN_HOST = _settings.uvicorn_host
+UVICORN_PORT = _settings.uvicorn_port

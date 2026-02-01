@@ -1,9 +1,9 @@
-import React from 'react';
+import type { MouseEvent } from 'react';
 import { appConfig } from '../../config/appConfig';
 
 const Home = () => {
     // Mouse move handler for wobble effect
-    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
         const card = e.currentTarget;
         const rect = card.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -16,7 +16,7 @@ const Home = () => {
         card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
     };
 
-    const handleMouseLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleMouseLeave = (e: MouseEvent<HTMLDivElement>) => {
         e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
     };
 

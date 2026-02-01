@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import type { FC } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import PipelinesSidebar from './components/PipelinesSidebar';
 import { useAuth } from '../../auth/useAuth';
 import { appConfig } from '../../config/appConfig';
-import { formatBytes, formatDuration, getDataTypeColor } from '../../utils/formatters';
+import { formatBytes, formatDate, formatDuration, getDataTypeColor } from '../../utils/formatters';
 
 interface ParquetFile {
     filename: string;
@@ -125,7 +126,7 @@ const saveActiveJobIds = (jobIds: string[]) => {
     }
 };
 
-const Processing: React.FC = () => {
+const Processing: FC = () => {
     const { getApiAccessToken } = useAuth();
     const [batches, setBatches] = useState<ValidatedBatch[]>([]);
     const [loading, setLoading] = useState(true);
@@ -321,10 +322,6 @@ const Processing: React.FC = () => {
                 return next;
             });
         }
-    };
-
-    const formatDate = (isoString: string): string => {
-        return new Date(isoString).toLocaleString();
     };
 
     // Get completed job for a batch (for showing summary)

@@ -1,0 +1,101 @@
+control_id,group_id,group_name,division_id,division_name,unit_id,unit_name,area_id,area_name,sector_id,sector_name,segment_id,segment_name,function_id,function_name
+CTRL-3746317213,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-9697354961,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-2181241943,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-1958682846,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-4163119785,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-9963334018,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-2812140441,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-1127978094,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-1939042955,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-9703905715,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-7635473142,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-6241752544,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-7825844140,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-4460967357,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-8293453178,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-6756332150,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-1667779376,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-2445662585,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-5693307665,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-5710360983,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-8934927891,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-7887950851,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-4466589567,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-8429141456,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-3303082117,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-2625792787,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-7665963761,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-8995970241,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-3479708607,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-4026113008,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-9786748825,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-5728765136,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-6488854841,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-2566942273,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-6884882440,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-3783290795,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-4131575764,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-5996775663,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-6924716023,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-3392080953,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-8235363119,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-4332894265,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-6649827836,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-2149938334,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-2351531223,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-8110054933,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-2970753705,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-2137651678,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-7805745017,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-7010379415,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-5284391408,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-7483366056,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-1470939445,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-3694860228,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-5567816720,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-9573276057,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-7567496105,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-9639245200,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-4095476665,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-8047877267,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-5774080233,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-2867302554,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-2948728483,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-4919706735,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-3615507143,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-5951406973,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-4274958945,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-9592390865,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-6687206971,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-1083651970,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-9285415473,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-2320763135,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-1248786714,N00000,All Functions,N30000,Asset Management,N30100,Traditional Investments,N30110,Fixed Income,N30111,Credit,N30112,Investment Grade,N30113,Portfolio Management
+CTRL-5067116918,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-9957813353,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-4289233844,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-3361388464,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-6633778586,N00000,All Functions,N40000,Group Functions,N40400,Group Finance,N40410,Financial Reporting,N40411,Regulatory Reporting,N40412,Capital Reporting,N40413,Capital Calculations
+CTRL-8086172302,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10110,Cash Equities,N10111,Execution Services,N10112,Electronic Trading
+CTRL-7517938612,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-1519709079,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-1965067727,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-2452066459,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-1945826486,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-9894847574,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-3710566582,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-1983297492,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-4888749350,N00000,All Functions,N10000,Investment Bank,N10007,Global Markets,N10100,Equities,N10120,Derivatives,N10121,Flow Derivatives,N10122,Options Trading
+CTRL-8987073217,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-9894264595,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-6317189421,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-8168204967,N00000,All Functions,N40000,Group Functions,N40100,Group Risk Control,N40110,Non-Financial Risk,N40111,Operational Risk,N40112,Risk Assessment,N40113,Control Testing
+CTRL-3030106617,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-8664882079,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-8763140509,N00000,All Functions,N20000,Global Wealth Management,N20100,Ultra High Net Worth,N20110,Private Banking,N20111,Client Advisory,N20112,Portfolio Management,N20113,Investment Advisory
+CTRL-1817804383,N00000,All Functions,N40000,Group Functions,N40200,Group Technology,N40210,Infrastructure,N40211,Cloud Services,N40212,Platform Engineering,N40213,DevOps
+CTRL-7146318035,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services
+CTRL-7114223633,N00000,All Functions,N10000,Investment Bank,N14952,Investment Banking,N14960,Advisory,N14961,M&A,N14962,Cross Border M&A,N14963,Deal Execution
+CTRL-4131356954,N00000,All Functions,N40000,Group Functions,N40300,Group Compliance,N40310,Regulatory Compliance,N40311,Financial Crime,N40312,AML Operations,N40313,Transaction Monitoring
+CTRL-1422701550,N00000,All Functions,N20000,Global Wealth Management,N20200,High Net Worth,N20210,Wealth Planning,N20211,Tax Advisory,N20212,Estate Planning,N20213,Trust Services

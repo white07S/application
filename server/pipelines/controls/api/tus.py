@@ -574,9 +574,10 @@ async def _complete_upload(tus_upload: TusUpload, db: Session) -> None:
     db.flush()
 
     # Check how many files in this batch session are complete
+    # Use FOR UPDATE lock to prevent race condition when multiple files complete simultaneously
     session_uploads = db.query(TusUpload).filter_by(
         batch_session_id=tus_upload.batch_session_id
-    ).all()
+    ).with_for_update().all()
 
     completed_count = sum(1 for u in session_uploads if u.is_complete)
     expected_count = tus_upload.expected_files

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DocsLayout from './DocsLayout';
 
@@ -34,15 +34,6 @@ export default function DocsPage() {
     }
   }, [location.pathname, location.hash]);
 
-  if (!slug) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin">
-          <span className="material-symbols-outlined text-4xl text-primary">sync</span>
-        </div>
-      </div>
-    );
-  }
-
-  return <DocsLayout slug={slug} />;
+  // Show DocsLayout - slug will be empty briefly before redirect happens
+  return <DocsLayout slug={slug || 'getting-started/introduction'} />;
 }

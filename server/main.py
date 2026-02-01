@@ -15,28 +15,11 @@ configure_logging()
 logger = get_logger(name=__name__)
 
 
-# DEPRECATED: Old pipeline directories - replaced by new storage system
-# def _init_data_directories() -> None:
-#     """Initialize data ingestion directories on startup."""
-#     data_types = ["issues", "controls", "actions"]
-#
-#     # Ensure base directory exists
-#     settings.DATA_INGESTION_PATH.mkdir(parents=True, exist_ok=True)
-#     logger.info("Data ingestion base path: %s", settings.DATA_INGESTION_PATH)
-#
-#     # Ensure subdirectories exist
-#     for data_type in data_types:
-#         type_dir = settings.DATA_INGESTION_PATH / data_type
-#         type_dir.mkdir(parents=True, exist_ok=True)
-#         logger.info("Ensured directory exists: %s", type_dir)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
     # Startup
     logger.info("Starting NFR Connect server...")
-    # _init_data_directories()  # DEPRECATED: Old pipeline directories
 
     # Initialize storage directories (uploads, preprocessed, etc.)
     logger.info("Initializing storage directories...")

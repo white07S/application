@@ -1,0 +1,201 @@
+control_id,risk_theme,taxonomy_number,risk_theme_number
+CTRL-3746317213,Financial Crime Prevention,3,3.1
+CTRL-9697354961,Data Management,1,1.3
+CTRL-9697354961,Process Execution,8,8.1
+CTRL-9697354961,Financial Crime Prevention,3,3.1
+CTRL-2181241943,Conduct Risk,4,4.1
+CTRL-2181241943,Intragroup Dependencies,2,2.3
+CTRL-2181241943,Process Execution,8,8.1
+CTRL-1958682846,Cyber and Information Security,1,1.2
+CTRL-1958682846,Regulatory Change,5,5.3
+CTRL-4163119785,Regulatory Compliance,5,5.1
+CTRL-4163119785,Conduct Risk,4,4.1
+CTRL-4163119785,Client Suitability,4,4.3
+CTRL-9963334018,Third Party Management,2,2.1
+CTRL-9963334018,Legal Risk,5,5.2
+CTRL-2812140441,Financial Crime Prevention,3,3.1
+CTRL-2812140441,Anti-Money Laundering,3,3.2
+CTRL-1127978094,Technology Change Management,1,1.4
+CTRL-1127978094,Operational Resilience,6,6.3
+CTRL-1127978094,Intragroup Dependencies,2,2.3
+CTRL-1939042955,Financial Crime Prevention,3,3.1
+CTRL-1939042955,Legal Risk,5,5.2
+CTRL-9703905715,Operational Resilience,6,6.3
+CTRL-9703905715,Business Continuity,6,6.1
+CTRL-9703905715,Talent and Resource Management,7,7.1
+CTRL-7635473142,Data Management,1,1.3
+CTRL-7635473142,Outsourcing Risk,2,2.2
+CTRL-7635473142,Financial Crime Prevention,3,3.1
+CTRL-6241752544,Regulatory Change,5,5.3
+CTRL-7825844140,Legal Risk,5,5.2
+CTRL-4460967357,Organizational Culture,7,7.2
+CTRL-4460967357,Third Party Management,2,2.1
+CTRL-8293453178,Legal Risk,5,5.2
+CTRL-6756332150,Anti-Money Laundering,3,3.2
+CTRL-1667779376,Third Party Management,2,2.1
+CTRL-1667779376,Regulatory Compliance,5,5.1
+CTRL-1667779376,Organizational Culture,7,7.2
+CTRL-2445662585,Conduct Risk,4,4.1
+CTRL-2445662585,Technology Production Stability,1,1.1
+CTRL-2445662585,Outsourcing Risk,2,2.2
+CTRL-5693307665,Regulatory Compliance,5,5.1
+CTRL-5693307665,Conduct Risk,4,4.1
+CTRL-5710360983,Third Party Management,2,2.1
+CTRL-8934927891,Regulatory Compliance,5,5.1
+CTRL-8934927891,Outsourcing Risk,2,2.2
+CTRL-7887950851,Regulatory Change,5,5.3
+CTRL-7887950851,Legal Risk,5,5.2
+CTRL-7887950851,Operational Resilience,6,6.3
+CTRL-4466589567,Market Conduct,4,4.2
+CTRL-4466589567,Sanctions Compliance,3,3.3
+CTRL-8429141456,Client Suitability,4,4.3
+CTRL-8429141456,Third Party Management,2,2.1
+CTRL-8429141456,Outsourcing Risk,2,2.2
+CTRL-3303082117,Financial Crime Prevention,3,3.1
+CTRL-2625792787,Regulatory Change,5,5.3
+CTRL-2625792787,Cyber and Information Security,1,1.2
+CTRL-7665963761,Business Continuity,6,6.1
+CTRL-7665963761,Anti-Money Laundering,3,3.2
+CTRL-8995970241,Technology Production Stability,1,1.1
+CTRL-3479708607,Data Management,1,1.3
+CTRL-3479708607,Third Party Management,2,2.1
+CTRL-3479708607,Conduct Risk,4,4.1
+CTRL-4026113008,Organizational Culture,7,7.2
+CTRL-4026113008,Technology Production Stability,1,1.1
+CTRL-4026113008,Regulatory Change,5,5.3
+CTRL-9786748825,Intragroup Dependencies,2,2.3
+CTRL-5728765136,Sanctions Compliance,3,3.3
+CTRL-5728765136,Operational Resilience,6,6.3
+CTRL-5728765136,Conduct Risk,4,4.1
+CTRL-6488854841,Sanctions Compliance,3,3.3
+CTRL-6488854841,Financial Crime Prevention,3,3.1
+CTRL-6488854841,Transaction Processing,8,8.2
+CTRL-2566942273,Regulatory Change,5,5.3
+CTRL-2566942273,Organizational Culture,7,7.2
+CTRL-2566942273,Intragroup Dependencies,2,2.3
+CTRL-6884882440,Regulatory Change,5,5.3
+CTRL-3783290795,Legal Risk,5,5.2
+CTRL-3783290795,Technology Change Management,1,1.4
+CTRL-3783290795,Process Execution,8,8.1
+CTRL-4131575764,Client Suitability,4,4.3
+CTRL-4131575764,Financial Crime Prevention,3,3.1
+CTRL-4131575764,Legal Risk,5,5.2
+CTRL-5996775663,Regulatory Compliance,5,5.1
+CTRL-5996775663,Third Party Management,2,2.1
+CTRL-5996775663,Sanctions Compliance,3,3.3
+CTRL-6924716023,Physical Security,6,6.2
+CTRL-3392080953,Regulatory Compliance,5,5.1
+CTRL-8235363119,Technology Production Stability,1,1.1
+CTRL-8235363119,Transaction Processing,8,8.2
+CTRL-8235363119,Outsourcing Risk,2,2.2
+CTRL-4332894265,Regulatory Change,5,5.3
+CTRL-4332894265,Financial Crime Prevention,3,3.1
+CTRL-6649827836,Anti-Money Laundering,3,3.2
+CTRL-6649827836,Regulatory Change,5,5.3
+CTRL-2149938334,Physical Security,6,6.2
+CTRL-2149938334,Technology Production Stability,1,1.1
+CTRL-2149938334,Legal Risk,5,5.2
+CTRL-2351531223,Process Execution,8,8.1
+CTRL-2351531223,Operational Resilience,6,6.3
+CTRL-8110054933,Transaction Processing,8,8.2
+CTRL-2970753705,Technology Production Stability,1,1.1
+CTRL-2970753705,Regulatory Change,5,5.3
+CTRL-2137651678,Third Party Management,2,2.1
+CTRL-2137651678,Intragroup Dependencies,2,2.3
+CTRL-2137651678,Cyber and Information Security,1,1.2
+CTRL-7805745017,Physical Security,6,6.2
+CTRL-7805745017,Operational Resilience,6,6.3
+CTRL-7010379415,Data Management,1,1.3
+CTRL-7010379415,Financial Crime Prevention,3,3.1
+CTRL-5284391408,Technology Production Stability,1,1.1
+CTRL-5284391408,Market Conduct,4,4.2
+CTRL-5284391408,Conduct Risk,4,4.1
+CTRL-7483366056,Business Continuity,6,6.1
+CTRL-7483366056,Anti-Money Laundering,3,3.2
+CTRL-7483366056,Outsourcing Risk,2,2.2
+CTRL-1470939445,Operational Resilience,6,6.3
+CTRL-3694860228,Cyber and Information Security,1,1.2
+CTRL-3694860228,Third Party Management,2,2.1
+CTRL-5567816720,Conduct Risk,4,4.1
+CTRL-9573276057,Intragroup Dependencies,2,2.3
+CTRL-9573276057,Outsourcing Risk,2,2.2
+CTRL-7567496105,Financial Crime Prevention,3,3.1
+CTRL-9639245200,Operational Resilience,6,6.3
+CTRL-9639245200,Technology Change Management,1,1.4
+CTRL-9639245200,Regulatory Change,5,5.3
+CTRL-4095476665,Data Management,1,1.3
+CTRL-8047877267,Legal Risk,5,5.2
+CTRL-5774080233,Regulatory Compliance,5,5.1
+CTRL-2867302554,Business Continuity,6,6.1
+CTRL-2948728483,Technology Production Stability,1,1.1
+CTRL-2948728483,Regulatory Change,5,5.3
+CTRL-2948728483,Third Party Management,2,2.1
+CTRL-4919706735,Transaction Processing,8,8.2
+CTRL-4919706735,Financial Crime Prevention,3,3.1
+CTRL-3615507143,Anti-Money Laundering,3,3.2
+CTRL-3615507143,Intragroup Dependencies,2,2.3
+CTRL-5951406973,Financial Crime Prevention,3,3.1
+CTRL-4274958945,Regulatory Change,5,5.3
+CTRL-4274958945,Conduct Risk,4,4.1
+CTRL-4274958945,Financial Crime Prevention,3,3.1
+CTRL-9592390865,Process Execution,8,8.1
+CTRL-9592390865,Legal Risk,5,5.2
+CTRL-9592390865,Outsourcing Risk,2,2.2
+CTRL-6687206971,Legal Risk,5,5.2
+CTRL-6687206971,Operational Resilience,6,6.3
+CTRL-1083651970,Talent and Resource Management,7,7.1
+CTRL-1083651970,Intragroup Dependencies,2,2.3
+CTRL-9285415473,Physical Security,6,6.2
+CTRL-9285415473,Transaction Processing,8,8.2
+CTRL-9285415473,Organizational Culture,7,7.2
+CTRL-2320763135,Legal Risk,5,5.2
+CTRL-2320763135,Financial Crime Prevention,3,3.1
+CTRL-2320763135,Organizational Culture,7,7.2
+CTRL-1248786714,Sanctions Compliance,3,3.3
+CTRL-1248786714,Intragroup Dependencies,2,2.3
+CTRL-5067116918,Financial Crime Prevention,3,3.1
+CTRL-5067116918,Anti-Money Laundering,3,3.2
+CTRL-5067116918,Regulatory Compliance,5,5.1
+CTRL-9957813353,Market Conduct,4,4.2
+CTRL-9957813353,Intragroup Dependencies,2,2.3
+CTRL-9957813353,Regulatory Compliance,5,5.1
+CTRL-4289233844,Organizational Culture,7,7.2
+CTRL-3361388464,Regulatory Change,5,5.3
+CTRL-3361388464,Legal Risk,5,5.2
+CTRL-6633778586,Organizational Culture,7,7.2
+CTRL-8086172302,Regulatory Compliance,5,5.1
+CTRL-8086172302,Market Conduct,4,4.2
+CTRL-8086172302,Cyber and Information Security,1,1.2
+CTRL-7517938612,Talent and Resource Management,7,7.1
+CTRL-7517938612,Transaction Processing,8,8.2
+CTRL-7517938612,Process Execution,8,8.1
+CTRL-1519709079,Sanctions Compliance,3,3.3
+CTRL-1519709079,Conduct Risk,4,4.1
+CTRL-1519709079,Technology Change Management,1,1.4
+CTRL-1965067727,Technology Change Management,1,1.4
+CTRL-2452066459,Regulatory Compliance,5,5.1
+CTRL-1945826486,Process Execution,8,8.1
+CTRL-1945826486,Talent and Resource Management,7,7.1
+CTRL-9894847574,Client Suitability,4,4.3
+CTRL-3710566582,Regulatory Change,5,5.3
+CTRL-3710566582,Physical Security,6,6.2
+CTRL-1983297492,Transaction Processing,8,8.2
+CTRL-4888749350,Organizational Culture,7,7.2
+CTRL-4888749350,Sanctions Compliance,3,3.3
+CTRL-8987073217,Operational Resilience,6,6.3
+CTRL-9894264595,Market Conduct,4,4.2
+CTRL-6317189421,Physical Security,6,6.2
+CTRL-6317189421,Anti-Money Laundering,3,3.2
+CTRL-8168204967,Organizational Culture,7,7.2
+CTRL-3030106617,Cyber and Information Security,1,1.2
+CTRL-3030106617,Financial Crime Prevention,3,3.1
+CTRL-8664882079,Technology Production Stability,1,1.1
+CTRL-8763140509,Operational Resilience,6,6.3
+CTRL-1817804383,Talent and Resource Management,7,7.1
+CTRL-1817804383,Regulatory Change,5,5.3
+CTRL-1817804383,Transaction Processing,8,8.2
+CTRL-7146318035,Regulatory Compliance,5,5.1
+CTRL-7114223633,Intragroup Dependencies,2,2.3
+CTRL-4131356954,Regulatory Change,5,5.3
+CTRL-4131356954,Third Party Management,2,2.1
+CTRL-1422701550,Technology Change Management,1,1.4

@@ -381,7 +381,7 @@ async def start_ingestion(
 
                 # Clean up parquet files after success
                 try:
-                    storage.cleanup_upload_batch(batch.upload_id, data_type)
+                    storage.cleanup_batch_after_ingestion(batch.upload_id, data_type)
                     logger.info("Cleaned up parquet files for batch {}", batch.upload_id)
                 except Exception as cleanup_err:
                     logger.warning("Failed to cleanup batch files: {}", cleanup_err)

@@ -1,6 +1,6 @@
-import React from 'react';
 import { Code, Bug } from 'lucide-react';
 import { useActiveHeading } from '../../hooks/useActiveHeading';
+import { appConfig } from '../../../../config/appConfig';
 import type { TocHeading } from '../../types';
 
 interface TableOfContentsProps {
@@ -43,30 +43,38 @@ export default function TableOfContents({ headings }: TableOfContentsProps) {
             ))}
           </nav>
 
-          {/* Resources section */}
-          <div className="mt-8 pt-4 border-t border-border">
-            <h4 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-              Resources
-            </h4>
-            <nav className="space-y-2">
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
-              >
-                <Code className="w-4 h-4 shrink-0" />
-                View Source
-              </a>
-              <a
-                href="#"
-                className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
-              >
-                <Bug className="w-4 h-4 shrink-0" />
-                Report Issue
-              </a>
-            </nav>
-          </div>
+          {/* Resources section - only show if links are configured */}
+          {(appConfig.externalLinks.github || appConfig.externalLinks.issueTracker) && (
+            <div className="mt-8 pt-4 border-t border-border">
+              <h4 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+                Resources
+              </h4>
+              <nav className="space-y-2">
+                {appConfig.externalLinks.github && (
+                  <a
+                    href={appConfig.externalLinks.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    <Code className="w-4 h-4 shrink-0" />
+                    View Source
+                  </a>
+                )}
+                {appConfig.externalLinks.issueTracker && (
+                  <a
+                    href={appConfig.externalLinks.issueTracker}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 py-1.5 min-h-[32px] text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    <Bug className="w-4 h-4 shrink-0" />
+                    Report Issue
+                  </a>
+                )}
+              </nav>
+            </div>
+          )}
         </div>
       </div>
     </aside>

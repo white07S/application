@@ -1,13 +1,24 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { SearchIndex, SearchDocument } from '../types';
 import { appConfig } from '../../../config/appConfig';
 
 interface SearchResult extends SearchDocument {
   highlight?: string;
+  score?: number;
+}
+
+// Pre-processed search index for faster lookups
+interface ProcessedDocument extends SearchDocument {
+  titleLower: string;
+  contentLower: string;
+}
+
+interface ProcessedIndex {
+  documents: ProcessedDocument[];
 }
 
 export function useDocsSearch() {
-  const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null);
+  const [searchIndex, setSearchIndex] = useState<ProcessedIndex | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,8 +29,17 @@ export function useDocsSearch() {
         if (!response.ok) {
           throw new Error('Failed to fetch search index');
         }
-        const data = await response.json();
-        setSearchIndex(data);
+        const data: SearchIndex = await response.json();
+
+        // Pre-process: store lowercase versions to avoid repeated conversions
+        const processed: ProcessedIndex = {
+          documents: data.documents.map(doc => ({
+            ...doc,
+            titleLower: doc.title.toLowerCase(),
+            contentLower: doc.content.toLowerCase(),
+          })),
+        };
+        setSearchIndex(processed);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
@@ -35,47 +55,79 @@ export function useDocsSearch() {
 
     const normalizedQuery = query.toLowerCase().trim();
     const terms = normalizedQuery.split(/\s+/);
+    const maxResults = 20;
 
-    const results: SearchResult[] = [];
+    // Collect matches with scores
+    const scoredResults: Array<{ doc: ProcessedDocument; score: number }> = [];
 
     for (const doc of searchIndex.documents) {
-      const titleLower = doc.title.toLowerCase();
-      const contentLower = doc.content.toLowerCase();
-
       // Check if all terms match either title or content
       const matches = terms.every(term =>
-        titleLower.includes(term) || contentLower.includes(term)
+        doc.titleLower.includes(term) || doc.contentLower.includes(term)
       );
 
       if (matches) {
-        // Create highlight snippet
-        let highlight = doc.content;
-        const firstTermIndex = contentLower.indexOf(terms[0]);
+        // Calculate relevance score
+        let score = 0;
 
-        if (firstTermIndex !== -1) {
-          const start = Math.max(0, firstTermIndex - 40);
-          const end = Math.min(doc.content.length, firstTermIndex + terms[0].length + 80);
-          highlight = (start > 0 ? '...' : '') +
-                     doc.content.slice(start, end) +
-                     (end < doc.content.length ? '...' : '');
+        // Title matches are worth more
+        const titleMatchesAll = terms.every(term => doc.titleLower.includes(term));
+        if (titleMatchesAll) score += 100;
+
+        // Exact title match is best
+        if (doc.titleLower === normalizedQuery) score += 50;
+
+        // Title starts with query
+        if (doc.titleLower.startsWith(normalizedQuery)) score += 25;
+
+        // Lower level (doc-level) docs are more important
+        score += (5 - doc.level) * 5;
+
+        // Count term occurrences (capped to avoid bias)
+        for (const term of terms) {
+          const titleCount = (doc.titleLower.match(new RegExp(term, 'g')) || []).length;
+          const contentCount = Math.min((doc.contentLower.match(new RegExp(term, 'g')) || []).length, 5);
+          score += titleCount * 10 + contentCount;
         }
 
-        results.push({
-          ...doc,
-          highlight
-        });
+        scoredResults.push({ doc, score });
       }
     }
 
-    // Sort by title match (higher priority) then by level (doc-level first)
-    results.sort((a, b) => {
-      const aTitle = a.title.toLowerCase().includes(normalizedQuery) ? 0 : 1;
-      const bTitle = b.title.toLowerCase().includes(normalizedQuery) ? 0 : 1;
-      if (aTitle !== bTitle) return aTitle - bTitle;
-      return a.level - b.level;
-    });
+    // Sort by score descending
+    scoredResults.sort((a, b) => b.score - a.score);
 
-    return results.slice(0, 20);
+    // Take top results and create highlights only for those
+    const topResults = scoredResults.slice(0, maxResults);
+
+    return topResults.map(({ doc, score }) => {
+      // Create highlight snippet
+      let highlight = doc.content;
+      const firstTermIndex = doc.contentLower.indexOf(terms[0]);
+
+      if (firstTermIndex !== -1) {
+        const start = Math.max(0, firstTermIndex - 40);
+        const end = Math.min(doc.content.length, firstTermIndex + terms[0].length + 80);
+        highlight = (start > 0 ? '...' : '') +
+                   doc.content.slice(start, end) +
+                   (end < doc.content.length ? '...' : '');
+      }
+
+      // Return all SearchDocument fields plus highlight and score
+      return {
+        id: doc.id,
+        headingId: doc.headingId,
+        title: doc.title,
+        content: doc.content,
+        path: doc.path,
+        anchor: doc.anchor,
+        level: doc.level,
+        category: doc.category,
+        docTitle: doc.docTitle,
+        highlight,
+        score,
+      };
+    });
   }, [searchIndex]);
 
   return { search, loading, error, isReady: !!searchIndex };
