@@ -7,7 +7,7 @@ from server import settings
 from server.api import api_router
 from server.middleware import RequestLoggingMiddleware
 from server.logging_config import configure_logging, get_logger
-from server.database import init_database
+from server.jobs import init_jobs_database
 from server.pipelines.storage import init_storage_directories
 
 # Configure shared Loguru logging
@@ -43,10 +43,10 @@ async def lifespan(app: FastAPI):
     init_storage_directories()
     logger.info("Storage directories initialized")
 
-    # Initialize database
-    logger.info("Initializing database...")
-    init_database()
-    logger.info("Database initialization complete")
+    # Initialize jobs database (SQLite for tracking)
+    logger.info("Initializing jobs database...")
+    init_jobs_database()
+    logger.info("Jobs database initialization complete")
 
     logger.info("Server initialization complete")
 

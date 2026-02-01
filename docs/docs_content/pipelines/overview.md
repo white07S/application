@@ -49,11 +49,11 @@ flowchart TB
 
 ## Supported Data Sources
 
-| Data Source | Files Required | Description |
-|-------------|----------------|-------------|
-| **Controls** | 1 Excel file | Key Performance Controls Inventory (KPCI) data |
-| **Issues** | 4 Excel files | Audit, Regulatory, Restricted Regulatory, Self-Identified issues |
-| **Actions** | 1 Excel file | Issue action plans and remediation tracking |
+| Data Source | Files Required | Description | Status |
+|-------------|----------------|-------------|--------|
+| **Controls** | 1 CSV file | Key Performance Controls Inventory (KPCI) data | Active |
+| **Issues** | 4 CSV files | Audit, Regulatory, Restricted Regulatory, Self-Identified issues | In Development |
+| **Actions** | 1 CSV file | Issue action plans and remediation tracking | In Development |
 
 ## Pipeline Stages
 
@@ -65,16 +65,16 @@ Files are uploaded using the **TUS (resumable upload) protocol**, ensuring relia
 - Chunk-based uploads (5MB chunks)
 - Automatic resume on connection failure
 - File size validation (minimum 5KB)
-- Extension validation (.xlsx only)
+- Extension validation (.csv only)
 - Batch session grouping for multi-file uploads
 
 ### Stage 2: Validation
 
 Uploaded files undergo comprehensive validation:
 
-1. **Enterprise Format Parsing** - Header metadata at rows 1-9, column headers at row 10
+1. **Format Parsing** - Column headers and data parsing
 2. **Schema Validation** - Column types, patterns, required fields, allowed values
-3. **Table Splitting** - Single Excel file split into multiple normalized parquet tables
+3. **Table Splitting** - Single CSV file split into multiple normalized parquet tables
 4. **Multi-Value Parsing** - Comma-separated fields expanded into junction tables
 
 ### Stage 3: Ingestion
@@ -130,14 +130,14 @@ POST /api/v2/pipelines/upload
 Content-Type: multipart/form-data
 ```
 
-Upload Excel files for validation. Creates a batch and automatically triggers validation.
+Upload CSV files for validation. Creates a batch and automatically triggers validation.
 
 **Form Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `data_type` | string | Yes | One of: `issues`, `controls`, `actions` |
-| `files` | File[] | Yes | Excel files (.xlsx) |
+| `files` | File[] | Yes | CSV files (.csv) |
 
 **Response:**
 
@@ -271,7 +271,7 @@ Get recent ingestion records in a summarized format.
       "status": "validated",
       "file_count": 1,
       "total_size": 524288,
-      "files": ["KPCI_Controls_Export.xlsx"],
+      "files": ["KPCI_Controls_Export.csv"],
       "created_at": "2026-01-28T10:30:00Z"
     }
   ]
@@ -371,7 +371,7 @@ Tus-Max-Size: 10737418240
 ```http
 POST /api/v2/pipelines/tus/
 Upload-Length: 5242880
-Upload-Metadata: data_type YWN0aW9ucw==,filename ZmlsZS54bHN4,batch_session_id dXVpZC1oZXJl
+Upload-Metadata: data_type YWN0aW9ucw==,filename ZmlsZS5jc3Y=,batch_session_id dXVpZC1oZXJl
 ```
 
 Creates a new upload session. Metadata values are base64 encoded.
@@ -735,22 +735,14 @@ The pipeline uses a structured directory layout:
 
 ```
 DATA_INGESTION_PATH/
-├── uploads/                          # Original uploaded Excel files
-│   ├── UPL-2026-0001_controls/
-│   │   └── KPCI_Controls_Export.xlsx
-│   └── UPL-2026-0002_issues/
-│       ├── issues_audit.xlsx
-│       ├── issues_regulatory.xlsx
-│       ├── issues_restricted_regulatory.xlsx
-│       └── issues_self_identified.xlsx
+├── uploads/                          # Original uploaded CSV files
+│   └── UPL-2026-0001_controls/
+│       └── KPCI_Controls_Export.csv
 │
 ├── preprocessed/                     # Validated parquet files
-│   ├── UPL-2026-0001_controls/
-│   │   ├── controls_main.parquet
-│   │   ├── controls_hierarchy.parquet
-│   │   └── ...
-│   └── UPL-2026-0002_issues/
-│       ├── issues_main.parquet
+│   └── UPL-2026-0001_controls/
+│       ├── controls_main.parquet
+│       ├── controls_hierarchy.parquet
 │       └── ...
 │
 ├── .state/                          # Internal state tracking
@@ -857,5 +849,5 @@ A global processing lock prevents concurrent pipeline runs:
 ## Related Documentation
 
 - [Controls Pipeline](/pipelines/controls-pipeline) - Controls data source schema and processing
-- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source schema and processing
-- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source schema and processing
+- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source schema and processing *(In Development)*
+- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source schema and processing *(In Development)*

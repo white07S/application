@@ -1,8 +1,5 @@
-"""API routers for pipelines module."""
+"""API module for pipelines - job tracking utilities."""
 
-from .upload import router as upload_router
-from .config import router as config_router
-from .processing import router as processing_router
-from .tus import router as tus_router
+from .job_tracker import JobTracker, create_job_tracker
 
-__all__ = ["upload_router", "config_router", "processing_router", "tus_router"]
+__all__ = ["JobTracker", "create_job_tracker"]

@@ -570,32 +570,38 @@ flowchart LR
 
 ## Database Tables
 
-After ingestion, data is stored in the following data layer tables:
+After ingestion, data is stored in SurrealDB using the naming convention: `{layer}_{domain}_{kind}_{name}`.
 
-| Parquet File | Database Table | Model |
-|--------------|----------------|-------|
-| `controls_main.parquet` | `dl_controls` | `DLControl` |
-| `controls_hierarchy.parquet` | `dl_controls_hierarchy` | `DLControlHierarchy` |
-| `controls_metadata.parquet` | `dl_controls_metadata` | `DLControlMetadata` |
-| `controls_risk_theme.parquet` | `dl_controls_risk_theme` | `DLControlRiskTheme` |
-| `controls_category_flags.parquet` | `dl_controls_category_flags` | `DLControlCategoryFlag` |
-| `controls_sox_assertions.parquet` | `dl_controls_sox_assertions` | `DLControlSoxAssertion` |
-| `controls_related_functions.parquet` | `dl_controls_related_functions` | `DLControlRelatedFunction` |
-| `controls_related_locations.parquet` | `dl_controls_related_locations` | `DLControlRelatedLocation` |
+### Source Tables
 
-### Versioning Fields
+| Table Name | Description |
+|------------|-------------|
+| `src_controls_main` | Primary controls table with core control information |
+| `src_controls_versions` | Version history for controls |
 
-All data layer tables include versioning fields:
+### Reference Tables
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key (auto-generated) |
-| `is_current` | boolean | Whether this is the active version |
-| `valid_from` | datetime | Version validity start |
-| `valid_to` | datetime | Version validity end (null if current) |
-| `ingestion_id` | string | Reference to upload batch |
-| `created_at` | datetime | Record creation timestamp |
-| `updated_at` | datetime | Record last update timestamp |
+| Table Name | Description |
+|------------|-------------|
+| `src_controls_ref_risk_theme` | Risk theme reference data |
+| `src_controls_ref_org_function` | Organizational function reference data |
+| `src_controls_ref_org_location` | Organizational location reference data |
+
+### Relationship Tables
+
+| Table Name | Description |
+|------------|-------------|
+| `src_controls_rel_has_risk_theme` | Control to risk theme relationships |
+| `src_controls_rel_has_related_function` | Control to related function relationships |
+
+### AI Model Output Tables
+
+| Table Name | Description |
+|------------|-------------|
+| `ai_controls_model_taxonomy_current` | Current NFR taxonomy classification results |
+| `ai_controls_model_enrichment_current` | Current enrichment model outputs (summaries, complexity scores) |
+| `ai_controls_model_cleaned_text_current` | Current cleaned/normalized text outputs |
+| `ai_controls_model_embeddings_current` | Current embedding vectors for controls |
 
 ---
 
@@ -657,5 +663,5 @@ curl /api/v2/processing/job/{job_id} \
 ## Related Documentation
 
 - [Pipeline Overview](/pipelines/overview) - Architecture and API reference
-- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source
-- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source
+- Issues Pipeline - *In Development*
+- Actions Pipeline - *In Development*

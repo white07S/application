@@ -10,13 +10,13 @@ For backward compatibility, key components are re-exported here.
 """
 
 # Re-export API routers for backward compatibility
-from .api.upload import router as upload_router
-from .api.config import router as config_router
-from .api.processing import router as processing_router
-from .api.tus import router as tus_router
+from .controls.api.upload import router as upload_router
+from .controls.api.config import router as config_router
+from .controls.api.processing import router as processing_router
+from .controls.api.tus import router as tus_router
 
 # Backward compatibility: expose router_v2.router as the main router
-from .api.upload import router
+from .controls.api.upload import router
 
 __all__ = [
     "router",

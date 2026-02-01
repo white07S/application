@@ -18,6 +18,7 @@ dependencies = [
     "requests>=2.32.5",
     "surrealdb>=1.0.8",
     "python-dotenv>=1.0.1",
+    "pydantic-settings>=2.0.0",
     "uvicorn>=0.40.0",
     "sqlalchemy>=2.0.46",
     "tuspyserver>=4.2.3",

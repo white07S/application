@@ -49,11 +49,11 @@ flowchart TB
 
 ## Supported Data Sources
 
-| Data Source | Files Required | Description |
-|-------------|----------------|-------------|
-| **Controls** | 1 CSV file | Key Performance Controls Inventory (KPCI) data |
-| **Issues** | 4 CSV files | Audit, Regulatory, Restricted Regulatory, Self-Identified issues |
-| **Actions** | 1 CSV file | Issue action plans and remediation tracking |
+| Data Source | Files Required | Description | Status |
+|-------------|----------------|-------------|--------|
+| **Controls** | 1 CSV file | Key Performance Controls Inventory (KPCI) data | Active |
+| **Issues** | 4 CSV files | Audit, Regulatory, Restricted Regulatory, Self-Identified issues | In Development |
+| **Actions** | 1 CSV file | Issue action plans and remediation tracking | In Development |
 
 ## Pipeline Stages
 
@@ -736,21 +736,13 @@ The pipeline uses a structured directory layout:
 ```
 DATA_INGESTION_PATH/
 ├── uploads/                          # Original uploaded CSV files
-│   ├── UPL-2026-0001_controls/
-│   │   └── KPCI_Controls_Export.csv
-│   └── UPL-2026-0002_issues/
-│       ├── issues_audit.csv
-│       ├── issues_regulatory.csv
-│       ├── issues_restricted_regulatory.csv
-│       └── issues_self_identified.csv
+│   └── UPL-2026-0001_controls/
+│       └── KPCI_Controls_Export.csv
 │
 ├── preprocessed/                     # Validated parquet files
-│   ├── UPL-2026-0001_controls/
-│   │   ├── controls_main.parquet
-│   │   ├── controls_hierarchy.parquet
-│   │   └── ...
-│   └── UPL-2026-0002_issues/
-│       ├── issues_main.parquet
+│   └── UPL-2026-0001_controls/
+│       ├── controls_main.parquet
+│       ├── controls_hierarchy.parquet
 │       └── ...
 │
 ├── .state/                          # Internal state tracking
@@ -857,5 +849,5 @@ A global processing lock prevents concurrent pipeline runs:
 ## Related Documentation
 
 - [Controls Pipeline](/pipelines/controls-pipeline) - Controls data source schema and processing
-- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source schema and processing
-- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source schema and processing
+- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source schema and processing *(In Development)*
+- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source schema and processing *(In Development)*

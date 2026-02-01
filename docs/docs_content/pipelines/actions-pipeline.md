@@ -6,18 +6,18 @@ description: Detailed documentation for the Actions data ingestion pipeline
 
 # Actions Pipeline
 
-The Actions pipeline processes issue action plan data. A single Excel file containing all action plans is validated and split into 2 normalized parquet tables for ingestion into the data layer.
+The Actions pipeline processes issue action plan data. A single CSV file containing all action plans is validated and split into 2 normalized parquet tables for ingestion into the data layer.
 
 ## Overview
 
 ```mermaid
 flowchart TB
-    subgraph Input["Input: 1 Excel File"]
-        EXCEL[Issue Actions Export<br/>~35 columns]
+    subgraph Input["Input: 1 CSV File"]
+        CSV[Issue Actions Export<br/>~35 columns]
     end
 
     subgraph Validation["Validation & Splitting"]
-        PARSE[Parse Enterprise Format]
+        PARSE[Parse CSV Format]
         VALIDATE[Schema Validation]
         SPLIT[Table Splitting]
     end
@@ -27,7 +27,7 @@ flowchart TB
         HIER[issues_actions_hierarchy]
     end
 
-    EXCEL --> PARSE
+    CSV --> PARSE
     PARSE --> VALIDATE
     VALIDATE --> SPLIT
     SPLIT --> MAIN
@@ -39,11 +39,11 @@ flowchart TB
 | Requirement | Value |
 |-------------|-------|
 | **File Count** | 1 |
-| **Format** | Excel (.xlsx) |
+| **Format** | CSV (.csv) |
 | **Minimum Size** | 5 KB |
 | **Maximum Size** | 10 GB |
-| **Header Row** | Row 10 (Enterprise format) |
-| **Data Start Row** | Row 11 |
+| **Header Row** | Row 1 |
+| **Data Start Row** | Row 2 |
 
 <Info title="Relationship to Issues">
 Actions are linked to issues via the `issue_id` foreign key. For full functionality, the Issues pipeline should be run first to ensure referential integrity.
@@ -305,14 +305,14 @@ During ingestion, the `issue_id` field is validated against existing issues in t
 ```mermaid
 sequenceDiagram
     participant Upload as Upload API
-    participant Parser as Enterprise Parser
+    participant Parser as CSV Parser
     participant Validator as Schema Validator
     participant Splitter as Table Splitter
     participant Storage as Parquet Storage
 
-    Upload->>Parser: Excel file
-    Parser->>Parser: Extract header metadata
-    Parser->>Parser: Parse data from row 11
+    Upload->>Parser: CSV file
+    Parser->>Parser: Extract headers
+    Parser->>Parser: Parse data rows
     Parser->>Validator: DataFrame
     Validator->>Validator: Check column types
     Validator->>Validator: Validate ID patterns
@@ -498,7 +498,7 @@ flowchart TB
 curl -X POST /api/v2/pipelines/upload \
   -H "X-MS-TOKEN-AAD: <token>" \
   -F "data_type=actions" \
-  -F "files=@Issue_Actions_Export.xlsx"
+  -F "files=@Issue_Actions_Export.csv"
 ```
 
 ### 2. Check Validation Status

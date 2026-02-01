@@ -9,7 +9,7 @@ import { DataType, IngestionRecord, IngestionHistoryResponse, VALIDATION_RULES }
 
 const Pipelines: React.FC = () => {
     const { getApiAccessToken } = useAuth();
-    const [dataType, setDataType] = useState<DataType>('issues');
+    const [dataType, setDataType] = useState<DataType>('controls');
     const [history, setHistory] = useState<IngestionRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -138,28 +138,31 @@ const Pipelines: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
                             <div className="bg-white p-2 rounded border border-border-light">
                                 <div className="flex items-center gap-2 mb-1">
+                                    <span className="material-symbols-outlined text-blue-600 text-[14px]">verified_user</span>
+                                    <span className="font-medium text-text-main">Controls</span>
+                                    <span className="ml-auto px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-medium rounded">Active</span>
+                                </div>
+                                <ul className="text-text-sub space-y-0.5 text-[10px]">
+                                    <li>1 enterprise-format CSV file</li>
+                                    <li>Minimum 5KB</li>
+                                </ul>
+                            </div>
+                            <div className="bg-white p-2 rounded border border-border-light opacity-60">
+                                <div className="flex items-center gap-2 mb-1">
                                     <span className="material-symbols-outlined text-amber-600 text-[14px]">report_problem</span>
                                     <span className="font-medium text-text-main">Issues</span>
+                                    <span className="ml-auto px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-medium rounded">In Dev</span>
                                 </div>
                                 <ul className="text-text-sub space-y-0.5 text-[10px]">
                                     <li>4 CSV files (.csv)</li>
                                     <li>Minimum 5KB each</li>
                                 </ul>
                             </div>
-                            <div className="bg-white p-2 rounded border border-border-light">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="material-symbols-outlined text-blue-600 text-[14px]">verified_user</span>
-                                    <span className="font-medium text-text-main">Controls</span>
-                                </div>
-                                <ul className="text-text-sub space-y-0.5 text-[10px]">
-                                    <li>1 CSV file (.csv)</li>
-                                    <li>Minimum 5KB</li>
-                                </ul>
-                            </div>
-                            <div className="bg-white p-2 rounded border border-border-light">
+                            <div className="bg-white p-2 rounded border border-border-light opacity-60">
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="material-symbols-outlined text-green-600 text-[14px]">task_alt</span>
                                     <span className="font-medium text-text-main">Actions</span>
+                                    <span className="ml-auto px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-medium rounded">In Dev</span>
                                 </div>
                                 <ul className="text-text-sub space-y-0.5 text-[10px]">
                                     <li>1 CSV file (.csv)</li>

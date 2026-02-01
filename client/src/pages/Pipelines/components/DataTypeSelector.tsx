@@ -7,24 +7,28 @@ interface DataTypeSelectorProps {
     disabled?: boolean;
 }
 
-const dataTypes: { value: DataType; label: string; icon: string; description: string }[] = [
-    {
-        value: 'issues',
-        label: 'Issues',
-        icon: 'report_problem',
-        description: '4 xlsx files required, min 5KB each',
-    },
+const dataTypes: { value: DataType; label: string; icon: string; description: string; disabled?: boolean; badge?: string }[] = [
     {
         value: 'controls',
         label: 'Controls',
         icon: 'verified_user',
-        description: '1 xlsx file required, min 5KB',
+        description: '1 CSV file required, min 5KB',
+    },
+    {
+        value: 'issues',
+        label: 'Issues',
+        icon: 'report_problem',
+        description: '4 CSV files required, min 5KB each',
+        disabled: true,
+        badge: 'In Development',
     },
     {
         value: 'actions',
         label: 'Actions',
         icon: 'task_alt',
-        description: '1 xlsx file required, min 5KB',
+        description: '1 CSV file required, min 5KB',
+        disabled: true,
+        badge: 'In Development',
     },
 ];
 
@@ -52,8 +56,8 @@ const DataTypeSelector: React.FC<DataTypeSelectorProps> = ({ value, onChange, di
                         }}
                     >
                         {dataTypes.map((type) => (
-                            <option key={type.value} value={type.value}>
-                                {type.label}
+                            <option key={type.value} value={type.value} disabled={type.disabled}>
+                                {type.label} {type.badge ? `(${type.badge})` : ''}
                             </option>
                         ))}
                     </select>
@@ -73,6 +77,11 @@ const DataTypeSelector: React.FC<DataTypeSelectorProps> = ({ value, onChange, di
                             <span className="font-medium text-text-main">{rules.fileCount} file{rules.fileCount > 1 ? 's' : ''}</span>
                             {' '}required, min {rules.minSizeKb}KB each
                         </div>
+                        {selectedType.badge && (
+                            <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded">
+                                {selectedType.badge}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>

@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from server.database import UploadBatch, DataSource
+from server.jobs import UploadBatch
 from server.logging_config import get_logger
 from .storage import get_upload_sequence_path
 
@@ -57,19 +57,12 @@ def generate_upload_id() -> str:
     return upload_id
 
 
-def get_data_source_id(db: Session, source_code: str) -> int:
-    """Get the data_source_id for a given source code."""
-    source = db.query(DataSource).filter_by(source_code=source_code).first()
-    if not source:
-        raise ValueError(f"Unknown data source: {source_code}")
-    return source.id
-
-
 def create_upload_batch(
     db: Session,
     data_type: str,
     source_path: str,
     file_count: int,
+    uploaded_by: Optional[str] = None,
 ) -> UploadBatch:
     """
     Create a new upload batch record in the database.
@@ -79,19 +72,20 @@ def create_upload_batch(
         data_type: Type of data (issues, controls, actions)
         source_path: Path where files are stored
         file_count: Number of files uploaded
+        uploaded_by: User who uploaded
 
     Returns:
         UploadBatch: The created batch record
     """
     upload_id = generate_upload_id()
-    data_source_id = get_data_source_id(db, data_type)
 
     batch = UploadBatch(
         upload_id=upload_id,
-        data_source_id=data_source_id,
+        data_type=data_type,
         status="pending",
         source_path=source_path,
         file_count=file_count,
+        uploaded_by=uploaded_by,
         created_at=datetime.utcnow(),
     )
 
