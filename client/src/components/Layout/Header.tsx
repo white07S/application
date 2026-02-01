@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { appConfig } from '../../config/appConfig';
 import { useAuth } from '../../auth/useAuth';
+import { DashboardSelector } from './DashboardSelector';
 
 const Header = () => {
     const location = useLocation();
@@ -96,18 +97,8 @@ const Header = () => {
                         </span>
                         Docs
                     </Link>
-                    <Link
-                        to="/dashboard"
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname === '/dashboard'
-                            ? 'text-primary bg-surface-light'
-                            : 'text-text-sub hover:text-text-main hover:bg-surface-light'
-                            } ${!isAuthenticated ? 'opacity-50 pointer-events-none grayscale' : ''}`}
-                    >
-                        <span className={`material-symbols-outlined ${location.pathname === '/dashboard' ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
-                            dashboard
-                        </span>
-                        Dashboard
-                    </Link>
+                    {/* Animated Dashboard Selector - expands horizontally */}
+                    <DashboardSelector disabled={!isAuthenticated} />
                     <Link
                         to="/chat"
                         className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname === '/chat'
@@ -244,20 +235,55 @@ const Header = () => {
                             </span>
                             Docs
                         </Link>
-                        <Link
-                            to="/dashboard"
-                            className={`flex items-center gap-2 px-3 py-2 min-h-[44px] text-sm font-medium rounded transition-colors ${location.pathname === '/dashboard'
-                                ? 'text-primary bg-surface-light'
-                                : 'text-text-sub hover:text-text-main hover:bg-surface-light'
-                                } ${!isAuthenticated ? 'opacity-50 pointer-events-none grayscale' : ''}`}
-                            onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                            <span className={`material-symbols-outlined ${location.pathname === '/dashboard' ? 'text-primary' : 'text-text-sub'}`}>
-                                dashboard
-                            </span>
-                            Dashboard
-                            {!isAuthenticated && <span className="text-[10px] text-text-sub ml-auto">(Sign in required)</span>}
-                        </Link>
+                        {/* Dashboard with sub-options */}
+                        <div className={`${!isAuthenticated ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                            <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-text-sub">
+                                <span className="material-symbols-outlined">dashboard</span>
+                                Dashboard
+                                {!isAuthenticated && <span className="text-[10px] text-text-sub ml-auto">(Sign in required)</span>}
+                            </div>
+                            <div className="pl-8 flex flex-col gap-0.5">
+                                <Link
+                                    to="/dashboard/controls"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/controls')
+                                        ? 'text-primary bg-surface-light'
+                                        : 'text-text-sub hover:text-text-main hover:bg-surface-light'
+                                        }`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/controls') ? 'text-primary' : 'text-text-sub'}`}>
+                                        shield
+                                    </span>
+                                    Controls
+                                </Link>
+                                <Link
+                                    to="/dashboard/events"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/events')
+                                        ? 'text-primary bg-surface-light'
+                                        : 'text-text-sub hover:text-text-main hover:bg-surface-light'
+                                        }`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/events') ? 'text-primary' : 'text-text-sub'}`}>
+                                        event_note
+                                    </span>
+                                    Events
+                                </Link>
+                                <Link
+                                    to="/dashboard/issues"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/issues')
+                                        ? 'text-primary bg-surface-light'
+                                        : 'text-text-sub hover:text-text-main hover:bg-surface-light'
+                                        }`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/issues') ? 'text-primary' : 'text-text-sub'}`}>
+                                        report_problem
+                                    </span>
+                                    Issues
+                                </Link>
+                            </div>
+                        </div>
                         <Link
                             to="/chat"
                             className={`flex items-center gap-2 px-3 py-2 min-h-[44px] text-sm font-medium rounded transition-colors ${location.pathname === '/chat'
