@@ -110,8 +110,29 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached settings singleton."""
-    return Settings()
+    """Get cached settings singleton.
+
+    Automatically creates all required directories on first call.
+    """
+    settings = Settings()
+
+    # Auto-create all directories at startup
+    # Jobs directory (parent of db file)
+    settings.job_tracking_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Ingestion directory and subdirectories
+    settings.ingestion_path.mkdir(parents=True, exist_ok=True)
+    (settings.ingestion_path / "uploads").mkdir(parents=True, exist_ok=True)
+    (settings.ingestion_path / "preprocessed").mkdir(parents=True, exist_ok=True)
+    (settings.ingestion_path / ".state").mkdir(parents=True, exist_ok=True)
+
+    # Model cache directory
+    settings.model_cache_path.mkdir(parents=True, exist_ok=True)
+
+    # Docs directory
+    settings.docs_content_dir.mkdir(parents=True, exist_ok=True)
+
+    return settings
 
 
 # Module-level exports for backward compatibility
