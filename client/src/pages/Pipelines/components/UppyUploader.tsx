@@ -147,8 +147,16 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                     setIsValidating(false);
                     setUploadComplete(true);
                     isPollingRef.current = false;
-                    // Auto-close success message after 5 seconds
-                    setTimeout(() => setUploadComplete(false), 5000);
+                    // Auto-reset all state after 5 seconds (clean slate for next upload)
+                    setTimeout(() => {
+                        setUploadComplete(false);
+                        setFileStatuses([]);
+                        setUploadError(null);
+                        setValidationStatus(null);
+                        setValidationErrors([]);
+                        uppyRef.current?.cancelAll();
+                        batchSessionIdRef.current = generateBatchSessionId();
+                    }, 5000);
                     return;
                 }
 

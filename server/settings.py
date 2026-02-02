@@ -129,8 +129,12 @@ def get_settings() -> Settings:
     # Model cache directory
     settings.model_cache_path.mkdir(parents=True, exist_ok=True)
 
-    # Docs directory
-    settings.docs_content_dir.mkdir(parents=True, exist_ok=True)
+    # Docs directory - must exist, don't auto-create
+    if not settings.docs_content_dir.exists():
+        raise FileNotFoundError(
+            f"DOCS_CONTENT_DIR does not exist: {settings.docs_content_dir}\n"
+            "Please create this directory manually or update the path in .env"
+        )
 
     return settings
 
