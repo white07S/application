@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 
 from surrealdb import AsyncSurreal
 from server.logging_config import get_logger
-from .settings import get_settings
+from server.settings import get_settings
 
 logger = get_logger(name=__name__)
 

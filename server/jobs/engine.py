@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from server.config.settings import get_settings
+from server.settings import get_settings
 from server.logging_config import get_logger
 
 from .models import Base

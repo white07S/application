@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from surrealdb import AsyncSurreal
 
-from server.config.settings import get_settings
+from server.settings import get_settings
 from server.config.surrealdb import SurrealDBConnectionError
 from server.logging_config import get_logger
 from server.pipelines.controls.schema import (

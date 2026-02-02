@@ -16,7 +16,7 @@ from server.jobs import get_jobs_db, UploadBatch
 from server.jobs.engine import get_session_local
 from server.logging_config import get_logger
 from server.config.surrealdb import get_surrealdb_connection
-from server.config.settings import get_settings
+from server.settings import get_settings
 
 from ..ingest.service import run_ingestion, IngestionResult
 from ..ingest.tracker import IngestionTracker

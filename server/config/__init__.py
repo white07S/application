@@ -5,7 +5,7 @@ This module provides:
 - SurrealDB connection utilities
 """
 
-from .settings import Settings, get_settings, settings
+from server.settings import Settings, get_settings, settings
 from .surrealdb import (
     get_surrealdb_connection,
     test_surrealdb_connection,

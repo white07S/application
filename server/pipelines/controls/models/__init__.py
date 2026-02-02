@@ -22,7 +22,7 @@ Usage:
     )
 """
 
-from server.config.settings import get_settings
+from server.settings import get_settings
 from server.pipelines.controls.models.cache import ModelCache
 
 

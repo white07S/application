@@ -72,7 +72,7 @@ async def health_check(db: Session = Depends(get_jobs_db)):
 
     # Test SurrealDB connection
     try:
-        from server.config.settings import get_settings
+        from server.settings import get_settings
         settings = get_settings()
 
         async with get_surrealdb_connection() as surreal_db:
