@@ -1,52 +1,46 @@
 """Storage management for pipeline data.
 
-Files flow:
-1. TUS temp files go to .tus_uploads/
-2. Completed uploads go directly to preprocessed/{upload_id}_{data_type}/
-3. Split CSVs saved in preprocessed/{upload_id}_{data_type}/split/
-4. Parquet files saved in preprocessed/{upload_id}_{data_type}/
+Directory structure under INGESTION_PATH:
+├── uploads/                    TUS temporary uploads
+├── preprocessed/               Processed batch data
+│   └── {upload_id}_{type}/
+│       ├── split/              Split CSV files
+│       └── *.parquet           Parquet files
+└── .state/                     Lock files, sequences, token cache
 
-No separate 'uploads' or 'database' directories.
+Jobs and model cache are in separate locations (from settings).
 """
+
 import os
 from pathlib import Path
-from server import settings
+from server.settings import get_settings
 from server.logging_config import get_logger
 
 logger = get_logger(name=__name__)
 
-# Directory names under DATA_INGESTION_PATH
+# Directory names under INGESTION_PATH
+UPLOADS_DIR = "uploads"
 PREPROCESSED_DIR = "preprocessed"
 STATE_DIR = ".state"
-TUS_UPLOADS_DIR = ".tus_uploads"
-JOBS_DIR = "jobs"
-MODEL_CACHE_DIR = "model_cache"
 LOCK_FILE = "processing_lock.json"
+
+
+def get_uploads_path() -> Path:
+    """Get the uploads directory path (TUS temporary uploads)."""
+    settings = get_settings()
+    return settings.ingestion_path / UPLOADS_DIR
 
 
 def get_preprocessed_path() -> Path:
     """Get the preprocessed directory path."""
-    return settings.DATA_INGESTION_PATH / PREPROCESSED_DIR
+    settings = get_settings()
+    return settings.ingestion_path / PREPROCESSED_DIR
 
 
 def get_state_path() -> Path:
-    """Get the state directory path (for lock files, etc.)."""
-    return settings.DATA_INGESTION_PATH / STATE_DIR
-
-
-def get_tus_uploads_path() -> Path:
-    """Get the TUS resumable uploads directory path."""
-    return settings.DATA_INGESTION_PATH / TUS_UPLOADS_DIR
-
-
-def get_jobs_path() -> Path:
-    """Get the jobs directory path (for jobs.db)."""
-    return settings.DATA_INGESTION_PATH / JOBS_DIR
-
-
-def get_model_cache_path() -> Path:
-    """Get the model cache directory path."""
-    return settings.DATA_INGESTION_PATH / MODEL_CACHE_DIR
+    """Get the state directory path (for lock files, sequences, token cache)."""
+    settings = get_settings()
+    return settings.ingestion_path / STATE_DIR
 
 
 def get_preprocessed_batch_path(upload_id: str, data_type: str) -> Path:
@@ -67,13 +61,15 @@ def get_split_batch_path(upload_id: str, data_type: str) -> Path:
 
 
 def init_storage_directories() -> None:
-    """Initialize all required storage directories."""
+    """Initialize all required storage directories.
+
+    Creates directories under ingestion_path only.
+    Jobs and model_cache directories are created by their respective modules.
+    """
     directories = [
+        get_uploads_path(),
         get_preprocessed_path(),
         get_state_path(),
-        get_tus_uploads_path(),
-        get_jobs_path(),
-        get_model_cache_path(),
     ]
 
     for directory in directories:
@@ -179,3 +175,9 @@ def is_processing_locked() -> bool:
 def get_upload_sequence_path() -> Path:
     """Get path to the upload ID sequence file."""
     return get_state_path() / "upload_id_sequence.json"
+
+
+# Backward compatibility aliases
+def get_tus_uploads_path() -> Path:
+    """Alias for get_uploads_path() for backward compatibility."""
+    return get_uploads_path()

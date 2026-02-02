@@ -12,6 +12,7 @@ from typing import Optional
 import msal
 
 from server import settings
+from server.pipelines.storage import get_state_path
 from server.logging_config import get_logger
 
 logger = get_logger(name=__name__)
@@ -19,8 +20,8 @@ logger = get_logger(name=__name__)
 # Thread pool for blocking MSAL operations
 _token_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="token_mgr")
 
-# Persistent cache file location - store alongside data ingestion path
-CACHE_FILE = settings.DATA_INGESTION_PATH / ".msal_token_cache.bin"
+# Persistent cache file location - store in .state directory
+CACHE_FILE = get_state_path() / ".msal_token_cache.bin"
 
 # Thread lock for cache operations
 _cache_lock = threading.Lock()

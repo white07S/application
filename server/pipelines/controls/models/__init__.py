@@ -34,7 +34,7 @@ def get_model_cache() -> ModelCache:
     """
     settings = get_settings()
     settings.ensure_model_cache_dir()
-    return ModelCache(cache_dir=settings.model_output_cache_path)
+    return ModelCache(cache_dir=settings.model_cache_path)
 from server.pipelines.controls.models.clean_text import run_clean_text
 from server.pipelines.controls.models.embeddings import run_embeddings
 from server.pipelines.controls.models.enrichment import run_enrichment

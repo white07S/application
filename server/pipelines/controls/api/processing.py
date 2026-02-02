@@ -310,7 +310,7 @@ async def start_ingestion(
                     # Initialize model cache using configured path
                     settings = get_settings()
                     settings.ensure_model_cache_dir()
-                    cache = ModelCache(cache_dir=settings.model_output_cache_path)
+                    cache = ModelCache(cache_dir=settings.model_cache_path)
 
                     # Load split CSV tables for model pipeline (need control data)
                     # Model pipeline expects pandas DataFrames

@@ -43,18 +43,9 @@ TUS_EXTENSIONS = "creation,expiration,termination"
 TUS_MAX_SIZE = 10 * 1024 * 1024 * 1024  # 10GB max upload size
 TUS_UPLOAD_EXPIRATION_HOURS = 24  # Uploads expire after 24 hours
 
-# Directory for TUS partial uploads
-TUS_UPLOADS_DIR = ".tus_uploads"
-
-
-def get_tus_uploads_path() -> Path:
-    """Get the TUS uploads directory path."""
-    return settings.DATA_INGESTION_PATH / TUS_UPLOADS_DIR
-
-
 def get_tus_upload_file_path(tus_id: str) -> Path:
     """Get the path for a specific TUS upload file."""
-    return get_tus_uploads_path() / tus_id
+    return storage.get_uploads_path() / tus_id
 
 
 def parse_upload_metadata(metadata_header: Optional[str]) -> dict:
@@ -276,7 +267,7 @@ async def tus_create(
     tus_id = str(uuid.uuid4())
 
     # Create TUS uploads directory if needed
-    tus_dir = get_tus_uploads_path()
+    tus_dir = storage.get_uploads_path()
     tus_dir.mkdir(parents=True, exist_ok=True)
 
     # Create empty file for the upload

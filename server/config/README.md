@@ -2,6 +2,27 @@
 
 This module provides centralized configuration management for the NFR Connect backend.
 
+## Directory Structure
+
+```
+/base/path/
+├── jobs/
+│   └── jobs.db                    ← JOB_TRACKING_DB_PATH
+│
+├── ingestion/                     ← INGESTION_PATH
+│   ├── uploads/                   ← TUS temporary uploads
+│   ├── preprocessed/              ← Processed batches
+│   │   └── {upload_id}_{type}/
+│   │       ├── split/
+│   │       └── *.parquet
+│   └── .state/                    ← Lock files, sequences, token cache
+│
+├── model_cache/                   ← MODEL_CACHE_PATH
+│   └── *.jsonl
+│
+└── docs/docs_content/             ← DOCS_CONTENT_DIR
+```
+
 ## Components
 
 ### 1. Settings (`server/settings.py`)
@@ -15,16 +36,10 @@ Manages all environment variables using Pydantic BaseSettings. Configuration is 
 ```python
 from server.settings import get_settings
 
-# Get settings instance (singleton)
 settings = get_settings()
-
-# Access configuration
-print(settings.surrealdb_url)
+print(settings.ingestion_path)
 print(settings.job_tracking_db_path)
-print(settings.data_ingestion_path)
-
-# Ensure directories exist
-settings.ensure_directories()
+print(settings.model_cache_path)
 ```
 
 **Also available via config module:**
@@ -50,9 +65,9 @@ from server.config import get_settings, settings
 | `surrealdb_database` | SurrealDB database name |
 | `surrealdb_user` | SurrealDB username |
 | `surrealdb_pass` | SurrealDB password |
-| `data_ingestion_path` | Base path for data ingestion |
-| `job_tracking_db_path` | Path to job tracking SQLite database |
-| `model_output_cache_path` | Path for model cache files |
+| `job_tracking_db_path` | Path to jobs SQLite database |
+| `ingestion_path` | Base path for ingestion (uploads, preprocessed, .state) |
+| `model_cache_path` | Path for model cache files |
 | `docs_content_dir` | Path to docs content directory |
 | `allowed_origins` | Comma-separated CORS origins |
 | `uvicorn_host` | Server host |
@@ -67,17 +82,9 @@ Provides async context manager for SurrealDB connections with automatic authenti
 ```python
 from server.config import get_surrealdb_connection
 
-# Use as async context manager
 async with get_surrealdb_connection() as db:
-    # Execute queries
     result = await db.query("SELECT * FROM controls")
     print(result)
-
-# Test connection
-from server.config import test_surrealdb_connection
-
-if await test_surrealdb_connection():
-    print("SurrealDB is ready!")
 ```
 
 ## Environment Variables
@@ -104,10 +111,10 @@ SURREALDB_DATABASE=nfr_connect_db
 SURREALDB_USER=root
 SURREALDB_PASS=root
 
-# Paths (ALL REQUIRED - no dynamic creation)
-DATA_INGESTION_PATH=/path/to/data_ingested
-JOB_TRACKING_DB_PATH=/path/to/data_ingested/jobs/jobs.db
-MODEL_OUTPUT_CACHE_PATH=/path/to/data_ingested/model_cache
+# Paths (ALL REQUIRED - explicit, no dynamic creation)
+JOB_TRACKING_DB_PATH=/path/to/jobs/jobs.db
+INGESTION_PATH=/path/to/ingestion
+MODEL_CACHE_PATH=/path/to/model_cache
 DOCS_CONTENT_DIR=/path/to/docs/docs_content
 
 # CORS & Server
@@ -116,30 +123,10 @@ UVICORN_HOST=0.0.0.0
 UVICORN_PORT=8000
 ```
 
-## Starting SurrealDB
-
-To start SurrealDB for development:
-
-```bash
-surreal start --bind 127.0.0.1:4132 --user root --pass root memory
-```
-
-## Directory Structure
-
-```
-server/
-├── settings.py           # Pydantic settings (main file)
-├── .env                  # Environment variables (required)
-└── config/
-    ├── __init__.py       # Module exports (re-exports settings)
-    ├── surrealdb.py      # SurrealDB connection manager
-    └── README.md         # This file
-```
-
 ## Best Practices
 
 1. Always use `get_settings()` to access configuration (singleton)
 2. Use the async context manager for SurrealDB connections
 3. Never hardcode connection strings or paths - use environment variables
 4. All settings must be in `.env` - no defaults in code
-5. All paths must be explicit - no dynamic path creation
+5. All paths are explicit - jobs, ingestion, and model_cache are separate

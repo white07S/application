@@ -50,9 +50,16 @@ class Settings(BaseSettings):
     surrealdb_pass: str = Field(description="SurrealDB password")
 
     # === Paths - ALL REQUIRED, NO DYNAMIC CREATION ===
-    data_ingestion_path: Path = Field(description="Base path for data ingestion")
+    # Jobs database (separate location)
     job_tracking_db_path: Path = Field(description="Path to jobs SQLite database")
-    model_output_cache_path: Path = Field(description="Path for model cache files")
+
+    # Ingestion (contains uploads/, preprocessed/, .state/)
+    ingestion_path: Path = Field(description="Base path for ingestion data")
+
+    # Model cache (separate location)
+    model_cache_path: Path = Field(description="Path for model cache files")
+
+    # Documentation
     docs_content_dir: Path = Field(description="Path to docs content directory")
 
     # === Server - ALL REQUIRED ===
@@ -62,9 +69,9 @@ class Settings(BaseSettings):
 
     # === Path Validators ===
     @field_validator(
-        'data_ingestion_path',
         'job_tracking_db_path',
-        'model_output_cache_path',
+        'ingestion_path',
+        'model_cache_path',
         'docs_content_dir',
         mode='before'
     )
@@ -87,28 +94,18 @@ class Settings(BaseSettings):
     def allowed_origins_list(self) -> List[str]:
         return _split_csv(self.allowed_origins)
 
-    @property
-    def job_tracking_db_dir(self) -> Path:
-        return self.job_tracking_db_path.parent
-
     # === Directory Helpers ===
-    def ensure_directories(self) -> None:
-        """Ensure all required directories exist."""
-        self.data_ingestion_path.mkdir(parents=True, exist_ok=True)
-        self.job_tracking_db_dir.mkdir(parents=True, exist_ok=True)
-        self.model_output_cache_path.mkdir(parents=True, exist_ok=True)
-
     def ensure_job_tracking_dir(self) -> None:
         """Ensure the job tracking database directory exists."""
-        self.job_tracking_db_dir.mkdir(parents=True, exist_ok=True)
+        self.job_tracking_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def ensure_model_cache_dir(self) -> None:
-        """Ensure the model output cache directory exists."""
-        self.model_output_cache_path.mkdir(parents=True, exist_ok=True)
+        """Ensure the model cache directory exists."""
+        self.model_cache_path.mkdir(parents=True, exist_ok=True)
 
-    def ensure_data_ingestion_dir(self) -> None:
-        """Ensure the data ingestion directory exists."""
-        self.data_ingestion_path.mkdir(parents=True, exist_ok=True)
+    def ensure_ingestion_dir(self) -> None:
+        """Ensure the ingestion directory exists."""
+        self.ingestion_path.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache()
@@ -121,7 +118,7 @@ def get_settings() -> Settings:
 settings = get_settings()
 BASE_DIR = PROJECT_ROOT / "server"
 
-# Legacy variable names
+# Legacy variable names (for backward compatibility)
 TENANT_ID = settings.tenant_id
 CLIENT_ID = settings.client_id
 CLIENT_SECRET = settings.client_secret
@@ -131,7 +128,7 @@ GROUP_CHAT_ACCESS = settings.group_chat_access
 GROUP_DASHBOARD_ACCESS = settings.group_dashboard_access
 GROUP_PIPELINES_INGESTION_ACCESS = settings.group_pipelines_ingestion_access
 GROUP_PIPELINES_ADMIN_ACCESS = settings.group_pipelines_admin_access
-DATA_INGESTION_PATH = settings.data_ingestion_path
+INGESTION_PATH = settings.ingestion_path
 DOCS_CONTENT_DIR = settings.docs_content_dir
 ALLOWED_ORIGINS = settings.allowed_origins_list
 UVICORN_HOST = settings.uvicorn_host
