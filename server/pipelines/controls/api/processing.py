@@ -443,14 +443,14 @@ async def start_ingestion(
                         return results
 
                 model_results = asyncio.run(run_models())
-                    pipeline_stats = get_pipeline_stats(model_results)
+                pipeline_stats = get_pipeline_stats(model_results)
 
-                    logger.info(
-                        "Model pipeline completed: total={}, successful={}, failed={}",
-                        pipeline_stats["total"],
-                        pipeline_stats["successful"],
-                        pipeline_stats["failed"]
-                    )
+                logger.info(
+                    "Model pipeline completed: total={}, successful={}, failed={}",
+                    pipeline_stats["total"],
+                    pipeline_stats["successful"],
+                    pipeline_stats["failed"]
+                )
 
                 # Update job with model results
                 bg_tracker.update_job_status(
@@ -460,7 +460,7 @@ async def start_ingestion(
                     batches_total=len(controls_to_process),
                     batches_completed=pipeline_stats["successful"],
                 )
-                    bg_db.commit()
+                bg_db.commit()
 
                 # Job completed successfully
                 bg_tracker.update_job_status(
