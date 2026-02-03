@@ -20,7 +20,7 @@ from server.settings import get_settings
 
 from ..ingest.service import run_ingestion, IngestionResult
 from ..ingest.tracker import IngestionTracker
-from ..models.runner import run_model_pipeline_batch, get_pipeline_stats
+from ..models.runner import run_model_pipeline, get_pipeline_stats
 from ..models.cache import ModelCache
 from ..consumer.service import ControlsConsumer
 from ... import storage
@@ -292,8 +292,8 @@ async def start_ingestion(
                 bg_tracker.update_job_status(
                     job_id=job_id,
                     status="running",
-                    current_step="Running model pipeline...",
-                    progress_percent=60,
+                    current_step="Preparing model pipeline...",
+                    progress_percent=20,
                     records_total=stats.get("total_records", 0),
                     records_processed=stats.get("processed_records", 0),
                     records_new=stats.get("new_records", 0),
@@ -338,18 +338,111 @@ async def start_ingestion(
                         for cid in controls_to_process
                     ]
 
-                    # Run model pipeline batch
-                    async def run_models():
-                        async with get_surrealdb_connection() as db_conn:
-                            return await run_model_pipeline_batch(
+                # Run model pipeline with incremental progress updates
+                async def run_models():
+                    async with get_surrealdb_connection() as db_conn:
+                        results = {}
+                        total_controls = len(controls_list)
+                        processed_controls = 0
+                        successful_controls = 0
+                        failed_controls = 0
+                        skipped_controls = 0
+
+                        # Reset progress tracking to model pipeline scope
+                        bg_tracker.update_job_status(
+                            job_id=job_id,
+                            records_total=total_controls,
+                            records_processed=0,
+                            records_failed=0,
+                            records_skipped=0,
+                            batches_total=total_controls,
+                            batches_completed=0,
+                            current_step="Running model pipeline (0/0)" if total_controls == 0 else "Running model pipeline (0/{})".format(total_controls),
+                            progress_percent=20,
+                        )
+                        bg_db.commit()
+
+                        status_map = {}
+                        try:
+                            main_table = tables.get("controls_main")
+                            if main_table is not None and "control_id" in main_table.columns:
+                                status_map = (
+                                    main_table.set_index("control_id")[["control_status", "hierarchy_level"]]
+                                    .to_dict(orient="index")
+                                )
+                        except Exception:
+                            status_map = {}
+
+                        def normalize_text(value: Any) -> str:
+                            if value is None:
+                                return ""
+                            return str(value).strip().lower()
+
+                        def is_enrichment_eligible(control_id: str) -> bool:
+                            row = status_map.get(control_id, {})
+                            status = normalize_text(row.get("control_status"))
+                            level = " ".join(normalize_text(row.get("hierarchy_level")).split())
+                            if status != "active":
+                                return False
+                            return level in {"level 1", "level 2"}
+
+                        step_labels = {
+                            "taxonomy": "Taxonomy",
+                            "enrichment": "Enrichment",
+                            "clean_text": "Clean Text",
+                            "embeddings": "Embeddings",
+                        }
+
+                        for idx, control in enumerate(controls_list, start=1):
+                            if not is_enrichment_eligible(control["control_id"]):
+                                skipped_controls += 1
+
+                            async def step_callback(step: str, control_id: str = control["control_id"], step_idx: int = idx):
+                                label = step_labels.get(step, step.replace("_", " ").title())
+                                bg_tracker.update_job_status(
+                                    job_id=job_id,
+                                    current_step="{} ({}/{}) - {}".format(label, step_idx, total_controls, control_id),
+                                )
+                                bg_db.commit()
+
+                            result = await run_model_pipeline(
                                 db=db_conn,
-                                controls=controls_list,
+                                control_id=control["control_id"],
+                                record_id=control["record_id"],
                                 tables=tables,
                                 cache=cache,
                                 graph_token=token,
+                                progress_callback=step_callback,
                             )
+                            results[control["control_id"]] = result
 
-                    model_results = asyncio.run(run_models())
+                            processed_controls += 1
+                            if result.success:
+                                successful_controls += 1
+                            else:
+                                failed_controls += 1
+
+                            # Smooth progress: 20% -> 90% across model pipeline
+                            if total_controls > 0:
+                                progress = 20 + int((processed_controls / total_controls) * 70)
+                            else:
+                                progress = 90
+
+                            bg_tracker.update_job_status(
+                                job_id=job_id,
+                                records_processed=processed_controls,
+                                records_failed=failed_controls,
+                                records_skipped=skipped_controls,
+                                batches_total=total_controls,
+                                batches_completed=successful_controls,
+                                current_step="Running model pipeline ({}/{})".format(processed_controls, total_controls),
+                                progress_percent=progress,
+                            )
+                            bg_db.commit()
+
+                        return results
+
+                model_results = asyncio.run(run_models())
                     pipeline_stats = get_pipeline_stats(model_results)
 
                     logger.info(
@@ -359,14 +452,14 @@ async def start_ingestion(
                         pipeline_stats["failed"]
                     )
 
-                    # Update job with model results
-                    bg_tracker.update_job_status(
-                        job_id=job_id,
-                        current_step="Cleaning up...",
-                        progress_percent=90,
-                        batches_total=len(controls_to_process),
-                        batches_completed=pipeline_stats["successful"],
-                    )
+                # Update job with model results
+                bg_tracker.update_job_status(
+                    job_id=job_id,
+                    current_step="Cleaning up...",
+                    progress_percent=95,
+                    batches_total=len(controls_to_process),
+                    batches_completed=pipeline_stats["successful"],
+                )
                     bg_db.commit()
 
                 # Job completed successfully

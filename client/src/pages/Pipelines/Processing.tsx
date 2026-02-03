@@ -514,6 +514,10 @@ const Processing: FC = () => {
                                                                     <span className="text-red-600">Failed: {activeJob.records_failed}</span>
                                                                     <span className="text-green-600">New: {activeJob.records_new}</span>
                                                                     <span className="text-amber-600">Updated: {activeJob.records_updated}</span>
+                                                                    <span className="text-text-main">
+                                                                        Eligible: {Math.max(activeJob.records_total - activeJob.records_skipped, 0)}
+                                                                    </span>
+                                                                    <span className="text-blue-700">Skipped (NULL): {activeJob.records_skipped}</span>
                                                                 </div>
                                                             </div>
                                                         )}
@@ -584,6 +588,21 @@ const Processing: FC = () => {
                                                                                 Duration
                                                                             </div>
                                                                         </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {getCompletedJob(batch.batch_id)?.status === 'completed' && (
+                                                                    <div className="mt-2 text-xs text-text-sub">
+                                                                        <span className="font-semibold text-text-main">
+                                                                            Eligible: {Math.max(
+                                                                                (getCompletedJob(batch.batch_id)?.records_total || 0) -
+                                                                                    (getCompletedJob(batch.batch_id)?.records_skipped || 0),
+                                                                                0
+                                                                            ).toLocaleString()}
+                                                                        </span>
+                                                                        <span className="ml-3 text-blue-700">
+                                                                            Skipped (NULL): {getCompletedJob(batch.batch_id)?.records_skipped.toLocaleString()}
+                                                                        </span>
                                                                     </div>
                                                                 )}
 
@@ -663,6 +682,11 @@ const Processing: FC = () => {
                                                                 <h4 className="text-[10px] font-bold text-text-sub uppercase tracking-wider mb-2">
                                                                     Pipeline Status
                                                                 </h4>
+                                                                {activeJob?.current_step && (
+                                                                    <div className="text-xs text-text-sub mb-2">
+                                                                        <span className="font-semibold">Current step:</span> {activeJob.current_step}
+                                                                    </div>
+                                                                )}
                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                                                     <div className="bg-white border border-border-light rounded p-2 text-xs">
                                                                         <div className="flex items-center justify-between">

@@ -10,7 +10,7 @@ Each step uses JSONL cache and creates SurrealDB records with graph edges.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from server.pipelines.controls.models.cache import ModelCache
 from server.pipelines.controls.models.clean_text import run_clean_text
@@ -46,6 +46,7 @@ async def run_model_pipeline(
     tables: Dict[str, Any],
     cache: ModelCache,
     graph_token: Optional[str] = None,
+    progress_callback: Optional[Callable[[str], Awaitable[None]]] = None,
 ) -> ModelPipelineResult:
     """Run the complete model pipeline for a single control.
 
@@ -84,6 +85,8 @@ async def run_model_pipeline(
 
     try:
         # Step 1: Taxonomy
+        if progress_callback:
+            await progress_callback("taxonomy")
         taxonomy_result = await run_taxonomy(
             db, control_id, record_id, tables, cache, graph_token
         )
@@ -94,6 +97,8 @@ async def run_model_pipeline(
             result.errors.append(f"Taxonomy: {taxonomy_result.get('error')}")
 
         # Step 2: Enrichment
+        if progress_callback:
+            await progress_callback("enrichment")
         enrichment_result = await run_enrichment(
             db, control_id, record_id, tables, cache, graph_token
         )
@@ -104,6 +109,8 @@ async def run_model_pipeline(
             result.errors.append(f"Enrichment: {enrichment_result.get('error')}")
 
         # Step 3: Clean Text (depends on enrichment)
+        if progress_callback:
+            await progress_callback("clean_text")
         clean_text_result = await run_clean_text(
             db, control_id, record_id, tables, enrichment_result, cache, graph_token
         )
@@ -114,6 +121,8 @@ async def run_model_pipeline(
             result.errors.append(f"Clean Text: {clean_text_result.get('error')}")
 
         # Step 4: Embeddings (depends on clean_text)
+        if progress_callback:
+            await progress_callback("embeddings")
         embeddings_result = await run_embeddings(
             db, control_id, record_id, clean_text_result, cache, graph_token
         )

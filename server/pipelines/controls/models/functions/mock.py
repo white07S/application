@@ -98,6 +98,25 @@ def clean_val(val: Any) -> Any:
     return val
 
 
+def _normalize_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
+
+
+def _is_active_status(value: Any) -> bool:
+    text = _normalize_text(value)
+    return text is not None and text.lower() == "active"
+
+
+def _normalize_hierarchy_level(value: Any) -> Optional[str]:
+    text = _normalize_text(value)
+    if not text:
+        return None
+    return " ".join(text.lower().split())
+
+
 def build_nested_record(control_id: str, tables: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """Build nested control record from tables.
 
@@ -292,8 +311,32 @@ def generate_mock_taxonomy(record: Dict[str, Any], hash_value: str, graph_token:
     """
     control = record.get("control", {})
     control_id = control.get("control_id")
+    control_status = control.get("control_status")
+    hierarchy_level = control.get("hierarchy_level")
 
     try:
+        is_active = _is_active_status(control_status)
+        level = _normalize_hierarchy_level(hierarchy_level)
+
+        if not is_active or level != "level 1":
+            data = {
+                "control_id": control_id,
+                "hash": hash_value,
+                "effective_at": datetime.now().isoformat(),
+                "primary_nfr_risk_theme": None,
+                "primary_risk_theme_id": None,
+                "secondary_nfr_risk_theme": None,
+                "secondary_risk_theme_id": None,
+                "primary_risk_theme_reasoning_steps": None,
+                "secondary_risk_theme_reasoning_steps": None,
+            }
+
+            return {
+                "status": "success",
+                "error": None,
+                "data": data,
+            }
+
         # Pick primary risk theme (random but deterministic based on control_id)
         random.seed(hash(control_id))
         primary = random.choice(NFR_TAXONOMY)
@@ -380,7 +423,6 @@ def generate_mock_enrichment(record: Dict[str, Any], hash_value: str, graph_toke
         random.seed(hash(control_id))
 
         title = control.get("control_title", "Unknown Control")
-        description = control.get("control_description", "")
         division = hierarchy.get("division_name", "Unknown Division")
         function_name = hierarchy.get("function_name", "Unknown Function")
 
@@ -388,98 +430,117 @@ def generate_mock_enrichment(record: Dict[str, Any], hash_value: str, graph_toke
         def yes_no():
             return "Yes" if random.random() < 0.7 else "No"
 
-        # Generate mock enrichment
-        data = {
+        base_data = {
             "control_id": control_id,
             "hash": hash_value,
             "effective_at": datetime.now().isoformat(),
-
-            # Summary
-            "summary": f"This control ensures {title.lower()} within {division}. "
-                       f"It is operated by {function_name} to maintain compliance and operational integrity.",
-
-            # What
-            "what_yes_no": yes_no(),
-            "what_details": f"The control performs {title.lower()} activities including validation, "
-                            f"monitoring, and reporting of key metrics.",
-
-            # Where
-            "where_yes_no": yes_no(),
-            "where_details": f"Control is executed within {division}, specifically in {function_name}.",
-
-            # Who
-            "who_yes_no": yes_no(),
-            "who_details": f"Control owner: {metadata.get('control_owner', 'Not specified')}. "
-                           f"Administrator: {metadata.get('control_administrator', 'Not specified')}.",
-
-            # When
-            "when_yes_no": yes_no(),
-            "when_details": f"Execution frequency: {control.get('execution_frequency', 'Not specified')}. "
-                            f"Valid from: {control.get('valid_from', 'Not specified')}.",
-
-            # Why
-            "why_yes_no": yes_no(),
-            "why_details": f"Control exists to ensure compliance with regulatory requirements "
-                           f"and to mitigate operational risks in {division}.",
-
-            # What-Why combined
-            "what_why_yes_no": yes_no(),
-            "what_why_details": f"The control {title.lower()} to ensure regulatory compliance "
-                                f"and operational risk mitigation within {function_name}.",
-
-            # Risk theme
-            "risk_theme_yes_no": yes_no(),
-            "risk_theme_details": f"Control is aligned with risk themes for {division} operations.",
-
-            # Frequency
-            "frequency_yes_no": yes_no(),
-            "frequency_details": f"Control operates {control.get('execution_frequency', 'periodically')}.",
-
-            # Preventative/Detective
-            "preventative_detective_yes_no": yes_no(),
-            "preventative_detective_details": f"Control is {control.get('preventative_detective', 'Preventative')} "
-                                              f"in nature, designed to {'prevent issues before they occur' if control.get('preventative_detective') == 'Preventative' else 'detect issues after occurrence'}.",
-
-            # Automation level
-            "automation_level_yes_no": yes_no(),
-            "automation_level_details": f"Control is {control.get('manual_automated', 'Manual')}. "
-                                        f"Supporting system: {metadata.get('it_application_system_supporting', 'Not specified')}.",
-
-            # Follow-up
-            "followup_yes_no": yes_no(),
-            "followup_details": "Follow-up actions are documented and tracked through the control management system.",
-
-            # Escalation
-            "escalation_yes_no": yes_no(),
-            "escalation_details": f"Escalation path: Control Owner -> {metadata.get('kpci_governance_forum', 'Management Committee')}.",
-
-            # Evidence
-            "evidence_yes_no": yes_no(),
-            "evidence_details": control.get("evidence_description", "Evidence documentation maintained as per policy."),
-
-            # Abbreviations
-            "abbreviations_yes_no": yes_no(),
-            "abbreviations_details": "Common abbreviations: SOX (Sarbanes-Oxley), KYC (Know Your Customer), "
-                                     "AML (Anti-Money Laundering), CCAR (Comprehensive Capital Analysis and Review).",
-
-            # Entities
-            "people": f"{metadata.get('control_owner', '')}, {metadata.get('control_administrator', '')}".strip(", "),
-            "process": f"{title} process within {function_name}",
-            "product": f"Services related to {division}",
-            "service": function_name,
-            "regulations": "SOX, Basel III, CCAR" if metadata.get("sox_relevant") == "True" else "Internal Policy",
-
-            # Control reframing
-            "control_as_issues": f"Failure in {title.lower()} could result in compliance breaches, "
-                                 f"financial misstatement, or operational disruption in {division}.",
-            "control_as_event": f"Event: {title} execution completed. "
-                                f"Outcome: Control operating effectively as of last review.",
+            "summary": None,
+            "what_yes_no": None,
+            "what_details": None,
+            "where_yes_no": None,
+            "where_details": None,
+            "who_yes_no": None,
+            "who_details": None,
+            "when_yes_no": None,
+            "when_details": None,
+            "why_yes_no": None,
+            "why_details": None,
+            "what_why_yes_no": None,
+            "what_why_details": None,
+            "risk_theme_yes_no": None,
+            "risk_theme_details": None,
+            "frequency_yes_no": None,
+            "frequency_details": None,
+            "preventative_detective_yes_no": None,
+            "preventative_detective_details": None,
+            "automation_level_yes_no": None,
+            "automation_level_details": None,
+            "followup_yes_no": None,
+            "followup_details": None,
+            "escalation_yes_no": None,
+            "escalation_details": None,
+            "evidence_yes_no": None,
+            "evidence_details": None,
+            "abbreviations_yes_no": None,
+            "abbreviations_details": None,
+            "people": None,
+            "process": None,
+            "product": None,
+            "service": None,
+            "regulations": None,
+            "control_as_issues": None,
+            "control_as_event": None,
         }
+
+        is_active = _is_active_status(control.get("control_status"))
+        level = _normalize_hierarchy_level(control.get("hierarchy_level"))
+
+        if not is_active:
+            return {
+                "status": "success",
+                "error": None,
+                "data": base_data,
+            }
+
+        if level == "level 1":
+            base_data.update({
+                "summary": f"This control ensures {title.lower()} within {division}. "
+                           f"It is operated by {function_name} to maintain compliance and operational integrity.",
+                "what_yes_no": yes_no(),
+                "what_details": f"The control performs {title.lower()} activities including validation, "
+                                f"monitoring, and reporting of key metrics.",
+                "where_yes_no": yes_no(),
+                "where_details": f"Control is executed within {division}, specifically in {function_name}.",
+                "who_yes_no": yes_no(),
+                "who_details": f"Control owner: {metadata.get('control_owner', 'Not specified')}. "
+                               f"Administrator: {metadata.get('control_administrator', 'Not specified')}.",
+                "when_yes_no": yes_no(),
+                "when_details": f"Execution frequency: {control.get('execution_frequency', 'Not specified')}. "
+                                f"Valid from: {control.get('valid_from', 'Not specified')}.",
+                "why_yes_no": yes_no(),
+                "why_details": f"Control exists to ensure compliance with regulatory requirements "
+                               f"and to mitigate operational risks in {division}.",
+                "what_why_yes_no": yes_no(),
+                "what_why_details": f"The control {title.lower()} to ensure regulatory compliance "
+                                    f"and operational risk mitigation within {function_name}.",
+                "risk_theme_yes_no": yes_no(),
+                "risk_theme_details": f"Control is aligned with risk themes for {division} operations.",
+                "control_as_issues": f"Failure in {title.lower()} could result in compliance breaches, "
+                                     f"financial misstatement, or operational disruption in {division}.",
+                "control_as_event": f"Event: {title} execution completed. "
+                                    f"Outcome: Control operating effectively as of last review.",
+            })
+        elif level == "level 2":
+            base_data.update({
+                "summary": f"This control ensures {title.lower()} within {division}. "
+                           f"It is operated by {function_name} to maintain compliance and operational integrity.",
+                "frequency_yes_no": yes_no(),
+                "frequency_details": f"Control operates {control.get('execution_frequency', 'periodically')}.",
+                "preventative_detective_yes_no": yes_no(),
+                "preventative_detective_details": f"Control is {control.get('preventative_detective', 'Preventative')} "
+                                                  f"in nature, designed to {'prevent issues before they occur' if control.get('preventative_detective') == 'Preventative' else 'detect issues after occurrence'}.",
+                "automation_level_yes_no": yes_no(),
+                "automation_level_details": f"Control is {control.get('manual_automated', 'Manual')}. "
+                                            f"Supporting system: {metadata.get('it_application_system_supporting', 'Not specified')}.",
+                "followup_yes_no": yes_no(),
+                "followup_details": "Follow-up actions are documented and tracked through the control management system.",
+                "escalation_yes_no": yes_no(),
+                "escalation_details": f"Escalation path: Control Owner -> {metadata.get('kpci_governance_forum', 'Management Committee')}.",
+                "evidence_yes_no": yes_no(),
+                "evidence_details": control.get("evidence_description", "Evidence documentation maintained as per policy."),
+                "abbreviations_yes_no": yes_no(),
+                "abbreviations_details": "Common abbreviations: SOX (Sarbanes-Oxley), KYC (Know Your Customer), "
+                                         "AML (Anti-Money Laundering), CCAR (Comprehensive Capital Analysis and Review).",
+                "control_as_issues": f"Failure in {title.lower()} could result in compliance breaches, "
+                                     f"financial misstatement, or operational disruption in {division}.",
+                "control_as_event": f"Event: {title} execution completed. "
+                                    f"Outcome: Control operating effectively as of last review.",
+            })
 
         return {
             "status": "success",
             "error": None,
-            "data": data,
+            "data": base_data,
         }
 
     except Exception as e:
@@ -553,24 +614,29 @@ def generate_clean_text(control_id: str, tables: Dict[str, pd.DataFrame], enrich
         meta_row = meta.loc[meta["control_id"] == control_id].iloc[0]
 
         # Get raw text fields from control data
-        control_title = clean_val(main_row.get("control_title")) or ""
-        control_description = clean_val(main_row.get("control_description")) or ""
-        evidence_description = clean_val(main_row.get("evidence_description")) or ""
-        local_functional_information = clean_val(meta_row.get("local_functional_information")) or ""
+        control_title = clean_val(main_row.get("control_title"))
+        control_description = clean_val(main_row.get("control_description"))
+        evidence_description = clean_val(main_row.get("evidence_description"))
+        local_functional_information = clean_val(meta_row.get("local_functional_information"))
 
         # Get control_as_event and control_as_issues from enrichment
         enrichment = enrichment_data.get("data", {}) if isinstance(enrichment_data, dict) else {}
-        control_as_event = enrichment.get("control_as_event") or ""
-        control_as_issues = enrichment.get("control_as_issues") or ""
+        control_as_event = enrichment.get("control_as_event")
+        control_as_issues = enrichment.get("control_as_issues")
+
+        def clean_text_field(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            return clean_business_text(str(value))
 
         # Apply text cleaning
         cleaned_texts = {
-            "control_title": clean_business_text(control_title),
-            "control_description": clean_business_text(control_description),
-            "evidence_description": clean_business_text(evidence_description),
-            "local_functional_information": clean_business_text(local_functional_information),
-            "control_as_event": clean_business_text(control_as_event),
-            "control_as_issues": clean_business_text(control_as_issues),
+            "control_title": clean_text_field(control_title),
+            "control_description": clean_text_field(control_description),
+            "evidence_description": clean_text_field(evidence_description),
+            "local_functional_information": clean_text_field(local_functional_information),
+            "control_as_event": clean_text_field(control_as_event),
+            "control_as_issues": clean_text_field(control_as_issues),
         }
 
         # Compute hash from cleaned texts
