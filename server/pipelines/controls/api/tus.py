@@ -454,12 +454,35 @@ async def tus_patch(
                    f"Chunk: {chunk_size}, Max: {tus_upload.file_size}",
         )
 
-    # Write chunk to file
+    # Write chunk to file (offset-safe)
     upload_file_path = Path(tus_upload.temp_path)
+    if not upload_file_path.exists():
+        if upload_offset == 0:
+            upload_file_path.parent.mkdir(parents=True, exist_ok=True)
+            upload_file_path.touch()
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail="Upload file missing or offset mismatch. Please retry from offset 0.",
+            )
+
     try:
-        with open(upload_file_path, "ab") as f:
+        on_disk_size = upload_file_path.stat().st_size
+    except Exception:
+        logger.exception("Failed to stat upload file for {}", upload_id)
+        raise HTTPException(status_code=500, detail="Failed to access upload file")
+
+    if on_disk_size != tus_upload.offset:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Upload file offset mismatch. Expected {tus_upload.offset}, got {on_disk_size}",
+        )
+
+    try:
+        with open(upload_file_path, "r+b") as f:
+            f.seek(upload_offset)
             f.write(chunk_data)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to write chunk for upload {}", upload_id)
         raise HTTPException(status_code=500, detail="Failed to write chunk data")
 
@@ -606,7 +629,7 @@ async def _complete_upload(tus_upload: TusUpload, db: Session) -> None:
     )
 
     # Generate a single upload ID for the entire batch
-    upload_id = upload_tracker.generate_upload_id()
+    upload_id = upload_tracker.generate_upload_id(db)
 
     # Create the batch directory directly in preprocessed
     batch_path = storage.get_preprocessed_batch_path(upload_id, tus_upload.data_type)

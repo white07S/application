@@ -7,7 +7,7 @@ from server import settings
 from server.api import api_router
 from server.middleware import RequestLoggingMiddleware
 from server.logging_config import configure_logging, get_logger
-from server.jobs import init_jobs_database
+from server.jobs import init_jobs_database, shutdown_jobs_engine
 from server.pipelines.storage import init_storage_directories
 
 # Configure shared Loguru logging
@@ -52,6 +52,13 @@ async def lifespan(app: FastAPI):
         logger.info("Token manager thread pool shut down")
     except Exception as e:
         logger.warning("Error shutting down token manager executor: {}", e)
+
+    # Checkpoint WAL and dispose jobs database engine
+    try:
+        shutdown_jobs_engine()
+        logger.info("Jobs database engine shut down")
+    except Exception as e:
+        logger.warning("Error shutting down jobs database engine: {}", e)
 
 
 app = FastAPI(lifespan=lifespan)

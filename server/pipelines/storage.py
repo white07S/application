@@ -112,18 +112,25 @@ def acquire_processing_lock(upload_id: str, owner: str) -> None:
         try:
             existing = json.loads(lock_path.read_text())
         except Exception:
-            existing = {}
+            existing = None
 
-        expires_at = existing.get("expires_at")
-        if expires_at:
+        expires_dt = None
+        if existing:
+            expires_at = existing.get("expires_at")
+            if expires_at:
+                try:
+                    expires_dt = datetime.fromisoformat(expires_at)
+                except Exception:
+                    expires_dt = None
+
+        # Stale or malformed lock file - remove and continue
+        if not existing or not expires_dt or expires_dt <= datetime.utcnow():
             try:
-                expires_dt = datetime.fromisoformat(expires_at)
+                lock_path.unlink()
+                logger.warning("Removed stale processing lock: {}", lock_path)
             except Exception:
-                expires_dt = None
+                pass
         else:
-            expires_dt = None
-
-        if not expires_dt or expires_dt > datetime.utcnow():
             raise RuntimeError(
                 f"Pipeline already running for upload '{existing.get('upload_id')}' "
                 f"by '{existing.get('owner')}'."
@@ -164,12 +171,18 @@ def is_processing_locked() -> bool:
             try:
                 expires_dt = datetime.fromisoformat(expires_at)
                 if expires_dt < datetime.utcnow():
+                    lock_path.unlink(missing_ok=True)
                     return False
             except Exception:
-                return True
+                lock_path.unlink(missing_ok=True)
+                return False
         return True
     except Exception:
-        return True
+        try:
+            lock_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return False
 
 
 def get_upload_sequence_path() -> Path:

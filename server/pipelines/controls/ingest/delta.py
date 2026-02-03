@@ -205,8 +205,10 @@ async def ensure_lookup_entries(
                 )
                 id_maps["risk_theme"][rt_id] = f"{SRC_CONTROLS_REF_RISK_THEME}:{safe_id}"
                 tracker.stats.risk_themes_added += 1
-            except Exception:
-                pass  # May already exist
+            except Exception as e:
+                msg = f"Risk theme insert {rt_id}: {e}"
+                logger.warning(msg)
+                tracker.add_error(msg)
 
     # Check for new functions
     for r in functions_records:
@@ -220,8 +222,10 @@ async def ensure_lookup_entries(
                 )
                 id_maps["org_function"][func_id] = f"{SRC_CONTROLS_REF_ORG_FUNCTION}:{func_id}"
                 tracker.stats.functions_added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                msg = f"Function insert {func_id}: {e}"
+                logger.warning(msg)
+                tracker.add_error(msg)
 
     # Check for new locations
     for r in locations_records:
@@ -235,8 +239,10 @@ async def ensure_lookup_entries(
                 )
                 id_maps["org_location"][loc_id] = f"{SRC_CONTROLS_REF_ORG_LOCATION}:{loc_id}"
                 tracker.stats.locations_added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                msg = f"Location insert {loc_id}: {e}"
+                logger.warning(msg)
+                tracker.add_error(msg)
 
     # Check for new SOX assertions
     seen_assertions = set()
@@ -252,8 +258,10 @@ async def ensure_lookup_entries(
                 )
                 id_maps["sox_assertion"][assertion] = f"{SRC_CONTROLS_REF_SOX_ASSERTION}:{safe_id}"
                 tracker.stats.sox_assertions_added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                msg = f"SOX assertion insert {assertion}: {e}"
+                logger.warning(msg)
+                tracker.add_error(msg)
 
     # Check for new category flags
     seen_flags = set()
@@ -269,8 +277,10 @@ async def ensure_lookup_entries(
                 )
                 id_maps["category_flag"][flag] = f"{SRC_CONTROLS_REF_CATEGORY_FLAG}:{safe_id}"
                 tracker.stats.category_flags_added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                msg = f"Category flag insert {flag}: {e}"
+                logger.warning(msg)
+                tracker.add_error(msg)
 
 
 async def delete_control_relationship_edges(db: AsyncSurreal, record_id: str) -> int:

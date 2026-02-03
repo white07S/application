@@ -115,3 +115,24 @@ def init_jobs_database() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     logger.info("Jobs database initialized at: {}", _get_database_path())
+
+
+def shutdown_jobs_engine() -> None:
+    """Checkpoint WAL and dispose the jobs database engine."""
+    global _engine, _session_local
+    if _engine is None:
+        return
+
+    try:
+        with _engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception as e:
+        logger.warning("Failed to checkpoint jobs database WAL: {}", e)
+
+    try:
+        _engine.dispose()
+    except Exception as e:
+        logger.warning("Failed to dispose jobs database engine: {}", e)
+
+    _engine = None
+    _session_local = None

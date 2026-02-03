@@ -114,3 +114,11 @@ class ProcessingJob(Base):
         Index('idx_processing_jobs_batch', 'batch_id'),
         Index('idx_processing_jobs_status', 'status'),
     )
+
+
+class UploadIdSequence(Base):
+    """SQLite-backed sequence for generating upload IDs."""
+    __tablename__ = "upload_id_sequence"
+
+    year: Mapped[int] = mapped_column(primary_key=True)
+    sequence: Mapped[int] = mapped_column(default=0)

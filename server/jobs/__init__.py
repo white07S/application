@@ -12,6 +12,7 @@ from server.jobs.engine import (
     get_jobs_db,
     init_jobs_database,
     JOBS_DATABASE_PATH,
+    shutdown_jobs_engine,
 )
 from server.jobs.models import (
     TusUpload,
@@ -24,6 +25,7 @@ __all__ = [
     "get_jobs_db",
     "init_jobs_database",
     "JOBS_DATABASE_PATH",
+    "shutdown_jobs_engine",
     # Models
     "TusUpload",
     "UploadBatch",

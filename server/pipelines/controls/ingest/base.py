@@ -255,7 +255,6 @@ async def ingest_controls_main(
     Returns:
         Dict mapping control_id -> record_id
     """
-    tracker.set_phase("loading_controls", "Loading controls and creating relationships")
     logger.info("Loading controls from CSV files")
 
     # Load CSV files
@@ -270,6 +269,8 @@ async def ingest_controls_main(
     locations_records = load_csv(split_dir / CSV_FILES["controls_related_locations"])
 
     logger.info(f"Loaded {len(main_records)} control records from CSV")
+    tracker.start(len(main_records), "base_ingestion")
+    tracker.set_phase("loading_controls", "Loading controls and creating relationships")
 
     # Build lookup dicts
     function_hierarchy_by_id = {r["control_id"]: r for r in function_hierarchy_records}

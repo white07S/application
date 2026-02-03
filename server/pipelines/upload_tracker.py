@@ -1,36 +1,17 @@
 """Upload batch tracking and ID generation."""
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from server.jobs import UploadBatch
 from server.logging_config import get_logger
-from .storage import get_upload_sequence_path
 
 logger = get_logger(name=__name__)
 
 
-def _load_sequence() -> dict:
-    """Load the upload ID sequence data from file."""
-    seq_path = get_upload_sequence_path()
-    if seq_path.exists():
-        with open(seq_path, "r") as f:
-            return json.load(f)
-    return {"year": None, "sequence": 0}
-
-
-def _save_sequence(data: dict) -> None:
-    """Save the upload ID sequence data to file."""
-    seq_path = get_upload_sequence_path()
-    seq_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(seq_path, "w") as f:
-        json.dump(data, f)
-
-
-def generate_upload_id() -> str:
+def generate_upload_id(db: Session) -> str:
     """
     Generate a sequential upload ID in format UPL-YYYY-XXXX.
     Resets sequence at the start of each year.
@@ -39,18 +20,27 @@ def generate_upload_id() -> str:
         str: Upload ID like UPL-2026-0001
     """
     current_year = datetime.now().year
-    seq_data = _load_sequence()
 
-    if seq_data["year"] != current_year:
-        # New year, reset sequence
-        sequence = 1
-    else:
-        sequence = seq_data["sequence"] + 1
-
-    # Update sequence file
-    seq_data["year"] = current_year
-    seq_data["sequence"] = sequence
-    _save_sequence(seq_data)
+    # Ensure the sequence row exists for this year, then atomically increment.
+    db.execute(
+        text(
+            "INSERT OR IGNORE INTO upload_id_sequence (year, sequence) "
+            "VALUES (:year, 0)"
+        ),
+        {"year": current_year},
+    )
+    db.execute(
+        text(
+            "UPDATE upload_id_sequence "
+            "SET sequence = sequence + 1 "
+            "WHERE year = :year"
+        ),
+        {"year": current_year},
+    )
+    sequence = db.execute(
+        text("SELECT sequence FROM upload_id_sequence WHERE year = :year"),
+        {"year": current_year},
+    ).scalar_one()
 
     upload_id = f"UPL-{current_year}-{sequence:04d}"
     logger.info("Generated upload ID: {}", upload_id)
@@ -77,7 +67,7 @@ def create_upload_batch(
     Returns:
         UploadBatch: The created batch record
     """
-    upload_id = generate_upload_id()
+    upload_id = generate_upload_id(db)
 
     batch = UploadBatch(
         upload_id=upload_id,

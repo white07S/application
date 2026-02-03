@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
-from server.jobs import get_jobs_db, UploadBatch
+from server.jobs import get_jobs_db, UploadBatch, ProcessingJob
 from server.jobs.engine import get_session_local
 from server.logging_config import get_logger
 from server.config.surrealdb import get_surrealdb_connection
@@ -189,6 +189,7 @@ async def start_ingestion(
             detail="Pipelines admin access required to start ingestion"
         )
 
+    lock_acquired = False
     try:
         # Prevent concurrent pipeline runs
         if storage.is_processing_locked():
@@ -222,12 +223,16 @@ async def start_ingestion(
             data_type=data_type,
         )
 
+        # Acquire lock before mutating batch status
+        try:
+            storage.acquire_processing_lock(batch.upload_id, owner="ingestion")
+            lock_acquired = True
+        except RuntimeError as lock_err:
+            raise HTTPException(status_code=409, detail=str(lock_err))
+
         # Update batch status
         batch.status = "processing"
         db.commit()
-
-        # Acquire lock
-        storage.acquire_processing_lock(batch.upload_id, owner="ingestion")
 
         logger.info(
             "Started SurrealDB ingestion job: job_id={}, batch_id={}, upload_id={}",
@@ -420,11 +425,17 @@ async def start_ingestion(
         )
 
     except HTTPException:
+        if lock_acquired:
+            storage.release_processing_lock()
         raise
     except ValueError as e:
+        if lock_acquired:
+            storage.release_processing_lock()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to start ingestion job")
+        if lock_acquired:
+            storage.release_processing_lock()
         raise HTTPException(status_code=500, detail=f"Failed to start ingestion job: {str(e)}")
 
 
@@ -555,6 +566,50 @@ async def get_batch_status(
 
         data_type = batch.data_type
 
+        # Determine ingestion job status (do not infer from global table counts)
+        ingestion_job = (
+            db.query(ProcessingJob)
+            .filter_by(batch_id=batch_id, job_type="ingestion")
+            .order_by(ProcessingJob.created_at.desc())
+            .first()
+        )
+
+        if ingestion_job:
+            if ingestion_job.status == "completed":
+                ingestion_state = "completed"
+            elif ingestion_job.status == "failed":
+                ingestion_state = "failed"
+            elif ingestion_job.status == "running":
+                ingestion_state = "running"
+            else:
+                ingestion_state = "pending"
+        else:
+            if batch.status == "success":
+                ingestion_state = "completed"
+            elif batch.status == "failed":
+                ingestion_state = "failed"
+            elif batch.status == "processing":
+                ingestion_state = "running"
+            else:
+                ingestion_state = "pending"
+
+        # Only fetch SurrealDB counts once ingestion is completed for this batch
+        if ingestion_state != "completed":
+            return PipelineStatusResponse(
+                batch_id=batch_id,
+                upload_id=batch.upload_id,
+                data_type=data_type,
+                ingestion={
+                    "status": ingestion_state,
+                    "records_total": 0,
+                    "records_processed": 0,
+                },
+                steps=[],
+                records_total=0,
+                records_processed=0,
+                records_failed=0,
+            )
+
         # Query SurrealDB for pipeline status
         async def get_surreal_status():
             async with get_surrealdb_connection() as db_conn:
@@ -579,9 +634,8 @@ async def get_batch_status(
                 clean_text_count = counts.get(AI_CONTROLS_MODEL_CLEANED_TEXT_CURRENT, 0)
                 embeddings_count = counts.get(AI_CONTROLS_MODEL_EMBEDDINGS_CURRENT, 0)
 
-                # Determine status based on counts
                 ingestion_status = {
-                    "status": "completed" if ingestion_count > 0 else "pending",
+                    "status": "completed",
                     "records_total": ingestion_count,
                     "records_processed": ingestion_count,
                 }
@@ -651,5 +705,3 @@ async def get_batch_status(
     except Exception as e:
         logger.exception("Failed to fetch batch status from SurrealDB")
         raise HTTPException(status_code=500, detail=f"Failed to fetch batch status: {str(e)}")
-
-

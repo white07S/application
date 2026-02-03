@@ -84,11 +84,11 @@ interface PipelineStatus {
         status: string;
         records_total: number;
         records_processed: number;
-        records_inserted: number;
-        records_updated: number;
-        records_skipped: number;
-        records_failed: number;
-        pipeline_run_id: number;
+        records_failed?: number;
+        records_inserted?: number;
+        records_updated?: number;
+        records_skipped?: number;
+        pipeline_run_id?: number;
     } | null;
     steps: Array<{
         name: string;
@@ -342,8 +342,10 @@ const Processing: FC = () => {
         if (!status) return null;
         const colors: Record<string, string> = {
             success: 'bg-green-100 text-green-700 border-green-200',
+            completed: 'bg-green-100 text-green-700 border-green-200',
             failed: 'bg-red-100 text-red-700 border-red-200',
             running: 'bg-blue-100 text-blue-700 border-blue-200',
+            processing: 'bg-blue-100 text-blue-700 border-blue-200',
             pending: 'bg-gray-100 text-gray-700 border-gray-200',
         };
         return (
@@ -665,16 +667,29 @@ const Processing: FC = () => {
                                                                     <div className="bg-white border border-border-light rounded p-2 text-xs">
                                                                         <div className="flex items-center justify-between">
                                                                             <span className="font-semibold">Ingestion</span>
-                                                                            {getStatusBadge(batch.ingestion_status)}
+                                                                            {getStatusBadge(
+                                                                                batchStatuses[batch.batch_id]?.ingestion?.status || batch.ingestion_status
+                                                                            )}
                                                                         </div>
                                                                         {batchStatuses[batch.batch_id]?.ingestion && (
                                                                             <div className="mt-1 text-text-sub space-y-1">
                                                                                 <div>Processed: {batchStatuses[batch.batch_id]?.ingestion?.records_processed}</div>
-                                                                                <div className="text-green-600">Inserted: {batchStatuses[batch.batch_id]?.ingestion?.records_inserted}</div>
-                                                                                <div className="text-amber-600">Updated: {batchStatuses[batch.batch_id]?.ingestion?.records_updated}</div>
-                                                                                {batchStatuses[batch.batch_id]?.ingestion && batchStatuses[batch.batch_id]!.ingestion!.records_failed > 0 && (
-                                                                                    <div className="text-red-600">Failed: {batchStatuses[batch.batch_id]?.ingestion?.records_failed}</div>
+                                                                                {batchStatuses[batch.batch_id]?.ingestion?.records_inserted !== undefined && (
+                                                                                    <div className="text-green-600">
+                                                                                        Inserted: {batchStatuses[batch.batch_id]?.ingestion?.records_inserted}
+                                                                                    </div>
                                                                                 )}
+                                                                                {batchStatuses[batch.batch_id]?.ingestion?.records_updated !== undefined && (
+                                                                                    <div className="text-amber-600">
+                                                                                        Updated: {batchStatuses[batch.batch_id]?.ingestion?.records_updated}
+                                                                                    </div>
+                                                                                )}
+                                                                                {batchStatuses[batch.batch_id]?.ingestion?.records_failed !== undefined &&
+                                                                                    batchStatuses[batch.batch_id]!.ingestion!.records_failed! > 0 && (
+                                                                                        <div className="text-red-600">
+                                                                                            Failed: {batchStatuses[batch.batch_id]?.ingestion?.records_failed}
+                                                                                        </div>
+                                                                                    )}
                                                                             </div>
                                                                         )}
                                                                     </div>
