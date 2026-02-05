@@ -23,16 +23,16 @@ export default function CategoryItem({ category, currentSlug }: CategoryItemProp
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={`
-          w-full flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-md
+          w-full flex items-center gap-3 py-2 px-3 text-xs font-medium rounded
           transition-colors hover:bg-surface-alt/50
           ${hasActiveItem ? 'text-primary' : 'text-text-primary'}
         `}
       >
-        <span className="material-symbols-outlined text-lg">
+        <span className="material-symbols-outlined text-[18px]">
           {category.icon}
         </span>
         <span className="flex-1 text-left">{category.label}</span>
-        <span className={`material-symbols-outlined text-base transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+        <span className={`material-symbols-outlined text-sm transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
           chevron_right
         </span>
       </button>

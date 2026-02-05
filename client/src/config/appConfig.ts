@@ -119,17 +119,17 @@ export const appConfig = {
     ],
     team: [
         {
-            name: 'Sarah Jenkins',
+            name: 'Tanja Weiher',
             role: 'Model Sponsor',
             icon: 'person'
         },
         {
-            name: 'David Chen',
+            name: 'Zhi Chung',
             role: 'Model Owner',
             icon: 'person_3'
         },
         {
-            name: 'Elena Rodriguez',
+            name: 'Preetam Sharma',
             role: 'Lead Developer',
             icon: 'person_4'
         }

@@ -21,6 +21,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting NFR Connect server...")
 
+    # Validate database connectivity on startup
+    try:
+        from server.config.surrealdb import get_surrealdb_connection
+        async with get_surrealdb_connection() as surreal_db:
+            await surreal_db.query("SELECT * FROM src_controls_main LIMIT 1")
+        logger.info("SurrealDB connection verified")
+    except Exception as e:
+        logger.error("SurrealDB connection failed on startup: {}", e)
+        raise
+
     # Initialize storage directories (uploads, preprocessed, etc.)
     logger.info("Initializing storage directories...")
     init_storage_directories()

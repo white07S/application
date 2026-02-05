@@ -12,7 +12,7 @@ export default function DocLink({ item, isActive }: DocLinkProps) {
     <Link
       to={`/docs/${item.slug}`}
       className={`
-        block py-1.5 px-3 text-sm rounded-md transition-colors
+        block py-1.5 px-3 text-xs rounded transition-colors
         ${isActive
           ? 'bg-primary/10 text-primary font-medium'
           : 'text-text-secondary hover:text-text-primary hover:bg-surface-alt/50'

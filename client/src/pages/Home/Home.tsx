@@ -1,25 +1,6 @@
-import type { MouseEvent } from 'react';
 import { appConfig } from '../../config/appConfig';
 
 const Home = () => {
-    // Mouse move handler for wobble effect
-    const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-        const card = e.currentTarget;
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
-        const rotateX = ((y - centerY) / centerY) * -5; // Max 5deg rotation
-        const rotateY = ((x - centerX) / centerX) * 5;
-
-        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
-    };
-
-    const handleMouseLeave = (e: MouseEvent<HTMLDivElement>) => {
-        e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
-    };
-
     return (
         <main className="pt-12 min-h-screen">
             <section className="relative border-b border-border-light bg-surface-light overflow-hidden">
@@ -308,10 +289,7 @@ const Home = () => {
                         {appConfig.features.map((feature, idx) => (
                             <div
                                 key={idx}
-                                className={`${feature.colSpan} relative rounded-sm bg-surface-light border border-border-light p-4 overflow-hidden group transition-all duration-200 ease-out h-[180px] flex flex-col justify-between hover:shadow-xl hover:border-primary/20`}
-                                onMouseMove={handleMouseMove}
-                                onMouseLeave={handleMouseLeave}
-                                style={{ transformStyle: 'preserve-3d', willChange: 'transform' }}
+                                className={`${feature.colSpan} relative rounded-sm bg-surface-light border border-border-light p-4 overflow-hidden group transition-all h-[180px] flex flex-col justify-between hover:bg-white hover:shadow-md`}
                             >
                                 <div className="absolute inset-0 bg-grid opacity-30 pointer-events-none"></div>
                                 <div className={`absolute -right-10 -bottom-10 w-40 h-40 ${feature.color} opacity-10 blur-3xl rounded-full group-hover:opacity-20 transition-opacity`}></div>
@@ -344,7 +322,7 @@ const Home = () => {
                     {/* Risk Models Panel */}
                     <div className="flex flex-col">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-text-main uppercase tracking-tight">Risk Models Portfolio</h2>
+                            <h2 className="text-xl font-bold text-text-main uppercase tracking-tight">Models Portfolio</h2>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {Object.values(appConfig.models).map((model) => (

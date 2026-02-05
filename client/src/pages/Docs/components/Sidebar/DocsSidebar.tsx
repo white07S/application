@@ -80,7 +80,7 @@ export default function DocsSidebar({
               onClose();
             }
           }}
-          className="w-full flex items-center gap-2 px-3 py-2.5 min-h-[44px] text-sm text-text-secondary
+          className="w-full flex items-center gap-2 px-3 py-2 min-h-[36px] text-xs text-text-secondary
                      bg-surface-alt rounded border border-border hover:border-text-tertiary
                      transition-colors mb-4"
         >

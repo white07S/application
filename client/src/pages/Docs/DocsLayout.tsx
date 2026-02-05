@@ -124,7 +124,7 @@ export default function DocsLayout({ slug }: DocsLayoutProps) {
       )}
 
       {/* Left Sidebar - Desktop */}
-      <div className="hidden lg:block w-64 xl:w-72 2xl:w-80 shrink-0">
+      <div className="hidden lg:block w-56 shrink-0">
         <DocsSidebar
           routes={routes}
           currentSlug={slug}

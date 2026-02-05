@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
-import { InteractionRequiredAuthError, BrowserAuthError, InteractionStatus } from "@azure/msal-browser";
+import { InteractionRequiredAuthError, BrowserAuthError, InteractionStatus, CacheLookupPolicy } from "@azure/msal-browser";
 import { loginRequest, apiConfig, graphConfig } from "../config/authConfig";
 
 export const useAuth = () => {
@@ -50,20 +50,25 @@ export const useAuth = () => {
       const response = await instance.acquireTokenSilent({
         scopes,
         account,
+        cacheLookupPolicy: CacheLookupPolicy.AccessTokenAndRefreshToken,
       });
       return response.accessToken;
     } catch (error) {
       if (error instanceof InteractionRequiredAuthError) {
-        // Fallback to redirect
+        // Session expired — redirect to Azure AD to re-authenticate.
+        // This is a full page navigation (not an iframe or popup).
         await instance.acquireTokenRedirect({ scopes });
-        // acquireTokenRedirect returns void, so we can't return the token here.
-        // The page will reload and the token will be acquired silently next time.
         return null;
       }
-      // Handle block_iframe_reload - MSAL is still processing a redirect
-      if (error instanceof BrowserAuthError && error.errorCode === "block_iframe_reload") {
-        // Return null to signal caller should retry later
-        return null;
+      // Handle transient MSAL errors - return null so caller can retry
+      if (error instanceof BrowserAuthError) {
+        if (
+          error.errorCode === "block_iframe_reload" ||
+          error.errorCode === "block_nested_popups" ||
+          error.errorCode === "popup_window_error"
+        ) {
+          return null;
+        }
       }
       throw error;
     }
