@@ -5,6 +5,7 @@ import Tus from '@uppy/tus';
 import { DataType, ValidationRules } from '../types';
 import { useAuth } from '../../../auth/useAuth';
 import { appConfig } from '../../../config/appConfig';
+import { formatBytes } from '../../../utils/formatters';
 
 // Type for our Uppy files with metadata
 type FileMeta = {
@@ -15,7 +16,7 @@ type FileMeta = {
 };
 type UppyFileType = UppyFile<FileMeta, Record<string, unknown>>;
 
-export interface UppyUploaderProps {
+interface UppyUploaderProps {
     dataType: DataType;
     rules: ValidationRules;
     onUploadComplete?: (result: { uploadId: string; filesUploaded: number }) => void;
@@ -76,7 +77,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
     const authTokenRef = useRef<string | null>(null);
     const uppyRef = useRef<Uppy<FileMeta, Record<string, unknown>> | null>(null);
     const batchSessionIdRef = useRef<string>(generateBatchSessionId());
-    const lastUploadIdRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const isPollingRef = useRef<boolean>(false);
 
@@ -297,7 +297,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                 const tusUploadId = uploadUrl?.split('/').pop();
 
                 if (tusUploadId) {
-                    lastUploadIdRef.current = tusUploadId;
                     // Start polling for validation status
                     pollValidationStatus(tusUploadId);
                 } else {
@@ -469,13 +468,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
         // Generate new batch session ID for next upload
         batchSessionIdRef.current = generateBatchSessionId();
     }, []);
-
-    // Format file size
-    const formatFileSize = (bytes: number): string => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    };
 
     const remainingFiles = rules.fileCount - fileStatuses.length;
     const canUpload = fileStatuses.length === rules.fileCount && !isUploading && !uploadComplete && !isValidating;
@@ -667,7 +659,7 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                                                 {file.name}
                                             </p>
                                             <div className="flex items-center gap-2 text-xs text-text-sub">
-                                                <span className="font-mono">{formatFileSize(file.size)}</span>
+                                                <span className="font-mono">{formatBytes(file.size)}</span>
                                                 {file.status === 'uploading' && (
                                                     <>
                                                         <span className="w-1 h-1 rounded-full bg-border-dark"></span>

@@ -64,14 +64,3 @@ export function getDataTypeColor(dataType: string): string {
     }
 }
 
-/**
- * Get icon name for data type.
- */
-export function getDataTypeIcon(dataType: string): string {
-    switch (dataType) {
-        case 'issues': return 'report_problem';
-        case 'controls': return 'verified_user';
-        case 'actions': return 'task_alt';
-        default: return 'description';
-    }
-}

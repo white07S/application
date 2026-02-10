@@ -3,7 +3,6 @@ import asyncio
 import threading
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import List, Optional, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,7 +18,6 @@ from server.config.surrealdb import get_surrealdb_connection
 from server.settings import get_settings
 
 from ..ingest.service import run_ingestion, IngestionResult
-from ..ingest.tracker import IngestionTracker
 from ..models.runner import run_model_pipeline, get_pipeline_stats
 from ..models.cache import ModelCache
 from ..consumer.service import ControlsConsumer
@@ -64,17 +62,6 @@ class ValidatedBatchResponse(BaseModel):
 class ValidatedBatchesListResponse(BaseModel):
     batches: List[ValidatedBatchResponse]
     total: int
-
-
-class JobStepInfo(BaseModel):
-    step: int
-    name: str
-    target_table: Optional[str] = None
-    type: Optional[str] = None
-    records_processed: int
-    records_new: Optional[int] = None
-    records_updated: Optional[int] = None
-    completed_at: str
 
 
 class JobStatusResponse(BaseModel):
@@ -241,8 +228,6 @@ async def start_ingestion(
 
         # Get paths
         split_dir = storage.get_split_batch_path(batch.upload_id, data_type)
-        preprocessed_dir = storage.get_preprocessed_batch_path(batch.upload_id, data_type)
-
         # Run ingestion in background thread
         def run_in_background():
             """Background thread that runs ingestion + model pipeline."""
@@ -265,7 +250,6 @@ async def start_ingestion(
                         batch_id=batch.upload_id,
                         split_dir=split_dir,
                         is_base=False,  # Always delta ingestion
-                        graph_token=token,
                     )
                 )
 

@@ -23,8 +23,6 @@ const Footer = () => {
                         ))}
                     </div>
                     <div className="flex items-center gap-4">
-                        <a className="hover:text-primary transition-colors" href="/privacy">Privacy</a>
-                        <a className="hover:text-primary transition-colors" href="/terms">Terms</a>
                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-surface-light rounded border border-border-light">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                             <span className="font-mono text-[10px]">Operational</span>

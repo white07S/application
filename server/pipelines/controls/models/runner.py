@@ -142,39 +142,6 @@ async def run_model_pipeline(
     return result
 
 
-async def run_model_pipeline_batch(
-    db: Any,
-    controls: list[Dict[str, Any]],
-    tables: Dict[str, Any],
-    cache: ModelCache,
-    graph_token: Optional[str] = None,
-) -> Dict[str, ModelPipelineResult]:
-    """Run model pipeline for multiple controls.
-
-    Args:
-        db: SurrealDB async connection
-        controls: List of control dicts with control_id and record_id
-        tables: Dictionary of DataFrames with control data
-        cache: Model cache manager
-        graph_token: Optional Graph API token
-
-    Returns:
-        Dictionary mapping control_id to ModelPipelineResult
-    """
-    results = {}
-
-    for control in controls:
-        control_id = control["control_id"]
-        record_id = control["record_id"]
-
-        result = await run_model_pipeline(
-            db, control_id, record_id, tables, cache, graph_token
-        )
-        results[control_id] = result
-
-    return results
-
-
 def get_pipeline_stats(results: Dict[str, ModelPipelineResult]) -> Dict[str, Any]:
     """Get statistics from pipeline results.
 

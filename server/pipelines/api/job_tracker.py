@@ -170,18 +170,6 @@ class JobTracker:
 
         return self._job_to_dict(job)
 
-    def get_active_jobs(self) -> List[Dict[str, Any]]:
-        """Get all running jobs.
-
-        Returns:
-            List of job data dictionaries
-        """
-        jobs = self.db.query(ProcessingJob).filter(
-            ProcessingJob.status.in_(["pending", "running"])
-        ).all()
-
-        return [self._job_to_dict(job) for job in jobs]
-
     def get_batch_jobs(self, batch_id: int) -> List[Dict[str, Any]]:
         """Get all jobs for a specific batch.
 
@@ -233,15 +221,3 @@ class JobTracker:
             "error_message": job.error_message,
             "duration_seconds": duration,
         }
-
-
-def create_job_tracker(db: Session) -> JobTracker:
-    """Create a job tracker instance.
-
-    Args:
-        db: SQLAlchemy database session
-
-    Returns:
-        JobTracker instance
-    """
-    return JobTracker(db)

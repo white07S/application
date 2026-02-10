@@ -4,7 +4,7 @@ This module defines SurrealQL query patterns for graph traversal and temporal qu
 used by the ControlsConsumer service.
 """
 
-from typing import Dict, Any
+from typing import Any
 
 
 # =============================================================================
@@ -132,8 +132,6 @@ RECORD_HISTORY_QUERY = """
 # =============================================================================
 
 TABLE_SELECT_ALL_QUERY = "SELECT * FROM {table}"
-
-TABLE_COUNT_QUERY = "SELECT count() FROM {table} GROUP ALL"
 
 
 # =============================================================================

@@ -17,7 +17,7 @@ Uses batches of 10 records for processing (user requirement).
 import csv
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, List, Set, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from surrealdb import AsyncSurreal
 from server.logging_config import get_logger

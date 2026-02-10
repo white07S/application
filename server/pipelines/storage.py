@@ -183,14 +183,3 @@ def is_processing_locked() -> bool:
         except Exception:
             pass
         return False
-
-
-def get_upload_sequence_path() -> Path:
-    """Get path to the upload ID sequence file."""
-    return get_state_path() / "upload_id_sequence.json"
-
-
-# Backward compatibility aliases
-def get_tus_uploads_path() -> Path:
-    """Alias for get_uploads_path() for backward compatibility."""
-    return get_uploads_path()

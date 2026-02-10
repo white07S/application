@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError, BrowserAuthError, InteractionStatus, CacheLookupPolicy } from "@azure/msal-browser";
-import { loginRequest, apiConfig, graphConfig } from "../config/authConfig";
+import { loginRequest, apiConfig } from "../config/authConfig";
 
 export const useAuth = () => {
   const { instance, accounts, inProgress } = useMsal();
@@ -78,29 +78,11 @@ export const useAuth = () => {
     return getAccessToken(apiConfig.scopes);
   }, [getAccessToken]);
 
-  const fetchUserProfile = useCallback(async () => {
-    const token = await getAccessToken();
-    const response = await fetch(graphConfig.graphMeEndpoint, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch user profile");
-    }
-
-    return response.json();
-  }, [getAccessToken]);
-
   return {
     account,
     isAuthenticated: !!account,
-    inProgress,
     login,
     logout,
-    getAccessToken,
     getApiAccessToken,
-    fetchUserProfile,
   };
 };

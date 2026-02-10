@@ -8,7 +8,7 @@ This module validates the split controls CSV tables to ensure:
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -76,42 +76,6 @@ class ValidationResult:
     errors: List[ValidationIssue] = field(default_factory=list)
     warnings: List[ValidationIssue] = field(default_factory=list)
 
-    def summary(self) -> str:
-        """Generate a human-readable summary of validation results."""
-        status = "PASSED" if self.is_valid else "FAILED"
-        lines = [
-            "=" * 50,
-            f"Controls Validation {status}",
-            "=" * 50,
-            f"Errors: {len(self.errors)} | Warnings: {len(self.warnings)}",
-        ]
-
-        if self.errors:
-            lines.append("\nErrors:")
-            for err in self.errors:
-                lines.append(f"  - {err}")
-
-        if self.warnings:
-            lines.append("\nWarnings:")
-            for warn in self.warnings:
-                lines.append(f"  - {warn}")
-
-        lines.append("=" * 50)
-        return "\n".join(lines)
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "is_valid": self.is_valid,
-            "errors": [
-                {"table": e.table, "column": e.column, "message": e.message}
-                for e in self.errors
-            ],
-            "warnings": [
-                {"table": w.table, "column": w.column, "message": w.message}
-                for w in self.warnings
-            ],
-        }
 
 
 def load_tables_from_csv(base_dir: Path) -> Dict[str, pd.DataFrame]:

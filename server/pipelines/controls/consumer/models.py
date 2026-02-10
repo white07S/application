@@ -25,20 +25,6 @@ class ControlRecord:
     clean_text: Optional[Dict[str, Any]] = None
     embeddings: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        return {
-            "control_id": self.control_id,
-            "as_of_date": self.as_of_date,
-            "actual_date": self.actual_date,
-            "fallback_used": self.fallback_used,
-            "controls_main": self.controls_main,
-            "taxonomy": self.taxonomy,
-            "enrichment": self.enrichment,
-            "clean_text": self.clean_text,
-            "embeddings": self.embeddings,
-        }
-
 
 @dataclass
 class ControlWithRelationships:
@@ -61,22 +47,6 @@ class ControlWithRelationships:
     enrichment: Optional[Dict[str, Any]] = None
     clean_text: Optional[Dict[str, Any]] = None
     embeddings: Optional[Dict[str, Any]] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        return {
-            "control_id": self.control_id,
-            "controls_main": self.controls_main,
-            "risk_themes": self.risk_themes,
-            "functions": self.functions,
-            "locations": self.locations,
-            "sox_assertions": self.sox_assertions,
-            "category_flags": self.category_flags,
-            "taxonomy": self.taxonomy,
-            "enrichment": self.enrichment,
-            "clean_text": self.clean_text,
-            "embeddings": self.embeddings,
-        }
 
     def summary(self) -> Dict[str, int]:
         """Get summary counts of relationships and model outputs."""
@@ -105,17 +75,6 @@ class ControlHistory:
     enrichment_versions: List[Dict[str, Any]]
     clean_text_versions: List[Dict[str, Any]]
     embeddings_versions: List[Dict[str, Any]]
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        return {
-            "control_id": self.control_id,
-            "controls_main_versions": self.controls_main_versions,
-            "taxonomy_versions": self.taxonomy_versions,
-            "enrichment_versions": self.enrichment_versions,
-            "clean_text_versions": self.clean_text_versions,
-            "embeddings_versions": self.embeddings_versions,
-        }
 
     def version_counts(self) -> Dict[str, int]:
         """Get counts of versions for each table."""
@@ -147,21 +106,6 @@ class CurrentSnapshot:
     locations: List[Dict[str, Any]] = field(default_factory=list)
     sox_assertions: List[Dict[str, Any]] = field(default_factory=list)
     category_flags: List[Dict[str, Any]] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        return {
-            "controls_main": self.controls_main,
-            "taxonomy": self.taxonomy,
-            "enrichment": self.enrichment,
-            "clean_text": self.clean_text,
-            "embeddings": self.embeddings,
-            "risk_themes": self.risk_themes,
-            "functions": self.functions,
-            "locations": self.locations,
-            "sox_assertions": self.sox_assertions,
-            "category_flags": self.category_flags,
-        }
 
     def summary(self) -> Dict[str, int]:
         """Get summary counts of all tables."""

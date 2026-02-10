@@ -26,7 +26,6 @@ import pandas as pd
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from server import settings
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
 from server.jobs import get_jobs_db, TusUpload, UploadBatch

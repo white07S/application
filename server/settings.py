@@ -12,9 +12,8 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Project root (for .env file location)
+# Server directory (for .env file location)
 _SERVER_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = _SERVER_DIR.parent
 
 
 def _split_csv(value: str) -> List[str]:
@@ -103,10 +102,6 @@ class Settings(BaseSettings):
         """Ensure the model cache directory exists."""
         self.model_cache_path.mkdir(parents=True, exist_ok=True)
 
-    def ensure_ingestion_dir(self) -> None:
-        """Ensure the ingestion directory exists."""
-        self.ingestion_path.mkdir(parents=True, exist_ok=True)
-
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -141,10 +136,8 @@ def get_settings() -> Settings:
 
 # Module-level exports for backward compatibility
 settings = get_settings()
-BASE_DIR = PROJECT_ROOT / "server"
 
 # Legacy variable names (for backward compatibility)
-TENANT_ID = settings.tenant_id
 CLIENT_ID = settings.client_id
 CLIENT_SECRET = settings.client_secret
 AUTHORITY = settings.authority
@@ -153,7 +146,6 @@ GROUP_CHAT_ACCESS = settings.group_chat_access
 GROUP_DASHBOARD_ACCESS = settings.group_dashboard_access
 GROUP_PIPELINES_INGESTION_ACCESS = settings.group_pipelines_ingestion_access
 GROUP_PIPELINES_ADMIN_ACCESS = settings.group_pipelines_admin_access
-INGESTION_PATH = settings.ingestion_path
 DOCS_CONTENT_DIR = settings.docs_content_dir
 ALLOWED_ORIGINS = settings.allowed_origins_list
 UVICORN_HOST = settings.uvicorn_host

@@ -5,8 +5,6 @@ progress tracking for UI updates.
 
 Main Functions:
 - run_ingestion: Orchestrate base or delta ingestion process
-- get_ingestion_progress: Get current progress for UI polling
-- get_ingestion_summary: Get final summary statistics
 
 Components:
 - tracker: Progress tracking with batch processing (10 records per batch)
@@ -35,8 +33,6 @@ from .tracker import (
 )
 from .service import (
     run_ingestion,
-    get_ingestion_progress,
-    get_ingestion_summary,
     IngestionResult,
 )
 from .base import ingest_base
@@ -45,8 +41,6 @@ from .delta import ingest_delta
 __all__ = [
     # Main service functions
     "run_ingestion",
-    "get_ingestion_progress",
-    "get_ingestion_summary",
     "IngestionResult",
     # Core ingestion functions
     "ingest_base",

@@ -11,9 +11,7 @@ export interface RouteConfig {
     component: React.ComponentType<any>;
     name: string;
     protected: boolean;
-    requiredRole?: string[]; // RBAC if needed
     accessRight?: string;   // For granular ABAC (e.g., 'hasChatAccess')
-    hideInNav?: boolean;
 }
 
 export const routes: RouteConfig[] = [
@@ -34,7 +32,6 @@ export const routes: RouteConfig[] = [
         component: DocsPage,
         name: "Docs",
         protected: false,
-        hideInNav: true,
     },
     {
         path: "/dashboard",
@@ -75,13 +72,11 @@ export const routes: RouteConfig[] = [
         name: "Processing",
         protected: true,
         accessRight: "hasPipelinesIngestionAccess",
-        hideInNav: true,
     },
     {
         path: "/unauthorized",
         component: Unauthorized,
         name: "Unauthorized",
         protected: false,
-        hideInNav: true,
     }
 ];

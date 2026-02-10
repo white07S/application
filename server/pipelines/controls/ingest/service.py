@@ -5,7 +5,7 @@ base and delta ingestion modes with progress tracking.
 """
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 from dataclasses import dataclass
 
 from surrealdb import AsyncSurreal
@@ -44,7 +44,6 @@ async def run_ingestion(
     batch_id: str,
     split_dir: Path,
     is_base: bool = False,
-    graph_token: str = None,
 ) -> IngestionResult:
     """Run ingestion process (base or delta).
 
@@ -52,7 +51,6 @@ async def run_ingestion(
         batch_id: Unique identifier for this batch
         split_dir: Directory containing split CSV files
         is_base: True for base ingestion (clear + load all), False for delta
-        graph_token: Microsoft Graph API token (for model pipeline, if needed)
 
     Returns:
         IngestionResult with statistics and status
@@ -136,27 +134,3 @@ async def run_ingestion(
             changed_control_ids=[],
             errors=tracker.stats.errors,
         )
-
-
-async def get_ingestion_progress(tracker: IngestionTracker) -> Dict:
-    """Get current ingestion progress.
-
-    Args:
-        tracker: IngestionTracker instance
-
-    Returns:
-        Dict with progress information
-    """
-    return tracker.get_progress()
-
-
-async def get_ingestion_summary(tracker: IngestionTracker) -> Dict:
-    """Get final ingestion summary.
-
-    Args:
-        tracker: IngestionTracker instance
-
-    Returns:
-        Dict with summary statistics
-    """
-    return tracker.get_summary()

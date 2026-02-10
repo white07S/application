@@ -43,7 +43,6 @@ export const appConfig = {
     },
     meta: {
         lastSync: '14:02:44 UTC',
-        portfolioVersion: '2023.4.1',
     },
     models: {
         dice: {

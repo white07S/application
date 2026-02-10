@@ -141,5 +141,3 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ disabled =
         </div>
     );
 };
-
-export default DashboardSelector;

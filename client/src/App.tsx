@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 
-import { useIsAuthenticated, MsalProvider } from "@azure/msal-react";
-import { msalInstance } from "./auth/msalInstance";
+import { useIsAuthenticated } from "@azure/msal-react";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccessControlProvider, useAccessControl } from "./context/AccessControlContext";
 import { routes, RouteConfig } from "./config/routes";
@@ -98,13 +97,11 @@ const AppRoutes = () => {
 
 function App() {
   return (
-    <MsalProvider instance={msalInstance}>
-      <AccessControlProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AccessControlProvider>
-    </MsalProvider>
+    <AccessControlProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AccessControlProvider>
   );
 }
 

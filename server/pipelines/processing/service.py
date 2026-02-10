@@ -2,8 +2,7 @@
 
 Simplified service after migration to SurrealDB.
 """
-from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List
 
 from sqlalchemy.orm import Session
 

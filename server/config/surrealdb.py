@@ -73,22 +73,3 @@ async def get_surrealdb_connection() -> AsyncGenerator[AsyncSurreal, None]:
             logger.warning(f"Error closing SurrealDB connection: {str(e)}")
 
 
-async def test_surrealdb_connection() -> bool:
-    """Test SurrealDB connection.
-
-    Returns:
-        bool: True if connection successful, False otherwise.
-
-    Example:
-        if await test_surrealdb_connection():
-            print("SurrealDB is ready!")
-    """
-    try:
-        async with get_surrealdb_connection() as db:
-            # Simple query to test connection
-            result = await db.query("SELECT * FROM system::info")
-            logger.info("SurrealDB connection test successful")
-            return True
-    except Exception as e:
-        logger.error(f"SurrealDB connection test failed: {str(e)}")
-        return False

@@ -32,10 +32,6 @@
   font-size: 16px;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
 }
-.icon-filled {
-  font-variation-settings: 'FILL' 1;
-}
-
 /* Docs-specific styles */
 .docs-content {
   @apply text-text-secondary leading-relaxed;

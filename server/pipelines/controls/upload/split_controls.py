@@ -3,7 +3,6 @@
 This module takes an enterprise-format CSV file (with blank rows and timestamp)
 and splits it into 9 component CSV tables for further processing.
 """
-import csv
 from pathlib import Path
 from typing import Dict
 

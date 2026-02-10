@@ -17,7 +17,6 @@ from server.pipelines.controls.schema import (
     AI_CONTROLS_MODEL_TAXONOMY_CURRENT,
     AI_CONTROLS_MODEL_TAXONOMY_VERSIONS,
     AI_CONTROLS_REL_HAS_TAXONOMY,
-    SRC_CONTROLS_MAIN,
 )
 
 

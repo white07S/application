@@ -29,9 +29,6 @@ class IngestionStats:
     unchanged_records: int = 0
     failed_records: int = 0
 
-    # Model pipeline stats
-    model_pipeline_runs: int = 0
-
     # Reference table additions (for delta)
     risk_themes_added: int = 0
     functions_added: int = 0
@@ -60,7 +57,6 @@ class IngestionStats:
             "updated_records": self.updated_records,
             "unchanged_records": self.unchanged_records,
             "failed_records": self.failed_records,
-            "model_pipeline_runs": self.model_pipeline_runs,
             "reference_tables": {
                 "risk_themes_added": self.risk_themes_added,
                 "functions_added": self.functions_added,
@@ -207,10 +203,6 @@ class IngestionTracker:
             error: Error message
         """
         self.stats.errors.append(error)
-
-    def increment_model_runs(self):
-        """Increment model pipeline run count."""
-        self.stats.model_pipeline_runs += 1
 
     def increment_edges_created(self, count: int = 1):
         """Increment edges created count.

@@ -9,9 +9,10 @@ This module provides the complete model pipeline for controls processing:
 All outputs are cached in JSONL format and stored in SurrealDB with graph edges.
 
 Usage:
-    from server.pipelines.controls.models import get_model_cache, run_model_pipeline
+    from server.pipelines.controls.models.cache import ModelCache
+    from server.pipelines.controls.models.runner import run_model_pipeline
 
-    cache = get_model_cache()  # Uses configured path from settings
+    cache = ModelCache(cache_dir=settings.model_cache_path)
     result = await run_model_pipeline(
         db=db,
         control_id="CTRL-001",
@@ -22,42 +23,18 @@ Usage:
     )
 """
 
-from server.settings import get_settings
 from server.pipelines.controls.models.cache import ModelCache
-
-
-def get_model_cache() -> ModelCache:
-    """Get a ModelCache instance using the configured path from settings.
-
-    Returns:
-        ModelCache: Cache manager configured with MODEL_OUTPUT_CACHE_PATH
-    """
-    settings = get_settings()
-    settings.ensure_model_cache_dir()
-    return ModelCache(cache_dir=settings.model_cache_path)
-from server.pipelines.controls.models.clean_text import run_clean_text
-from server.pipelines.controls.models.embeddings import run_embeddings
-from server.pipelines.controls.models.enrichment import run_enrichment
 from server.pipelines.controls.models.runner import (
     ModelPipelineResult,
     get_pipeline_stats,
     run_model_pipeline,
-    run_model_pipeline_batch,
 )
-from server.pipelines.controls.models.taxonomy import run_taxonomy
 
 __all__ = [
     # Cache management
     "ModelCache",
-    "get_model_cache",
-    # Individual model runners
-    "run_taxonomy",
-    "run_enrichment",
-    "run_clean_text",
-    "run_embeddings",
     # Pipeline orchestration
     "run_model_pipeline",
-    "run_model_pipeline_batch",
     "ModelPipelineResult",
     "get_pipeline_stats",
 ]
