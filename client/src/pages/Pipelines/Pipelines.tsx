@@ -72,10 +72,10 @@ const Pipelines: React.FC = () => {
                         <div>
                             <h1 className="text-sm font-bold text-text-main flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary text-[18px]">cloud_upload</span>
-                                Data Ingestion
+                                Data Upload
                             </h1>
                             <p className="text-[11px] text-text-sub mt-0.5">
-                                Upload risk management data files for processing
+                                Upload risk management data files
                             </p>
                         </div>
                         {/* TUS Badge */}

@@ -6,4 +6,5 @@ class AccessResponse(BaseModel):
     hasDashboardAccess: bool
     hasPipelinesIngestionAccess: bool
     hasPipelinesAdminAccess: bool
+    hasDevDataAccess: bool
     user: str

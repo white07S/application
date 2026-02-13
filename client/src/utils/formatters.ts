@@ -38,8 +38,25 @@ export function formatRelativeDate(isoString: string): string {
 /**
  * Format a date string to locale-specific string.
  */
-export function formatDate(isoString: string): string {
-    return new Date(isoString).toLocaleString();
+export function formatDate(isoString: string | null | undefined): string {
+    if (!isoString) {
+        return 'Unknown date';
+    }
+
+    try {
+        const date = new Date(isoString);
+
+        // Check if the date is valid
+        if (isNaN(date.getTime())) {
+            console.error('Invalid date format:', isoString);
+            return 'Invalid date';
+        }
+
+        return date.toLocaleString();
+    } catch (error) {
+        console.error('Date parsing error:', error, 'Input:', isoString);
+        return 'Invalid date';
+    }
 }
 
 /**

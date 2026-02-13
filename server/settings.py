@@ -40,23 +40,53 @@ class Settings(BaseSettings):
     group_dashboard_access: str = Field(description="Group ID for dashboard access")
     group_pipelines_ingestion_access: str = Field(description="Group ID for ingestion")
     group_pipelines_admin_access: str = Field(description="Group ID for admin access")
+    group_dev_data_access: str = Field(description="Group ID for dev data access")
 
-    # === SurrealDB - ALL REQUIRED ===
-    surrealdb_url: str = Field(description="SurrealDB WebSocket URL")
-    surrealdb_namespace: str = Field(description="SurrealDB namespace")
-    surrealdb_database: str = Field(description="SurrealDB database name")
-    surrealdb_user: str = Field(description="SurrealDB username")
-    surrealdb_pass: str = Field(description="SurrealDB password")
+    # === PostgreSQL - ALL REQUIRED ===
+    postgres_url: str = Field(
+        description="PostgreSQL async connection URL (postgresql+asyncpg://...)"
+    )
+    postgres_pool_size: int = Field(
+        default=5,
+        description="Connection pool size",
+        ge=1,
+    )
+    postgres_max_overflow: int = Field(
+        default=10,
+        description="Max pool overflow connections",
+        ge=0,
+    )
+    postgres_write_batch_size: int = Field(
+        default=500,
+        description="Batch size for ingestion writers",
+        ge=1,
+    )
 
-    # === Paths - ALL REQUIRED, NO DYNAMIC CREATION ===
-    # Jobs database (separate location)
-    job_tracking_db_path: Path = Field(description="Path to jobs SQLite database")
+    # === Qdrant ===
+    qdrant_url: str = Field(
+        default="http://localhost:16333",
+        description="Qdrant REST API URL",
+    )
+    qdrant_collection_prefix: str = Field(
+        default="nfr_connect",
+        description="Qdrant collection name prefix (e.g., nfr_connect_controls, nfr_connect_issues)",
+    )
 
-    # Ingestion (contains uploads/, preprocessed/, .state/)
-    ingestion_path: Path = Field(description="Base path for ingestion data")
+    @property
+    def qdrant_collection(self) -> str:
+        """Get the controls collection name (backward compatibility)."""
+        return f"{self.qdrant_collection_prefix}_controls"
 
-    # Model cache (separate location)
-    model_cache_path: Path = Field(description="Path for model cache files")
+    def get_qdrant_collection(self, data_type: str = "controls") -> str:
+        """Get collection name for a specific data type."""
+        return f"{self.qdrant_collection_prefix}_{data_type}"
+
+    # === Paths - ALL REQUIRED ===
+    # Context providers (org charts + risk themes, date-partitioned)
+    context_providers_path: Path = Field(description="Base path for context provider data")
+
+    # Data ingested (controls, model runs, TUS temp, state)
+    data_ingested_path: Path = Field(description="Base path for ingested controls and model outputs")
 
     # Documentation
     docs_content_dir: Path = Field(description="Path to docs content directory")
@@ -68,9 +98,8 @@ class Settings(BaseSettings):
 
     # === Path Validators ===
     @field_validator(
-        'job_tracking_db_path',
-        'ingestion_path',
-        'model_cache_path',
+        'context_providers_path',
+        'data_ingested_path',
         'docs_content_dir',
         mode='before'
     )
@@ -93,15 +122,6 @@ class Settings(BaseSettings):
     def allowed_origins_list(self) -> List[str]:
         return _split_csv(self.allowed_origins)
 
-    # === Directory Helpers ===
-    def ensure_job_tracking_dir(self) -> None:
-        """Ensure the job tracking database directory exists."""
-        self.job_tracking_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    def ensure_model_cache_dir(self) -> None:
-        """Ensure the model cache directory exists."""
-        self.model_cache_path.mkdir(parents=True, exist_ok=True)
-
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -111,18 +131,18 @@ def get_settings() -> Settings:
     """
     settings = Settings()
 
-    # Auto-create all directories at startup
-    # Jobs directory (parent of db file)
-    settings.job_tracking_db_path.parent.mkdir(parents=True, exist_ok=True)
+    # Context providers directory (org charts + risk themes)
+    settings.context_providers_path.mkdir(parents=True, exist_ok=True)
 
-    # Ingestion directory and subdirectories
-    settings.ingestion_path.mkdir(parents=True, exist_ok=True)
-    (settings.ingestion_path / "uploads").mkdir(parents=True, exist_ok=True)
-    (settings.ingestion_path / "preprocessed").mkdir(parents=True, exist_ok=True)
-    (settings.ingestion_path / ".state").mkdir(parents=True, exist_ok=True)
-
-    # Model cache directory
-    settings.model_cache_path.mkdir(parents=True, exist_ok=True)
+    # Data ingested directory and subdirectories
+    settings.data_ingested_path.mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "controls").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "model_runs" / "taxonomy").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "model_runs" / "enrichment").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "model_runs" / "clean_text").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "model_runs" / "embeddings").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / ".tus_temp").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / ".state").mkdir(parents=True, exist_ok=True)
 
     # Docs directory - must exist, don't auto-create
     if not settings.docs_content_dir.exists():
@@ -146,6 +166,7 @@ GROUP_CHAT_ACCESS = settings.group_chat_access
 GROUP_DASHBOARD_ACCESS = settings.group_dashboard_access
 GROUP_PIPELINES_INGESTION_ACCESS = settings.group_pipelines_ingestion_access
 GROUP_PIPELINES_ADMIN_ACCESS = settings.group_pipelines_admin_access
+GROUP_DEV_DATA_ACCESS = settings.group_dev_data_access
 DOCS_CONTENT_DIR = settings.docs_content_dir
 ALLOWED_ORIGINS = settings.allowed_origins_list
 UVICORN_HOST = settings.uvicorn_host

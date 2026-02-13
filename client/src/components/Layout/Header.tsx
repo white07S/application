@@ -3,11 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { appConfig } from '../../config/appConfig';
 import { useAuth } from '../../auth/useAuth';
+import { useAccessControl } from '../../context/AccessControlContext';
 import { DashboardSelector } from './DashboardSelector';
 
 const Header = () => {
     const location = useLocation();
     const { isAuthenticated, account, login, logout } = useAuth();
+    const { hasDevDataAccess } = useAccessControl();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -136,7 +138,7 @@ const Header = () => {
                         OneOffFeatures
                     </Link>
                     <Link
-                        to="/pipelines/ingestion"
+                        to="/pipelines/upload"
                         className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname.startsWith('/pipelines')
                             ? 'text-primary bg-surface-light'
                             : 'text-text-sub hover:text-text-main hover:bg-surface-light'
@@ -147,6 +149,21 @@ const Header = () => {
                         </span>
                         Pipelines
                     </Link>
+                    {/* Dev Data - always last nav element */}
+                    {hasDevDataAccess && (
+                        <Link
+                            to="/devdata"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname.startsWith('/devdata')
+                                ? 'text-primary bg-surface-light'
+                                : 'text-text-sub hover:text-text-main hover:bg-surface-light'
+                                }`}
+                        >
+                            <span className={`material-symbols-outlined ${location.pathname.startsWith('/devdata') ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
+                                database
+                            </span>
+                            Dev Data
+                        </Link>
+                    )}
                 </nav>
             </div>
             <div className="flex items-center gap-3">
@@ -327,7 +344,7 @@ const Header = () => {
                             {!isAuthenticated && <span className="text-[10px] text-text-sub ml-auto">(Sign in required)</span>}
                         </Link>
                         <Link
-                            to="/pipelines/ingestion"
+                            to="/pipelines/upload"
                             className={`flex items-center gap-2 px-3 py-2 min-h-[44px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/pipelines')
                                 ? 'text-primary bg-surface-light'
                                 : 'text-text-sub hover:text-text-main hover:bg-surface-light'
@@ -340,6 +357,22 @@ const Header = () => {
                             Pipelines
                             {!isAuthenticated && <span className="text-[10px] text-text-sub ml-auto">(Sign in required)</span>}
                         </Link>
+                        {/* Dev Data - always last nav element */}
+                        {hasDevDataAccess && (
+                            <Link
+                                to="/devdata"
+                                className={`flex items-center gap-2 px-3 py-2 min-h-[44px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/devdata')
+                                    ? 'text-primary bg-surface-light'
+                                    : 'text-text-sub hover:text-text-main hover:bg-surface-light'
+                                    }`}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                            >
+                                <span className={`material-symbols-outlined ${location.pathname.startsWith('/devdata') ? 'text-primary' : 'text-text-sub'}`}>
+                                    database
+                                </span>
+                                Dev Data
+                            </Link>
+                        )}
                     </nav>
                 </div>
             )}

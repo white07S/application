@@ -5,6 +5,7 @@ import Unauthorized from '../pages/Unauthorized';
 import DocsPage from '../pages/Docs/DocsPage';
 import Pipelines from '../pages/Pipelines/Pipelines';
 import Processing from '../pages/Pipelines/Processing';
+import DevDataLayout from '../pages/DevData/DevDataLayout';
 
 export interface RouteConfig {
     path: string;
@@ -60,18 +61,32 @@ export const routes: RouteConfig[] = [
         protected: true,
     },
     {
-        path: "/pipelines/ingestion",
+        path: "/pipelines/upload",
         component: Pipelines,
         name: "Pipelines",
         protected: true,
         accessRight: "hasPipelinesIngestionAccess",
     },
     {
-        path: "/pipelines/processing",
+        path: "/pipelines/ingestion",
         component: Processing,
-        name: "Processing",
+        name: "Ingestion",
         protected: true,
         accessRight: "hasPipelinesIngestionAccess",
+    },
+    {
+        path: "/devdata",
+        component: DevDataLayout,
+        name: "Dev Data",
+        protected: true,
+        accessRight: "hasDevDataAccess",
+    },
+    {
+        path: "/devdata/:tableName",
+        component: DevDataLayout,
+        name: "Dev Data",
+        protected: true,
+        accessRight: "hasDevDataAccess",
     },
     {
         path: "/unauthorized",

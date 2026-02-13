@@ -7,8 +7,6 @@ from server import settings
 from server.api import api_router
 from server.middleware import RequestLoggingMiddleware
 from server.logging_config import configure_logging, get_logger
-from server.jobs import init_jobs_database, shutdown_jobs_engine
-from server.pipelines.storage import init_storage_directories
 
 # Configure shared Loguru logging
 configure_logging()
@@ -21,25 +19,56 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting NFR Connect server...")
 
-    # Validate database connectivity on startup
+    # Initialize PostgreSQL engine
     try:
-        from server.config.surrealdb import get_surrealdb_connection
-        async with get_surrealdb_connection() as surreal_db:
-            await surreal_db.query("SELECT * FROM src_controls_main LIMIT 1")
-        logger.info("SurrealDB connection verified")
+        from server.config.postgres import init_engine, get_engine
+        from server.settings import get_settings
+        s = get_settings()
+        init_engine(s.postgres_url, s.postgres_pool_size, s.postgres_max_overflow)
+
+        # Quick connectivity check
+        engine = get_engine()
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("PostgreSQL connection verified")
     except Exception as e:
-        logger.error("SurrealDB connection failed on startup: {}", e)
+        logger.error("PostgreSQL connection failed on startup: {}", e)
         raise
 
-    # Initialize storage directories (uploads, preprocessed, etc.)
+    # Verify Alembic migration is at head
+    try:
+        from server.pipelines.schema.setup import check_alembic_current
+        await check_alembic_current()
+    except Exception as e:
+        logger.error("Alembic migration check failed: {}", e)
+        raise
+
+    # Verify context providers (org charts + risk themes) are loaded
+    try:
+        from server.pipelines.schema.setup import verify_context_providers_loaded
+        await verify_context_providers_loaded()
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error("Context provider verification failed: {}", e)
+        raise
+
+    # Initialize Qdrant client
+    try:
+        from server.config.qdrant import init_qdrant
+        s = get_settings()
+        await init_qdrant(s.qdrant_url, s.qdrant_collection_prefix)
+        logger.info("Qdrant client initialized with prefix: {}", s.qdrant_collection_prefix)
+    except Exception as e:
+        logger.error("Qdrant initialization failed: {}", e)
+        raise
+
+    # Initialize storage directories
+    from server.pipelines.storage import init_storage_directories
     logger.info("Initializing storage directories...")
     init_storage_directories()
     logger.info("Storage directories initialized")
-
-    # Initialize jobs database (SQLite for tracking)
-    logger.info("Initializing jobs database...")
-    init_jobs_database()
-    logger.info("Jobs database initialization complete")
 
     logger.info("Server initialization complete")
 
@@ -63,12 +92,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Error shutting down token manager executor: {}", e)
 
-    # Checkpoint WAL and dispose jobs database engine
+    # Close Qdrant client
     try:
-        shutdown_jobs_engine()
-        logger.info("Jobs database engine shut down")
+        from server.config.qdrant import close_qdrant
+        await close_qdrant()
+        logger.info("Qdrant client closed")
     except Exception as e:
-        logger.warning("Error shutting down jobs database engine: {}", e)
+        logger.warning("Error closing Qdrant client: {}", e)
+
+    # Dispose PostgreSQL engine
+    try:
+        from server.config.postgres import dispose_engine
+        await dispose_engine()
+        logger.info("PostgreSQL engine disposed")
+    except Exception as e:
+        logger.warning("Error disposing PostgreSQL engine: {}", e)
 
 
 app = FastAPI(lifespan=lifespan)

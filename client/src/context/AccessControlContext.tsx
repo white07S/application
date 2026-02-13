@@ -8,6 +8,7 @@ interface AccessState {
     hasChatAccess: boolean;
     hasDashboardAccess: boolean;
     hasPipelinesIngestionAccess: boolean;
+    hasDevDataAccess: boolean;
     user: string;
     isLoading: boolean;
     error: string | null;
@@ -17,6 +18,7 @@ const AccessControlContext = createContext<AccessState>({
     hasChatAccess: false,
     hasDashboardAccess: false,
     hasPipelinesIngestionAccess: false,
+    hasDevDataAccess: false,
     user: "",
     isLoading: true,
     error: null,
@@ -33,6 +35,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
         hasChatAccess: false,
         hasDashboardAccess: false,
         hasPipelinesIngestionAccess: false,
+        hasDevDataAccess: false,
         user: "",
         isLoading: true,
         error: null,
@@ -138,6 +141,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
                         hasChatAccess: data.hasChatAccess,
                         hasDashboardAccess: data.hasDashboardAccess,
                         hasPipelinesIngestionAccess: data.hasPipelinesIngestionAccess,
+                        hasDevDataAccess: data.hasDevDataAccess,
                         user: data.user,
                         isLoading: false,
                         error: null,

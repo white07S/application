@@ -82,6 +82,7 @@ async def get_access_control(user_token: str) -> AccessResponse:
     has_dashboard = settings.GROUP_DASHBOARD_ACCESS in group_ids
     has_pipelines_ingestion = settings.GROUP_PIPELINES_INGESTION_ACCESS in group_ids
     has_pipelines_admin = settings.GROUP_PIPELINES_ADMIN_ACCESS in group_ids
+    has_dev_data = settings.GROUP_DEV_DATA_ACCESS in group_ids
 
     logger.info("--- Access Check for User: {} ({}) ---", user_name, user_id)
     logger.info("User Groups ({}): {}", len(group_ids), group_ids)
@@ -105,6 +106,11 @@ async def get_access_control(user_token: str) -> AccessResponse:
         settings.GROUP_PIPELINES_ADMIN_ACCESS,
         "GRANTED" if has_pipelines_admin else "DENIED",
     )
+    logger.info(
+        "Checking Dev Data Access (Required: {}): {}",
+        settings.GROUP_DEV_DATA_ACCESS,
+        "GRANTED" if has_dev_data else "DENIED",
+    )
     logger.info("---------------------------------------------------")
 
     return AccessResponse(
@@ -112,5 +118,6 @@ async def get_access_control(user_token: str) -> AccessResponse:
         hasDashboardAccess=has_dashboard,
         hasPipelinesIngestionAccess=has_pipelines_ingestion,
         hasPipelinesAdminAccess=has_pipelines_admin,
+        hasDevDataAccess=has_dev_data,
         user=user_name,
     )

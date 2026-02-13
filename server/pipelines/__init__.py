@@ -1,8 +1,14 @@
-"""Pipelines module for data upload, validation, and processing.
+"""Pipelines module — data upload, ingestion, and processing.
 
-This module is organized into subpackages:
-- api: FastAPI routers for HTTP endpoints
-- config: Configuration loading and services
-- processing: Core processing logic (batch, graph, ingestion)
-- validation: Data validation and schema checking
+Domain packages:
+    controls: Controls data (upload, model runners, ingestion, readiness)
+    orgs: Organizational chart hierarchies (function, location, consolidated)
+    risks: Risk theme taxonomies and themes
+
+Shared modules:
+    schema: SQLAlchemy table definitions + Alembic migration support
+    api: Job tracking utilities
+    processing: Batch listing with readiness status
+    storage: File path helpers and processing lock
+    upload_tracker: Upload ID sequence generation
 """

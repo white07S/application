@@ -1,74 +1,70 @@
-"""Processing service for listing batches and jobs.
+"""Processing service for listing batches with ingestion readiness (async).
 
-Simplified service after migration to SurrealDB.
+Provides batch listing with readiness status for the ingestion API.
 """
+
 from typing import Dict, List
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.jobs import UploadBatch, ProcessingJob
 from server.logging_config import get_logger
-from .. import storage
+from server.pipelines.controls.readiness import check_ingestion_readiness
 
 logger = get_logger(name=__name__)
 
 
-def get_validated_batches(db: Session) -> List[Dict]:
-    """Get all batches that have been validated and are ready for processing.
+async def get_validated_batches(db: AsyncSession) -> List[Dict]:
+    """Get all batches that have been validated, with ingestion readiness status.
 
-    Returns batches with status 'validated' along with their parquet files info.
+    Returns batches with status 'validated', 'processing', or 'success' along with
+    their readiness information (whether all model outputs are available).
     """
-    batches = db.query(UploadBatch).filter(
-        UploadBatch.status.in_(["validated", "processing", "success"])
-    ).order_by(UploadBatch.created_at.desc()).all()
+    result = await db.execute(
+        select(UploadBatch)
+        .where(UploadBatch.status.in_(["validated", "processing", "success", "failed"]))
+        .order_by(UploadBatch.created_at.desc())
+    )
+    batches = result.scalars().all()
 
-    result = []
+    output = []
     for batch in batches:
-        data_type = batch.data_type
+        upload_id = batch.upload_id
 
-        # Get parquet files from preprocessed directory
-        parquet_files = []
-        preprocessed_path = storage.get_preprocessed_batch_path(batch.upload_id, data_type)
+        # Check ingestion readiness (model outputs available?)
+        readiness = check_ingestion_readiness(upload_id)
 
-        if preprocessed_path.exists():
-            for file_path in preprocessed_path.glob("*.parquet"):
-                stat = file_path.stat()
-                parquet_files.append({
-                    "filename": file_path.name,
-                    "path": str(file_path),
-                    "size_bytes": stat.st_size,
-                    "modified_at": stat.st_mtime,
-                })
+        # Get the latest ingestion job for this batch
+        job_result = await db.execute(
+            select(ProcessingJob)
+            .where(ProcessingJob.batch_id == batch.id, ProcessingJob.job_type == "ingestion")
+            .order_by(ProcessingJob.created_at.desc())
+            .limit(1)
+        )
+        ingestion_job = job_result.scalar_one_or_none()
 
-        # Get the latest jobs for this batch
-        ingestion_job = db.query(ProcessingJob).filter_by(
-            batch_id=batch.id,
-            job_type="ingestion"
-        ).order_by(ProcessingJob.created_at.desc()).first()
+        # Can ingest only if: readiness is True, batch is validated,
+        # and no successful ingestion job exists yet (or last one failed)
+        can_ingest = (
+            readiness.ready
+            and batch.status in ("validated", "failed")
+            and (not ingestion_job or ingestion_job.status == "failed")
+        )
 
-        model_job = db.query(ProcessingJob).filter_by(
-            batch_id=batch.id,
-            job_type="model_run"
-        ).order_by(ProcessingJob.created_at.desc()).first()
-
-        result.append({
+        output.append({
             "batch_id": batch.id,
-            "upload_id": batch.upload_id,
-            "data_type": data_type,
+            "upload_id": upload_id,
+            "data_type": batch.data_type,
             "status": batch.status,
             "file_count": batch.file_count,
             "total_records": batch.total_records,
             "uploaded_by": batch.uploaded_by,
-            "created_at": batch.created_at.isoformat() + "Z",  # UTC indicator
-            "parquet_files": parquet_files,
-            "parquet_count": len(parquet_files),
-            "pk_records": None,  # No longer computed, SurrealDB handles this
+            "created_at": batch.created_at.isoformat() if batch.created_at else None,
+            "readiness": readiness.to_dict(),
+            "can_ingest": can_ingest,
             "ingestion_status": ingestion_job.status if ingestion_job else None,
-            "ingestion_run_id": None,  # Deprecated - using job tracking now
-            "model_run_status": model_job.status if model_job else None,
-            "model_run_id": None,  # Deprecated - using job tracking now
-            "can_ingest": batch.status == "validated" and (not ingestion_job or ingestion_job.status == "failed"),
-            "can_run_model": bool(ingestion_job and ingestion_job.status == "completed" and (not model_job or model_job.status == "failed")),
+            "message": readiness.message,
         })
 
-    return result
+    return output

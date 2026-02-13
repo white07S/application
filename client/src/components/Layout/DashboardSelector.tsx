@@ -9,9 +9,9 @@ interface DashboardOption {
 }
 
 const dashboardOptions: DashboardOption[] = [
-    { id: 'controls', label: 'Controls', icon: 'shield', path: '/dashboard/controls' },
-    { id: 'events', label: 'Events', icon: 'event_note', path: '/dashboard/events' },
-    { id: 'issues', label: 'Issues', icon: 'report_problem', path: '/dashboard/issues' },
+    { id: 'controls', label: 'Controls', icon: 'shield', path: '/dashboard' },
+    { id: 'events', label: 'Events', icon: 'event_note', path: '/dashboard' },
+    { id: 'issues', label: 'Issues', icon: 'report_problem', path: '/dashboard' },
 ];
 
 interface DashboardSelectorProps {

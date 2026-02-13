@@ -1,6 +1,29 @@
+import { useState, useEffect } from 'react';
 import { appConfig } from '../../config/appConfig';
 
+interface ControlsStats {
+    total_controls: number;
+    ingested_today: number;
+    last_sync: string | null;
+}
+
 const Home = () => {
+    const [controlsStats, setControlsStats] = useState<ControlsStats | null>(null);
+
+    useEffect(() => {
+        fetch(`${appConfig.api.baseUrl}/api/v2/stats/controls`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setControlsStats(data); })
+            .catch(() => {});
+    }, []);
+
+    const formatCount = (n: number) => n.toLocaleString();
+    const formatSyncDate = (iso: string) => {
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
+            ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
+    };
+
     return (
         <main className="pt-12 min-h-screen">
             <section className="relative border-b border-border-light bg-surface-light overflow-hidden">
@@ -48,8 +71,12 @@ const Home = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="lg:col-span-7">
-                        <div className="bg-white rounded-lg border border-border-light shadow-floating overflow-hidden flex flex-col h-[480px]">
+                    <div className="lg:col-span-7 relative">
+                        {/* TODO: Remove blur + overlay when agentic chat is ready */}
+                        <div className="absolute inset-0 z-20 flex items-center justify-center">
+                            <span className="bg-black/70 text-white text-xs font-mono uppercase tracking-widest px-4 py-2 rounded">Coming Soon</span>
+                        </div>
+                        <div className="bg-white rounded-lg border border-border-light shadow-floating overflow-hidden flex flex-col h-[480px] blur-sm pointer-events-none select-none">
                             <div className="bg-surface-light border-b border-border-light px-3 py-2 flex items-center justify-between shrink-0">
                                 <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-text-sub text-lg">smart_toy</span>
@@ -213,63 +240,90 @@ const Home = () => {
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-fluid-xl font-bold text-text-main uppercase tracking-tight">Data Tracked by NFR Connect</h2>
                         <div className="flex items-center gap-2 text-xs text-text-sub font-mono bg-white px-2 py-1 border border-border-light rounded-sm">
-                            LAST_SYNC: {appConfig.meta.lastSync}
+                            LAST_SYNC: {controlsStats?.last_sync ? formatSyncDate(controlsStats.last_sync) : '—'}
                         </div>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 gap-3">
-                        <div className="bg-white p-3 rounded border border-border-light shadow-card hover:shadow-md transition-shadow group">
-                            <div className="flex items-center gap-2 mb-3 text-text-sub group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined text-2xl">bug_report</span>
-                                <span className="text-xs font-medium">Issues</span>
+                        {/* TODO: Remove blur when Issues pipeline is implemented */}
+                        <div className="relative">
+                            <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                <span className="bg-black/60 text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded">Soon</span>
                             </div>
-                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.issues.count}</div>
-                            <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
-                                <span className="material-symbols-outlined text-base">arrow_upward</span>
-                                <span>+{appConfig.stats.issues.ingested} Ingested</span>
+                            <div className="bg-white p-3 rounded border border-border-light shadow-card blur-[2px] pointer-events-none select-none">
+                                <div className="flex items-center gap-2 mb-3 text-text-sub">
+                                    <span className="material-symbols-outlined text-2xl">bug_report</span>
+                                    <span className="text-xs font-medium">Issues</span>
+                                </div>
+                                <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.issues.count}</div>
+                                <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
+                                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                                    <span>+{appConfig.stats.issues.ingested} Ingested</span>
+                                </div>
                             </div>
                         </div>
+                        {/* Controls — real data */}
                         <div className="bg-white p-3 rounded border border-border-light shadow-card hover:shadow-md transition-shadow group">
                             <div className="flex items-center gap-2 mb-3 text-text-sub group-hover:text-primary transition-colors">
                                 <span className="material-symbols-outlined text-2xl">gpp_good</span>
                                 <span className="text-xs font-medium">Controls</span>
                             </div>
-                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.controls.count}</div>
+                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">
+                                {controlsStats ? formatCount(controlsStats.total_controls) : '—'}
+                            </div>
                             <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
                                 <span className="material-symbols-outlined text-base">arrow_upward</span>
-                                <span>+{appConfig.stats.controls.ingested} Ingested</span>
+                                <span>+{controlsStats ? formatCount(controlsStats.ingested_today) : '0'} Ingested</span>
                             </div>
                         </div>
-                        <div className="bg-white p-3 rounded border border-border-light shadow-card hover:shadow-md transition-shadow group">
-                            <div className="flex items-center gap-2 mb-3 text-text-sub group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined text-2xl">notifications_active</span>
-                                <span className="text-xs font-medium">Events</span>
+                        {/* TODO: Remove blur when Events pipeline is implemented */}
+                        <div className="relative">
+                            <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                <span className="bg-black/60 text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded">Soon</span>
                             </div>
-                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.events.count}</div>
-                            <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
-                                <span className="material-symbols-outlined text-base">arrow_upward</span>
-                                <span>+{appConfig.stats.events.ingested} Ingested</span>
-                            </div>
-                        </div>
-                        <div className="bg-white p-3 rounded border border-border-light shadow-card hover:shadow-md transition-shadow group">
-                            <div className="flex items-center gap-2 mb-3 text-text-sub group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined text-2xl">trending_down</span>
-                                <span className="text-xs font-medium">External Loss</span>
-                            </div>
-                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.externalLoss.count}</div>
-                            <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
-                                <span className="material-symbols-outlined text-base">arrow_upward</span>
-                                <span>+{appConfig.stats.externalLoss.ingested} Ingested</span>
+                            <div className="bg-white p-3 rounded border border-border-light shadow-card blur-[2px] pointer-events-none select-none">
+                                <div className="flex items-center gap-2 mb-3 text-text-sub">
+                                    <span className="material-symbols-outlined text-2xl">notifications_active</span>
+                                    <span className="text-xs font-medium">Events</span>
+                                </div>
+                                <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.events.count}</div>
+                                <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
+                                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                                    <span>+{appConfig.stats.events.ingested} Ingested</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="bg-white p-3 rounded border border-border-light shadow-card hover:shadow-md transition-shadow group">
-                            <div className="flex items-center gap-2 mb-3 text-text-sub group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined text-2xl">policy</span>
-                                <span className="text-xs font-medium">Policies</span>
+                        {/* TODO: Remove blur when External Loss pipeline is implemented */}
+                        <div className="relative">
+                            <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                <span className="bg-black/60 text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded">Soon</span>
                             </div>
-                            <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.policies.count}</div>
-                            <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
-                                <span className="material-symbols-outlined text-base">arrow_upward</span>
-                                <span>+{appConfig.stats.policies.ingested} Ingested</span>
+                            <div className="bg-white p-3 rounded border border-border-light shadow-card blur-[2px] pointer-events-none select-none">
+                                <div className="flex items-center gap-2 mb-3 text-text-sub">
+                                    <span className="material-symbols-outlined text-2xl">trending_down</span>
+                                    <span className="text-xs font-medium">External Loss</span>
+                                </div>
+                                <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.externalLoss.count}</div>
+                                <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
+                                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                                    <span>+{appConfig.stats.externalLoss.ingested} Ingested</span>
+                                </div>
+                            </div>
+                        </div>
+                        {/* TODO: Remove blur when Policies pipeline is implemented */}
+                        <div className="relative">
+                            <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                <span className="bg-black/60 text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded">Soon</span>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-border-light shadow-card blur-[2px] pointer-events-none select-none">
+                                <div className="flex items-center gap-2 mb-3 text-text-sub">
+                                    <span className="material-symbols-outlined text-2xl">policy</span>
+                                    <span className="text-xs font-medium">Policies</span>
+                                </div>
+                                <div className="text-2xl font-mono font-medium text-text-main mb-1 tracking-tight">{appConfig.stats.policies.count}</div>
+                                <div className="flex items-center gap-1 text-xs font-mono text-green-600 bg-green-50 w-fit px-1.5 py-0.5 rounded">
+                                    <span className="material-symbols-outlined text-base">arrow_upward</span>
+                                    <span>+{appConfig.stats.policies.ingested} Ingested</span>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -41,9 +41,6 @@ export const appConfig = {
             ingested: '56',
         },
     },
-    meta: {
-        lastSync: '14:02:44 UTC',
-    },
     models: {
         dice: {
             id: 'DICE-9921',

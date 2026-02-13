@@ -36,7 +36,3 @@ export default function MathBlock({ children, display = true }: MathBlockProps) 
   }
 }
 
-// Inline math component
-export function InlineMath({ children }: { children: string }) {
-  return <MathBlock display={false}>{children}</MathBlock>;
-}

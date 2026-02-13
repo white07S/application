@@ -1,27 +1,25 @@
 """SQLAlchemy models for job tracking.
 
-These models are stored in the jobs.db SQLite database, separate from
-the main SurrealDB data storage.
+These models are stored alongside the domain tables in PostgreSQL.
+They share the same MetaData instance so Alembic manages all tables together.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, Text, BigInteger, CheckConstraint, Index
+from sqlalchemy import DateTime, String, Text, BigInteger, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
+
+from server.pipelines.schema.base import metadata
 
 
 class Base(DeclarativeBase):
-    """Base class for all job tracking models."""
-    pass
+    """Base class for all job tracking models, using shared metadata."""
+    metadata = metadata
 
 
 class TusUpload(Base):
-    """Track TUS resumable upload state.
-
-    This model stores the state of in-progress TUS uploads, allowing
-    uploads to be resumed after interruption.
-    """
+    """Track TUS resumable upload state."""
     __tablename__ = "tus_uploads"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID
@@ -36,9 +34,9 @@ class TusUpload(Base):
     temp_path: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     expected_files: Mapped[int] = mapped_column(default=1)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint("data_type IN ('issues', 'controls', 'actions')"),
@@ -59,17 +57,25 @@ class UploadBatch(Base):
     uploaded_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     file_count: Mapped[Optional[int]] = mapped_column(nullable=True)
     total_records: Mapped[Optional[int]] = mapped_column(nullable=True)
-    started_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     error_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'validating', 'validated', 'processing', 'success', 'failed')"),
         CheckConstraint("data_type IN ('issues', 'controls', 'actions')"),
         Index('idx_upload_batches_status', 'status'),
     )
+
+
+class UploadIdSequence(Base):
+    """Track upload ID sequences per year (UPL-YYYY-XXXX)."""
+    __tablename__ = "upload_id_sequence"
+
+    year: Mapped[int] = mapped_column(primary_key=True)
+    sequence: Mapped[int] = mapped_column(default=0)
 
 
 class ProcessingJob(Base):
@@ -88,29 +94,21 @@ class ProcessingJob(Base):
     records_total: Mapped[int] = mapped_column(default=0)
     records_processed: Mapped[int] = mapped_column(default=0)
     records_new: Mapped[int] = mapped_column(default=0)
-    records_updated: Mapped[int] = mapped_column(default=0)
-    records_skipped: Mapped[int] = mapped_column(default=0)
+    records_changed: Mapped[int] = mapped_column(default=0)
+    records_unchanged: Mapped[int] = mapped_column(default=0)
     records_failed: Mapped[int] = mapped_column(default=0)
 
-    # Batch tracking
-    batches_total: Mapped[int] = mapped_column(default=0)
-    batches_completed: Mapped[int] = mapped_column(default=0)
-
-    # Summary fields
-    data_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    db_total_records: Mapped[int] = mapped_column(default=0)
-
     # Timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Error tracking
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'running', 'completed', 'failed')"),
-        CheckConstraint("job_type IN ('ingestion', 'model_run')"),
+        CheckConstraint("job_type IN ('ingestion')"),
         Index('idx_processing_jobs_batch', 'batch_id'),
         Index('idx_processing_jobs_status', 'status'),
     )

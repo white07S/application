@@ -1,138 +1,42 @@
-"""SQLAlchemy engine configuration for jobs SQLite database.
+"""Database engine for job tracking — delegates to shared PostgreSQL engine.
 
-This is a separate database from the main data (SurrealDB) used for:
-- TUS upload tracking
-- Upload batch tracking
-- Processing job tracking
+All job tables (TusUpload, UploadBatch, UploadIdSequence, ProcessingJob)
+now live alongside domain tables in PostgreSQL. Alembic manages the schema.
 """
 
-from collections.abc import Generator
-from typing import Any
+from collections.abc import AsyncGenerator
 
-from sqlalchemy import Engine, create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.settings import get_settings
+from server.config.postgres import get_db_session, get_session_factory
 from server.logging_config import get_logger
-
-from .models import Base
 
 logger = get_logger(name=__name__)
 
 
-def _get_database_path():
-    """Get the jobs database path from settings."""
-    settings = get_settings()
-    return settings.job_tracking_db_path
+async def get_jobs_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that provides an async database session.
 
-
-JOBS_DATABASE_PATH = _get_database_path()
-
-
-def _ensure_database_directory() -> None:
-    """Create the database directory if it doesn't exist."""
-    settings = get_settings()
-    settings.ensure_job_tracking_dir()
-
-
-def _set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
-    """Set SQLite pragmas on each new connection."""
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON")
-    cursor.execute("PRAGMA journal_mode = WAL")
-    cursor.execute("PRAGMA synchronous = NORMAL")
-    cursor.execute("PRAGMA cache_size = -65536")  # 64MB
-    cursor.execute("PRAGMA busy_timeout = 30000")
-    cursor.close()
-
-
-def create_jobs_engine() -> Engine:
-    """Create and configure the SQLAlchemy engine for jobs database."""
-    _ensure_database_directory()
-
-    db_path = _get_database_path()
-    database_url = f"sqlite:///{db_path}"
-
-    logger.info("Creating jobs database engine at: {}", db_path)
-
-    engine = create_engine(
-        database_url,
-        connect_args={"check_same_thread": False},
-        echo=False,
-    )
-
-    event.listen(engine, "connect", _set_sqlite_pragmas)
-
-    return engine
-
-
-# Create the engine instance
-_engine = None
-
-
-def get_engine() -> Engine:
-    """Get or create the jobs database engine."""
-    global _engine
-    if _engine is None:
-        _engine = create_jobs_engine()
-    return _engine
-
-
-# Session factory
-_session_local = None
-
-
-def get_session_local() -> sessionmaker:
-    """Get or create the session factory."""
-    global _session_local
-    if _session_local is None:
-        _session_local = sessionmaker(
-            bind=get_engine(),
-            autocommit=False,
-            autoflush=False,
-            expire_on_commit=False,
-        )
-    return _session_local
-
-
-def get_jobs_db() -> Generator[Session, None, None]:
-    """FastAPI dependency that provides a jobs database session.
-
-    Yields:
-        SQLAlchemy Session instance for jobs database.
+    This is a thin wrapper around the shared Postgres session factory.
     """
-    SessionLocal = get_session_local()
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    async for session in get_db_session():
+        yield session
 
 
-def init_jobs_database() -> None:
-    """Initialize the jobs database by creating all tables."""
-    _ensure_database_directory()
-    engine = get_engine()
-    Base.metadata.create_all(engine)
-    logger.info("Jobs database initialized at: {}", _get_database_path())
+def get_session_factory_for_background():
+    """Return the async session factory for background tasks.
+
+    Background tasks (e.g. ingestion) create their own sessions
+    outside the request lifecycle.
+    """
+    return get_session_factory()
 
 
-def shutdown_jobs_engine() -> None:
-    """Checkpoint WAL and dispose the jobs database engine."""
-    global _engine, _session_local
-    if _engine is None:
-        return
+async def init_jobs_database() -> None:
+    """No-op — Alembic manages all table creation."""
+    logger.debug("init_jobs_database is a no-op; Alembic manages schema")
 
-    try:
-        with _engine.connect() as connection:
-            connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
-    except Exception as e:
-        logger.warning("Failed to checkpoint jobs database WAL: {}", e)
 
-    try:
-        _engine.dispose()
-    except Exception as e:
-        logger.warning("Failed to dispose jobs database engine: {}", e)
-
-    _engine = None
-    _session_local = None
+async def shutdown_jobs_engine() -> None:
+    """No-op — engine lifecycle is managed by config/postgres.py."""
+    logger.debug("shutdown_jobs_engine is a no-op; engine lifecycle in config/postgres.py")

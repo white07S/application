@@ -1,42 +1,50 @@
-"""API endpoints for data processing (ingestion and model runs)."""
+"""API endpoints for controls ingestion (async PostgreSQL).
+
+Provides endpoints for listing validated batches with readiness status,
+triggering ingestion, and polling job progress.
+
+Background ingestion uses asyncio.create_task() instead of threading.Thread,
+eliminating the sync/async boundary.
+"""
+
 import asyncio
-import threading
 import uuid
-from datetime import datetime
-from typing import List, Optional, Any, Dict
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
-from server.jobs import get_jobs_db, UploadBatch, ProcessingJob
-from server.jobs.engine import get_session_local
+from server.jobs import get_jobs_db, get_session_factory_for_background, UploadBatch, ProcessingJob
 from server.logging_config import get_logger
-from server.config.surrealdb import get_surrealdb_connection
-from server.settings import get_settings
 
-from ..ingest.service import run_ingestion, IngestionResult
-from ..models.runner import run_model_pipeline, get_pipeline_stats
-from ..models.cache import ModelCache
-from ..consumer.service import ControlsConsumer
+from ..ingest.service import run_controls_ingestion, IngestionResult
+from ..readiness import check_ingestion_readiness
 from ... import storage
 from ...api.job_tracker import JobTracker
 from ...processing import service as processing_service
 
 logger = get_logger(name=__name__)
 
-router = APIRouter(prefix="/v2/processing", tags=["Processing"])
+router = APIRouter(prefix="/v2/ingestion", tags=["Ingestion"])
 
 
 # ============== Response Models ==============
 
-class ParquetFileInfo(BaseModel):
-    filename: str
-    path: str
-    size_bytes: int
-    modified_at: float
+class ReadinessInfo(BaseModel):
+    ready: bool
+    source_jsonl: bool
+    taxonomy: bool
+    enrichment: bool
+    clean_text: bool
+    embeddings: bool
+    missing_models: List[str] = []
+    missing_control_ids: Dict[str, List[str]] = {}
+    message: Optional[str] = None
 
 
 class ValidatedBatchResponse(BaseModel):
@@ -46,17 +54,12 @@ class ValidatedBatchResponse(BaseModel):
     status: str
     file_count: Optional[int]
     total_records: Optional[int]
-    pk_records: Optional[int] = None
     uploaded_by: Optional[str]
     created_at: str
-    parquet_files: List[ParquetFileInfo]
-    parquet_count: int
-    ingestion_status: Optional[str]
-    ingestion_run_id: Optional[int]
-    model_run_status: Optional[str]
-    model_run_id: Optional[int]
+    readiness: ReadinessInfo
     can_ingest: bool
-    can_run_model: bool
+    ingestion_status: Optional[str]
+    message: Optional[str]
 
 
 class ValidatedBatchesListResponse(BaseModel):
@@ -75,28 +78,21 @@ class JobStatusResponse(BaseModel):
     records_total: int
     records_processed: int
     records_new: int
-    records_updated: int
-    records_skipped: int = 0
+    records_changed: int
+    records_unchanged: int
     records_failed: int
     started_at: Optional[str]
     completed_at: Optional[str]
+    created_at: Optional[str]
     error_message: Optional[str]
-    steps: List[Dict[str, Any]]
-    # Summary fields
-    data_type: str = ""
     duration_seconds: float = 0.0
-    db_total_records: int = 0
-    pk_records: Optional[int] = None
-    # Batch tracking
-    batches_total: int = 0
-    batches_completed: int = 0
 
 
-class StartJobRequest(BaseModel):
+class StartInsertRequest(BaseModel):
     batch_id: int
 
 
-class StartJobResponse(BaseModel):
+class StartInsertResponse(BaseModel):
     success: bool
     message: str
     job_id: str
@@ -104,47 +100,20 @@ class StartJobResponse(BaseModel):
     upload_id: str
 
 
-class PipelineStepStatus(BaseModel):
-    name: str
-    type: str
-    status: str
-    records_processed: int = 0
-    records_failed: int = 0
-    records_skipped: int = 0
-    pipeline_run_id: Optional[int] = None
-    records_total: Optional[int] = None
-
-
-class PipelineStatusResponse(BaseModel):
-    batch_id: int
-    upload_id: str
-    data_type: str
-    ingestion: Optional[dict]
-    steps: List[PipelineStepStatus]
-    records_total: Optional[int] = None
-    records_processed: Optional[int] = None
-    records_failed: Optional[int] = None
-
-
 # ============== Endpoints ==============
 
 @router.get("/batches", response_model=ValidatedBatchesListResponse)
 async def get_validated_batches(
     token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_jobs_db),
+    db: AsyncSession = Depends(get_jobs_db),
 ):
-    """
-    Get all validated batches ready for processing.
-
-    Returns batches that have passed validation and have parquet files,
-    along with their ingestion and model run status.
-    """
+    """Get all validated batches with ingestion readiness status."""
     access = await get_access_control(token)
 
     if not access.hasPipelinesIngestionAccess:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    batches = processing_service.get_validated_batches(db)
+    batches = await processing_service.get_validated_batches(db)
 
     return ValidatedBatchesListResponse(
         batches=[ValidatedBatchResponse(**b) for b in batches],
@@ -152,19 +121,16 @@ async def get_validated_batches(
     )
 
 
-@router.post("/ingest", response_model=StartJobResponse)
+@router.post("/insert", response_model=StartInsertResponse)
 async def start_ingestion(
-    request: StartJobRequest,
+    request: StartInsertRequest,
     token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_jobs_db),
+    db: AsyncSession = Depends(get_jobs_db),
 ):
-    """
-    Start ingestion job for a validated batch.
+    """Start ingestion job for a validated batch.
 
-    This triggers the new SurrealDB ingestion pipeline that:
-    1. Loads split CSV files into SurrealDB (src_controls_* tables)
-    2. Runs model pipeline for new/changed controls
-    3. Cleans up parquet files after success
+    Checks readiness (all model outputs available), then runs
+    controls ingestion into PostgreSQL + Qdrant as a background asyncio task.
 
     Requires pipelines-admin access.
     """
@@ -186,31 +152,38 @@ async def start_ingestion(
             )
 
         # Get batch
-        batch = db.query(UploadBatch).filter_by(id=request.batch_id).first()
+        result = await db.execute(
+            select(UploadBatch).where(UploadBatch.id == request.batch_id)
+        )
+        batch = result.scalar_one_or_none()
         if not batch:
             raise HTTPException(status_code=404, detail=f"Batch {request.batch_id} not found")
 
-        if batch.status != "validated":
+        if batch.status not in ("validated", "failed"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Batch {request.batch_id} is not in validated state (status: {batch.status})"
+                detail=f"Batch {request.batch_id} is not in a re-runnable state (status: {batch.status})"
             )
 
-        # Get data type from batch
-        data_type = batch.data_type
+        # Check readiness
+        readiness = check_ingestion_readiness(batch.upload_id)
+        if not readiness.ready:
+            raise HTTPException(
+                status_code=400,
+                detail=readiness.message or "Model outputs are not ready for ingestion"
+            )
 
-        # Create job tracker
+        # Create job
         job_id = str(uuid.uuid4())
         tracker = JobTracker(db)
-        job = tracker.create_job(
+        await tracker.create_job(
             job_id=job_id,
             batch_id=request.batch_id,
             upload_id=batch.upload_id,
             job_type="ingestion",
-            data_type=data_type,
         )
 
-        # Acquire lock before mutating batch status
+        # Acquire lock
         try:
             storage.acquire_processing_lock(batch.upload_id, owner="ingestion")
             lock_acquired = True
@@ -219,281 +192,21 @@ async def start_ingestion(
 
         # Update batch status
         batch.status = "processing"
-        db.commit()
+        await db.commit()
 
         logger.info(
-            "Started SurrealDB ingestion job: job_id={}, batch_id={}, upload_id={}",
+            "Started ingestion job: job_id={}, batch_id={}, upload_id={}",
             job_id, request.batch_id, batch.upload_id
         )
 
-        # Get paths
-        split_dir = storage.get_split_batch_path(batch.upload_id, data_type)
-        # Run ingestion in background thread
-        def run_in_background():
-            """Background thread that runs ingestion + model pipeline."""
-            bg_db = get_session_local()()
-            bg_tracker = JobTracker(bg_db)
+        # Launch background task (async, no thread needed)
+        _batch_id = request.batch_id
+        _upload_id = batch.upload_id
+        asyncio.create_task(
+            _run_ingestion_background(job_id, _batch_id, _upload_id)
+        )
 
-            try:
-                # Update job to running
-                bg_tracker.update_job_status(
-                    job_id=job_id,
-                    status="running",
-                    current_step="Starting SurrealDB ingestion...",
-                    progress_percent=5,
-                )
-                bg_db.commit()
-
-                # Run ingestion (async in sync context)
-                ingestion_result: IngestionResult = asyncio.run(
-                    run_ingestion(
-                        batch_id=batch.upload_id,
-                        split_dir=split_dir,
-                        is_base=False,  # Always delta ingestion
-                    )
-                )
-
-                if not ingestion_result.success:
-                    # Ingestion failed
-                    bg_tracker.update_job_status(
-                        job_id=job_id,
-                        status="failed",
-                        current_step="Ingestion failed",
-                        error_message=ingestion_result.message,
-                        progress_percent=50,
-                        completed_at=datetime.utcnow(),
-                    )
-
-                    bg_batch = bg_db.query(UploadBatch).filter_by(id=request.batch_id).first()
-                    if bg_batch:
-                        bg_batch.status = "failed"
-
-                    bg_db.commit()
-                    return
-
-                # Ingestion succeeded - update job progress
-                stats = ingestion_result.stats
-                bg_tracker.update_job_status(
-                    job_id=job_id,
-                    status="running",
-                    current_step="Preparing model pipeline...",
-                    progress_percent=20,
-                    records_total=stats.get("total_records", 0),
-                    records_processed=stats.get("processed_records", 0),
-                    records_new=stats.get("new_records", 0),
-                    records_updated=stats.get("updated_records", 0),
-                )
-                bg_db.commit()
-
-                # Run model pipeline for new and changed controls
-                controls_to_process = ingestion_result.new_control_ids + ingestion_result.changed_control_ids
-
-                if controls_to_process:
-                    logger.info(
-                        "Running model pipeline for {} controls (new={}, changed={})",
-                        len(controls_to_process),
-                        len(ingestion_result.new_control_ids),
-                        len(ingestion_result.changed_control_ids)
-                    )
-
-                    # Initialize model cache using configured path
-                    settings = get_settings()
-                    settings.ensure_model_cache_dir()
-                    cache = ModelCache(cache_dir=settings.model_cache_path)
-
-                    # Load split CSV tables for model pipeline (need control data)
-                    # Model pipeline expects pandas DataFrames
-                    import pandas as pd
-                    from ..ingest.base import CSV_FILES
-
-                    tables = {}
-                    for table_name, csv_file in CSV_FILES.items():
-                        csv_path = split_dir / csv_file
-                        if csv_path.exists():
-                            tables[table_name] = pd.read_csv(csv_path)
-
-                    # Prepare controls list with record IDs
-                    from ..consumer.queries import normalize_control_id_for_record
-                    controls_list = [
-                        {
-                            "control_id": cid,
-                            "record_id": normalize_control_id_for_record(cid),
-                        }
-                        for cid in controls_to_process
-                    ]
-
-                # Run model pipeline with incremental progress updates
-                async def run_models():
-                    async with get_surrealdb_connection() as db_conn:
-                        results = {}
-                        total_controls = len(controls_list)
-                        processed_controls = 0
-                        successful_controls = 0
-                        failed_controls = 0
-                        skipped_controls = 0
-
-                        # Reset progress tracking to model pipeline scope
-                        bg_tracker.update_job_status(
-                            job_id=job_id,
-                            records_total=total_controls,
-                            records_processed=0,
-                            records_failed=0,
-                            records_skipped=0,
-                            batches_total=total_controls,
-                            batches_completed=0,
-                            current_step="Running model pipeline (0/0)" if total_controls == 0 else "Running model pipeline (0/{})".format(total_controls),
-                            progress_percent=20,
-                        )
-                        bg_db.commit()
-
-                        status_map = {}
-                        try:
-                            main_table = tables.get("controls_main")
-                            if main_table is not None and "control_id" in main_table.columns:
-                                status_map = (
-                                    main_table.set_index("control_id")[["control_status", "hierarchy_level"]]
-                                    .to_dict(orient="index")
-                                )
-                        except Exception:
-                            status_map = {}
-
-                        def normalize_text(value: Any) -> str:
-                            if value is None:
-                                return ""
-                            return str(value).strip().lower()
-
-                        def is_enrichment_eligible(control_id: str) -> bool:
-                            row = status_map.get(control_id, {})
-                            status = normalize_text(row.get("control_status"))
-                            level = " ".join(normalize_text(row.get("hierarchy_level")).split())
-                            if status != "active":
-                                return False
-                            return level in {"level 1", "level 2"}
-
-                        step_labels = {
-                            "taxonomy": "Taxonomy",
-                            "enrichment": "Enrichment",
-                            "clean_text": "Clean Text",
-                            "embeddings": "Embeddings",
-                        }
-
-                        for idx, control in enumerate(controls_list, start=1):
-                            if not is_enrichment_eligible(control["control_id"]):
-                                skipped_controls += 1
-
-                            async def step_callback(step: str, control_id: str = control["control_id"], step_idx: int = idx):
-                                label = step_labels.get(step, step.replace("_", " ").title())
-                                bg_tracker.update_job_status(
-                                    job_id=job_id,
-                                    current_step="{} ({}/{}) - {}".format(label, step_idx, total_controls, control_id),
-                                )
-                                bg_db.commit()
-
-                            result = await run_model_pipeline(
-                                db=db_conn,
-                                control_id=control["control_id"],
-                                record_id=control["record_id"],
-                                tables=tables,
-                                cache=cache,
-                                graph_token=token,
-                                progress_callback=step_callback,
-                            )
-                            results[control["control_id"]] = result
-
-                            processed_controls += 1
-                            if result.success:
-                                successful_controls += 1
-                            else:
-                                failed_controls += 1
-
-                            # Smooth progress: 20% -> 90% across model pipeline
-                            if total_controls > 0:
-                                progress = 20 + int((processed_controls / total_controls) * 70)
-                            else:
-                                progress = 90
-
-                            bg_tracker.update_job_status(
-                                job_id=job_id,
-                                records_processed=processed_controls,
-                                records_failed=failed_controls,
-                                records_skipped=skipped_controls,
-                                batches_total=total_controls,
-                                batches_completed=successful_controls,
-                                current_step="Running model pipeline ({}/{})".format(processed_controls, total_controls),
-                                progress_percent=progress,
-                            )
-                            bg_db.commit()
-
-                        return results
-
-                model_results = asyncio.run(run_models())
-                pipeline_stats = get_pipeline_stats(model_results)
-
-                logger.info(
-                    "Model pipeline completed: total={}, successful={}, failed={}",
-                    pipeline_stats["total"],
-                    pipeline_stats["successful"],
-                    pipeline_stats["failed"]
-                )
-
-                # Update job with model results
-                bg_tracker.update_job_status(
-                    job_id=job_id,
-                    current_step="Cleaning up...",
-                    progress_percent=95,
-                    batches_total=len(controls_to_process),
-                    batches_completed=pipeline_stats["successful"],
-                )
-                bg_db.commit()
-
-                # Job completed successfully
-                bg_tracker.update_job_status(
-                    job_id=job_id,
-                    status="completed",
-                    current_step="Completed",
-                    progress_percent=100,
-                    completed_at=datetime.utcnow(),
-                )
-
-                bg_batch = bg_db.query(UploadBatch).filter_by(id=request.batch_id).first()
-                if bg_batch:
-                    bg_batch.status = "success"
-
-                bg_db.commit()
-
-                # Clean up parquet files after success
-                try:
-                    storage.cleanup_batch_after_ingestion(batch.upload_id, data_type)
-                    logger.info("Cleaned up parquet files for batch {}", batch.upload_id)
-                except Exception as cleanup_err:
-                    logger.warning("Failed to cleanup batch files: {}", cleanup_err)
-
-                logger.info("Ingestion job completed successfully: job_id={}", job_id)
-
-            except Exception as e:
-                logger.exception("Background ingestion failed: {}", str(e))
-                bg_tracker.update_job_status(
-                    job_id=job_id,
-                    status="failed",
-                    error_message=str(e),
-                    completed_at=datetime.utcnow(),
-                )
-
-                bg_batch = bg_db.query(UploadBatch).filter_by(id=request.batch_id).first()
-                if bg_batch:
-                    bg_batch.status = "failed"
-
-                bg_db.commit()
-
-            finally:
-                storage.release_processing_lock()
-                bg_db.close()
-
-        # Start background thread
-        thread = threading.Thread(target=run_in_background, daemon=True)
-        thread.start()
-
-        return StartJobResponse(
+        return StartInsertResponse(
             success=True,
             message="Ingestion job started successfully",
             job_id=job_id,
@@ -516,269 +229,137 @@ async def start_ingestion(
         raise HTTPException(status_code=500, detail=f"Failed to start ingestion job: {str(e)}")
 
 
+async def _run_ingestion_background(job_id: str, batch_id: int, upload_id: str) -> None:
+    """Background async task that runs ingestion with its own DB session."""
+    session_factory = get_session_factory_for_background()
+
+    async with session_factory() as bg_db:
+        bg_tracker = JobTracker(bg_db)
+
+        try:
+            # Update job to running
+            await bg_tracker.update_job_status(
+                job_id=job_id,
+                status="running",
+                current_step="Starting controls ingestion...",
+                progress_percent=5,
+            )
+            await bg_db.commit()
+
+            # Async progress callback
+            async def on_progress(step: str, processed: int, total: int, percent: int):
+                await bg_tracker.update_job_status(
+                    job_id=job_id,
+                    current_step=step,
+                    records_processed=processed,
+                    records_total=total,
+                    progress_percent=max(5, min(95, percent)),
+                )
+                await bg_db.commit()
+
+            # Run ingestion (already async, no thread boundary)
+            result: IngestionResult = await run_controls_ingestion(
+                batch_id=batch_id,
+                upload_id=upload_id,
+                progress_callback=on_progress,
+            )
+
+            now = datetime.now(timezone.utc)
+
+            if not result.success:
+                await bg_tracker.update_job_status(
+                    job_id=job_id,
+                    status="failed",
+                    current_step="Ingestion failed",
+                    error_message=result.message,
+                    records_total=result.counts.total,
+                    records_processed=result.counts.processed,
+                    records_new=result.counts.new,
+                    records_changed=result.counts.changed,
+                    records_unchanged=result.counts.unchanged,
+                    records_failed=result.counts.failed,
+                    progress_percent=100,
+                    completed_at=now,
+                )
+
+                bg_batch_result = await bg_db.execute(
+                    select(UploadBatch).where(UploadBatch.id == batch_id)
+                )
+                bg_batch = bg_batch_result.scalar_one_or_none()
+                if bg_batch:
+                    bg_batch.status = "failed"
+
+                await bg_db.commit()
+                return
+
+            # Ingestion succeeded
+            await bg_tracker.update_job_status(
+                job_id=job_id,
+                status="completed",
+                current_step="Completed",
+                progress_percent=100,
+                records_total=result.counts.total,
+                records_processed=result.counts.processed,
+                records_new=result.counts.new,
+                records_changed=result.counts.changed,
+                records_unchanged=result.counts.unchanged,
+                records_failed=result.counts.failed,
+                completed_at=now,
+            )
+
+            bg_batch_result = await bg_db.execute(
+                select(UploadBatch).where(UploadBatch.id == batch_id)
+            )
+            bg_batch = bg_batch_result.scalar_one_or_none()
+            if bg_batch:
+                bg_batch.status = "success"
+
+            await bg_db.commit()
+
+            logger.info(
+                "Ingestion job completed: job_id={}, total={}, new={}, changed={}, unchanged={}",
+                job_id, result.counts.total, result.counts.new,
+                result.counts.changed, result.counts.unchanged,
+            )
+
+        except Exception as e:
+            logger.exception("Background ingestion failed: {}", str(e))
+            await bg_tracker.update_job_status(
+                job_id=job_id,
+                status="failed",
+                error_message=str(e),
+                completed_at=datetime.now(timezone.utc),
+            )
+
+            bg_batch_result = await bg_db.execute(
+                select(UploadBatch).where(UploadBatch.id == batch_id)
+            )
+            bg_batch = bg_batch_result.scalar_one_or_none()
+            if bg_batch:
+                bg_batch.status = "failed"
+
+            await bg_db.commit()
+
+        finally:
+            storage.release_processing_lock()
+
+
 @router.get("/job/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: str,
     token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_jobs_db),
+    db: AsyncSession = Depends(get_jobs_db),
 ):
-    """
-    Get the status of a processing job.
-
-    Returns progress information including:
-    - Current step and progress percentage
-    - Records processed, new, updated
-    - Detailed step-by-step progress
-    """
+    """Get the status of an ingestion job."""
     access = await get_access_control(token)
 
     if not access.hasPipelinesIngestionAccess:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Use JobTracker to get job status
     tracker = JobTracker(db)
-    job_data = tracker.get_job(job_id)
+    job_data = await tracker.get_job(job_id)
 
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    # Return job data with proper format
-    return JobStatusResponse(
-        job_id=job_data["job_id"],
-        job_type=job_data["job_type"],
-        batch_id=job_data["batch_id"],
-        upload_id=job_data["upload_id"],
-        status=job_data["status"],
-        progress_percent=job_data["progress_percent"],
-        current_step=job_data["current_step"],
-        records_total=job_data["records_total"],
-        records_processed=job_data["records_processed"],
-        records_new=job_data["records_new"],
-        records_updated=job_data["records_updated"],
-        records_skipped=job_data["records_skipped"],
-        records_failed=job_data["records_failed"],
-        started_at=job_data["started_at"],
-        completed_at=job_data["completed_at"],
-        error_message=job_data["error_message"],
-        steps=[],  # Not tracked in new system yet
-        data_type=job_data["data_type"],
-        duration_seconds=job_data["duration_seconds"],
-        db_total_records=job_data["db_total_records"],
-        batches_total=job_data["batches_total"],
-        batches_completed=job_data["batches_completed"],
-    )
-
-
-@router.get("/batch/{batch_id}/jobs", response_model=List[JobStatusResponse])
-async def get_batch_jobs(
-    batch_id: int,
-    token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_jobs_db),
-):
-    """
-    Get all jobs for a specific batch.
-
-    Returns both ingestion and model run jobs for the batch.
-    """
-    access = await get_access_control(token)
-
-    if not access.hasPipelinesIngestionAccess:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    # Use JobTracker to get all jobs for this batch
-    tracker = JobTracker(db)
-    jobs_data = tracker.get_batch_jobs(batch_id)
-
-    return [
-        JobStatusResponse(
-            job_id=job["job_id"],
-            job_type=job["job_type"],
-            batch_id=job["batch_id"],
-            upload_id=job["upload_id"],
-            status=job["status"],
-            progress_percent=job["progress_percent"],
-            current_step=job["current_step"],
-            records_total=job["records_total"],
-            records_processed=job["records_processed"],
-            records_new=job["records_new"],
-            records_updated=job["records_updated"],
-            records_skipped=job["records_skipped"],
-            records_failed=job["records_failed"],
-            started_at=job["started_at"],
-            completed_at=job["completed_at"],
-            error_message=job["error_message"],
-            steps=[],
-            data_type=job["data_type"],
-            duration_seconds=job["duration_seconds"],
-            db_total_records=job["db_total_records"],
-            batches_total=job["batches_total"],
-            batches_completed=job["batches_completed"],
-        )
-        for job in jobs_data
-    ]
-
-
-@router.get("/batch/{batch_id}/status", response_model=PipelineStatusResponse)
-async def get_batch_status(
-    batch_id: int,
-    token: str = Depends(get_token_from_header),
-    db: Session = Depends(get_jobs_db),
-):
-    """Get pipeline status (ingestion + model steps) for a batch from SurrealDB.
-
-    This queries SurrealDB to get the current state of:
-    - Ingestion (controls loaded into src_controls_main)
-    - Model pipeline steps (taxonomy, enrichment, clean_text, embeddings)
-    """
-    access = await get_access_control(token)
-
-    if not access.hasPipelinesIngestionAccess:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    try:
-        # Get batch info
-        batch = db.query(UploadBatch).filter_by(id=batch_id).first()
-        if not batch:
-            raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
-
-        data_type = batch.data_type
-
-        # Determine ingestion job status (do not infer from global table counts)
-        ingestion_job = (
-            db.query(ProcessingJob)
-            .filter_by(batch_id=batch_id, job_type="ingestion")
-            .order_by(ProcessingJob.created_at.desc())
-            .first()
-        )
-
-        if ingestion_job:
-            if ingestion_job.status == "completed":
-                ingestion_state = "completed"
-            elif ingestion_job.status == "failed":
-                ingestion_state = "failed"
-            elif ingestion_job.status == "running":
-                ingestion_state = "running"
-            else:
-                ingestion_state = "pending"
-        else:
-            if batch.status == "success":
-                ingestion_state = "completed"
-            elif batch.status == "failed":
-                ingestion_state = "failed"
-            elif batch.status == "processing":
-                ingestion_state = "running"
-            else:
-                ingestion_state = "pending"
-
-        # Only fetch SurrealDB counts once ingestion is completed for this batch
-        if ingestion_state != "completed":
-            return PipelineStatusResponse(
-                batch_id=batch_id,
-                upload_id=batch.upload_id,
-                data_type=data_type,
-                ingestion={
-                    "status": ingestion_state,
-                    "records_total": 0,
-                    "records_processed": 0,
-                },
-                steps=[],
-                records_total=0,
-                records_processed=0,
-                records_failed=0,
-            )
-
-        # Query SurrealDB for pipeline status
-        async def get_surreal_status():
-            async with get_surrealdb_connection() as db_conn:
-                consumer = ControlsConsumer()
-                consumer.db = db_conn
-
-                # Get table counts to determine what's been processed
-                counts = await consumer.get_table_counts()
-
-                # Build status response
-                from ..schema import (
-                    SRC_CONTROLS_MAIN,
-                    AI_CONTROLS_MODEL_TAXONOMY_CURRENT,
-                    AI_CONTROLS_MODEL_ENRICHMENT_CURRENT,
-                    AI_CONTROLS_MODEL_CLEANED_TEXT_CURRENT,
-                    AI_CONTROLS_MODEL_EMBEDDINGS_CURRENT,
-                )
-
-                ingestion_count = counts.get(SRC_CONTROLS_MAIN, 0)
-                taxonomy_count = counts.get(AI_CONTROLS_MODEL_TAXONOMY_CURRENT, 0)
-                enrichment_count = counts.get(AI_CONTROLS_MODEL_ENRICHMENT_CURRENT, 0)
-                clean_text_count = counts.get(AI_CONTROLS_MODEL_CLEANED_TEXT_CURRENT, 0)
-                embeddings_count = counts.get(AI_CONTROLS_MODEL_EMBEDDINGS_CURRENT, 0)
-
-                ingestion_status = {
-                    "status": "completed",
-                    "records_total": ingestion_count,
-                    "records_processed": ingestion_count,
-                }
-
-                steps = []
-
-                if taxonomy_count > 0:
-                    steps.append({
-                        "name": "Taxonomy Classification",
-                        "type": "taxonomy",
-                        "status": "completed",
-                        "records_processed": taxonomy_count,
-                        "records_total": ingestion_count,
-                        "records_failed": 0,
-                        "records_skipped": 0,
-                    })
-
-                if enrichment_count > 0:
-                    steps.append({
-                        "name": "Enrichment Analysis",
-                        "type": "enrichment",
-                        "status": "completed",
-                        "records_processed": enrichment_count,
-                        "records_total": ingestion_count,
-                        "records_failed": 0,
-                        "records_skipped": 0,
-                    })
-
-                if clean_text_count > 0:
-                    steps.append({
-                        "name": "Text Cleaning",
-                        "type": "clean_text",
-                        "status": "completed",
-                        "records_processed": clean_text_count,
-                        "records_total": ingestion_count,
-                        "records_failed": 0,
-                        "records_skipped": 0,
-                    })
-
-                if embeddings_count > 0:
-                    steps.append({
-                        "name": "Embeddings Generation",
-                        "type": "embeddings",
-                        "status": "completed",
-                        "records_processed": embeddings_count,
-                        "records_total": ingestion_count,
-                        "records_failed": 0,
-                        "records_skipped": 0,
-                    })
-
-                return {
-                    "batch_id": batch_id,
-                    "upload_id": batch.upload_id,
-                    "data_type": data_type,
-                    "ingestion": ingestion_status,
-                    "steps": steps,
-                    "records_total": ingestion_count,
-                    "records_processed": ingestion_count,
-                    "records_failed": 0,
-                }
-
-        status = await get_surreal_status()
-        return PipelineStatusResponse(**status)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Failed to fetch batch status from SurrealDB")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch batch status: {str(e)}")
+    return JobStatusResponse(**job_data)

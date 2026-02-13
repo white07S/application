@@ -33,22 +33,6 @@ interface FileStatus {
     error?: string;
 }
 
-interface ValidationStatus {
-    batch_status?: string;
-    validation?: {
-        status: string;
-        error_details?: {
-            isValid: boolean;
-            errors: Array<{
-                column: string;
-                code: string;
-                message: string;
-                fileName?: string;
-            }>;
-        };
-    };
-}
-
 // Generate a unique batch session ID
 const generateBatchSessionId = (): string => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -71,14 +55,10 @@ const UppyUploader: FC<UppyUploaderProps> = ({
     const [isUploading, setIsUploading] = useState(false);
     const [uploadComplete, setUploadComplete] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
-    const [validationStatus, setValidationStatus] = useState<ValidationStatus | null>(null);
-    const [isValidating, setIsValidating] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const authTokenRef = useRef<string | null>(null);
     const uppyRef = useRef<Uppy<FileMeta, Record<string, unknown>> | null>(null);
     const batchSessionIdRef = useRef<string>(generateBatchSessionId());
-    const abortControllerRef = useRef<AbortController | null>(null);
-    const isPollingRef = useRef<boolean>(false);
 
     // TUS endpoint
     const tusEndpoint = `${appConfig.api.baseUrl}/api/v2/pipelines/tus/`;
@@ -96,122 +76,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
         fetchToken();
     }, [getApiAccessToken]);
 
-    // Poll for validation status after upload completes
-    const pollValidationStatus = useCallback(async (tusUploadId: string) => {
-        if (!authTokenRef.current) return;
-
-        // Prevent overlapping polls
-        if (isPollingRef.current) return;
-        isPollingRef.current = true;
-
-        // Cancel any previous polling
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
-        abortControllerRef.current = new AbortController();
-        const signal = abortControllerRef.current.signal;
-
-        setIsValidating(true);
-        setValidationErrors([]);
-
-        const maxAttempts = 30; // Poll for up to 30 seconds
-        let attempts = 0;
-
-        const checkStatus = async (): Promise<void> => {
-            // Check if polling was cancelled
-            if (signal.aborted) {
-                isPollingRef.current = false;
-                return;
-            }
-
-            try {
-                const response = await fetch(
-                    `${appConfig.api.baseUrl}/api/v2/pipelines/tus/${tusUploadId}/status`,
-                    {
-                        headers: {
-                            'X-MS-TOKEN-AAD': authTokenRef.current || '',
-                        },
-                        signal,
-                    }
-                );
-
-                if (!response.ok) {
-                    throw new Error(`Failed to get status: ${response.status}`);
-                }
-
-                const data: ValidationStatus & { batch_status?: string; validation?: { status: string; error_details?: unknown } } = await response.json();
-                setValidationStatus(data);
-
-                // Check if validation is complete
-                if (data.batch_status === 'validated') {
-                    setIsValidating(false);
-                    setUploadComplete(true);
-                    isPollingRef.current = false;
-                    // Auto-reset all state after 5 seconds (clean slate for next upload)
-                    setTimeout(() => {
-                        setUploadComplete(false);
-                        setFileStatuses([]);
-                        setUploadError(null);
-                        setValidationStatus(null);
-                        setValidationErrors([]);
-                        uppyRef.current?.cancelAll();
-                        batchSessionIdRef.current = generateBatchSessionId();
-                    }, 5000);
-                    return;
-                }
-
-                if (data.batch_status === 'failed') {
-                    setIsValidating(false);
-                    isPollingRef.current = false;
-                    // Extract validation errors
-                    const errors: string[] = [];
-                    if (data.validation?.error_details) {
-                        const errorDetails = data.validation.error_details as { errors?: Array<{ column: string; code: string; message: string; fileName?: string }> };
-                        if (errorDetails.errors) {
-                            errorDetails.errors.slice(0, 5).forEach(err => {
-                                errors.push(`${err.column}: ${err.message}${err.fileName ? ` (${err.fileName})` : ''}`);
-                            });
-                            if (errorDetails.errors.length > 5) {
-                                errors.push(`... and ${errorDetails.errors.length - 5} more errors`);
-                            }
-                        }
-                    }
-                    if (errors.length === 0) {
-                        errors.push('Validation failed. Check server logs for details.');
-                    }
-                    setValidationErrors(errors);
-                    return;
-                }
-
-                // Still validating or pending - poll again
-                attempts++;
-                if (attempts < maxAttempts && !signal.aborted) {
-                    setTimeout(checkStatus, 1000);
-                } else if (!signal.aborted) {
-                    setIsValidating(false);
-                    isPollingRef.current = false;
-                    setValidationErrors(['Validation timed out. Please check status later.']);
-                }
-            } catch (err) {
-                // Ignore abort errors
-                if (err instanceof Error && err.name === 'AbortError') {
-                    isPollingRef.current = false;
-                    return;
-                }
-                console.error('Error polling validation status:', err);
-                attempts++;
-                if (attempts < maxAttempts && !signal.aborted) {
-                    setTimeout(checkStatus, 1000);
-                } else if (!signal.aborted) {
-                    setIsValidating(false);
-                    isPollingRef.current = false;
-                    setValidationErrors(['Failed to check validation status.']);
-                }
-            }
-        };
-
-        checkStatus();
-    }, []);
 
     // Initialize Uppy instance
     useEffect(() => {
@@ -294,15 +158,20 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                 // Get the TUS upload ID from the last successful file
                 const lastFile = successful[successful.length - 1];
                 const uploadUrl = lastFile.response?.uploadURL;
-                const tusUploadId = uploadUrl?.split('/').pop();
+                const tusUploadId = uploadUrl?.split('/').filter(Boolean).pop();
 
-                if (tusUploadId) {
-                    // Start polling for validation status
-                    pollValidationStatus(tusUploadId);
-                } else {
-                    setUploadComplete(true);
-                    setTimeout(() => setUploadComplete(false), 5000);
-                }
+                // Validation happens synchronously on the server during upload
+                // completion, so we can show success immediately.
+                setUploadComplete(true);
+                // Auto-reset for next upload after 5 seconds
+                setTimeout(() => {
+                    setUploadComplete(false);
+                    setFileStatuses([]);
+                    setUploadError(null);
+                    setValidationErrors([]);
+                    uppyRef.current?.cancelAll();
+                    batchSessionIdRef.current = generateBatchSessionId();
+                }, 5000);
 
                 onUploadComplete?.({ uploadId: tusUploadId || 'unknown', filesUploaded: successful.length });
             }
@@ -318,13 +187,8 @@ const UppyUploader: FC<UppyUploaderProps> = ({
 
         return () => {
             uppy.destroy();
-            // Cancel any ongoing polling
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-            isPollingRef.current = false;
         };
-    }, [dataType, rules, tusEndpoint, onUploadComplete, onUploadError, pollValidationStatus]);
+    }, [dataType, rules, tusEndpoint, onUploadComplete, onUploadError]);
 
     // Helper to update file statuses from Uppy state
     const updateFileStatuses = (uppy: Uppy<FileMeta, Record<string, unknown>>) => {
@@ -462,15 +326,13 @@ const UppyUploader: FC<UppyUploaderProps> = ({
         setFileStatuses([]);
         setUploadComplete(false);
         setUploadError(null);
-        setValidationStatus(null);
-        setIsValidating(false);
         setValidationErrors([]);
         // Generate new batch session ID for next upload
         batchSessionIdRef.current = generateBatchSessionId();
     }, []);
 
     const remainingFiles = rules.fileCount - fileStatuses.length;
-    const canUpload = fileStatuses.length === rules.fileCount && !isUploading && !uploadComplete && !isValidating;
+    const canUpload = fileStatuses.length === rules.fileCount && !isUploading && !uploadComplete;
 
     return (
         <div className="space-y-4">
@@ -491,21 +353,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                         >
                             <span className="material-symbols-outlined text-[18px]">close</span>
                         </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Validating Message */}
-            {isValidating && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-3 animate-pulse">
-                    <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-blue-600 animate-spin">refresh</span>
-                        <div>
-                            <p className="text-xs font-medium text-blue-800">Validating Files...</p>
-                            <p className="text-xs text-blue-600 mt-1">
-                                Checking file format and schema. This may take a moment.
-                            </p>
-                        </div>
                     </div>
                 </div>
             )}
@@ -716,11 +563,6 @@ const UppyUploader: FC<UppyUploaderProps> = ({
                         <span className="text-amber-600">
                             <span className="material-symbols-outlined text-[14px] align-middle mr-1">warning</span>
                             {rules.fileCount - fileStatuses.length} more file(s) required
-                        </span>
-                    ) : isValidating ? (
-                        <span className="text-blue-600">
-                            <span className="material-symbols-outlined text-[14px] align-middle mr-1 animate-spin">refresh</span>
-                            Validating files...
                         </span>
                     ) : validationErrors.length > 0 ? (
                         <span className="text-red-600">

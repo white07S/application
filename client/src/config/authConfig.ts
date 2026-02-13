@@ -48,7 +48,3 @@ export const apiConfig = {
   scopes: appConfig.auth.apiScopes,
 };
 
-// Graph API endpoint
-export const graphConfig = {
-  graphMeEndpoint: appConfig.auth.graphEndpoint,
-};
