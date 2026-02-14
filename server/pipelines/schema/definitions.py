@@ -1,9 +1,10 @@
 """Combined PostgreSQL schema definitions — imports from per-domain schema files.
 
 Each domain owns its own schema (SQLAlchemy Table objects):
-- server/pipelines/orgs/schema.py      (6 tables)
-- server/pipelines/risks/schema.py     (5 tables)
-- server/pipelines/controls/schema.py  (11 tables + FTS trigger)
+- server/pipelines/orgs/schema.py              (6 tables)
+- server/pipelines/risks/schema.py             (5 tables)
+- server/pipelines/controls/schema.py          (11 tables + FTS trigger)
+- server/pipelines/assessment_units/schema.py  (2 tables)
 
 The shared MetaData instance (from schema/base.py) is the single source of truth.
 Alembic auto-generates migrations from it.
@@ -45,9 +46,14 @@ from server.pipelines.controls.schema import (  # noqa: F401
     ai_controls_model_taxonomy,
     ai_controls_model_clean_text,
 )
+from server.pipelines.assessment_units.schema import (  # noqa: F401
+    AU_TABLES,
+    src_au_ref_unit,
+    src_au_ver_unit,
+)
 
 # All table names (for iteration, drop operations, etc.)
-ALL_TABLES = ORGS_TABLES + RISKS_TABLES + CONTROLS_TABLES
+ALL_TABLES = ORGS_TABLES + RISKS_TABLES + CONTROLS_TABLES + AU_TABLES
 
 # Context provider tables (used for startup verification)
-CONTEXT_PROVIDER_TABLES = ORGS_TABLES + RISKS_TABLES
+CONTEXT_PROVIDER_TABLES = ORGS_TABLES + RISKS_TABLES + AU_TABLES

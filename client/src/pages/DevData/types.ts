@@ -8,6 +8,7 @@ export interface ConnectionStatus {
 export interface TableInfo {
     name: string;
     category: string;
+    domain: string;
     record_count: number;
     is_relation: boolean;
 }
@@ -42,13 +43,37 @@ export interface TableCategory {
     tables: TableInfo[];
 }
 
+/** A domain section containing category sub-groups. */
+export interface DomainGroup {
+    id: string;
+    label: string;
+    icon: string;
+    totalRecords: number;
+    categories: TableCategory[];
+}
+
 // View modes for the DevData page
 export type ViewMode = 'overview' | 'postgres' | 'qdrant' | 'consistency';
 
-// Data types that can be viewed
-export type DataType = 'controls' | 'risks' | 'orgs';
+// Data domains
+export type DataType = 'all' | 'orgs' | 'risks' | 'controls' | 'system';
 
-/** Known category display metadata. Unknown categories get auto-generated labels. */
+/** Domain display metadata. */
+export const DOMAIN_META: Record<DataType, { label: string; icon: string }> = {
+    all: { label: 'All Tables', icon: 'apps' },
+    orgs: { label: 'Organizations', icon: 'account_tree' },
+    risks: { label: 'Risk Themes', icon: 'warning' },
+    controls: { label: 'Controls', icon: 'verified_user' },
+    system: { label: 'System', icon: 'settings' },
+};
+
+/** Domains that support Qdrant and Consistency tabs. */
+export const DOMAINS_WITH_QDRANT: DataType[] = ['all', 'controls'];
+
+/** Domain display order. */
+const DOMAIN_ORDER: DataType[] = ['orgs', 'risks', 'controls', 'system'];
+
+/** Known category display metadata. */
 const KNOWN_CATEGORIES: Record<string, { label: string; icon: string }> = {
     reference: { label: 'Reference', icon: 'menu_book' },
     main: { label: 'Main', icon: 'table_chart' },
@@ -58,15 +83,11 @@ const KNOWN_CATEGORIES: Record<string, { label: string; icon: string }> = {
     other: { label: 'Other', icon: 'folder' },
 };
 
-/**
- * Get display metadata for a category. Falls back to a readable label
- * derived from the category ID for unknown categories.
- */
+/** Get display metadata for a category. */
 export function getCategoryMeta(categoryId: string): { label: string; icon: string } {
     if (KNOWN_CATEGORIES[categoryId]) {
         return KNOWN_CATEGORIES[categoryId];
     }
-    // Auto-generate label from ID: "src_controls" -> "Src Controls"
     const label = categoryId
         .split('_')
         .map(w => w.charAt(0).toUpperCase() + w.slice(1))
@@ -75,7 +96,7 @@ export function getCategoryMeta(categoryId: string): { label: string; icon: stri
 }
 
 /**
- * Group tables by category, preserving server-provided category strings.
+ * Group tables by category within a flat list.
  * Returns categories in a stable order (known categories first, then alphabetical).
  */
 export function groupTablesByCategory(tables: TableInfo[]): TableCategory[] {
@@ -86,33 +107,55 @@ export function groupTablesByCategory(tables: TableInfo[]): TableCategory[] {
         groups[cat].push(table);
     }
 
-    // Known categories in display order
     const knownOrder = ['reference', 'main', 'relation', 'model', 'version', 'other'];
-
     const result: TableCategory[] = [];
     const seen = new Set<string>();
 
-    // Add known categories first (in order)
     for (const catId of knownOrder) {
         if (groups[catId]) {
-            result.push({
-                id: catId,
-                ...getCategoryMeta(catId),
-                tables: groups[catId],
-            });
+            result.push({ id: catId, ...getCategoryMeta(catId), tables: groups[catId] });
             seen.add(catId);
         }
     }
-
-    // Add any remaining categories alphabetically
     for (const catId of Object.keys(groups).sort()) {
         if (!seen.has(catId)) {
-            result.push({
-                id: catId,
-                ...getCategoryMeta(catId),
-                tables: groups[catId],
-            });
+            result.push({ id: catId, ...getCategoryMeta(catId), tables: groups[catId] });
         }
+    }
+    return result;
+}
+
+/**
+ * Group tables by domain, then by category within each domain.
+ * When selectedDomain != 'all', only returns tables for that domain.
+ */
+export function groupTablesByDomain(tables: TableInfo[], selectedDomain: DataType): DomainGroup[] {
+    // Filter by selected domain
+    const filtered = selectedDomain === 'all' ? tables : tables.filter(t => t.domain === selectedDomain);
+
+    // Group by domain
+    const byDomain: Record<string, TableInfo[]> = {};
+    for (const table of filtered) {
+        const d = table.domain || 'system';
+        if (!byDomain[d]) byDomain[d] = [];
+        byDomain[d].push(table);
+    }
+
+    const result: DomainGroup[] = [];
+    const order = selectedDomain === 'all' ? DOMAIN_ORDER : [selectedDomain];
+
+    for (const domainId of order) {
+        const domainTables = byDomain[domainId];
+        if (!domainTables || domainTables.length === 0) continue;
+        const meta = DOMAIN_META[domainId as DataType] || { label: domainId, icon: 'folder' };
+        const totalRecords = domainTables.reduce((sum, t) => sum + Math.max(0, t.record_count), 0);
+        result.push({
+            id: domainId,
+            label: meta.label,
+            icon: meta.icon,
+            totalRecords,
+            categories: groupTablesByCategory(domainTables),
+        });
     }
 
     return result;

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from server.config.postgres import get_engine
 from server.logging_config import get_logger
 from server.pipelines.schema.base import metadata
+import server.pipelines.schema.definitions as _schema_all  # noqa: F401 — ensure all tables register on metadata
 from server.pipelines.controls import qdrant_service
 from server.settings import get_settings
 
@@ -71,6 +72,19 @@ def categorize_table(name: str) -> str:
     return "other"
 
 
+def domain_of_table(name: str) -> str:
+    """Map a table name to its logical domain."""
+    if name.startswith("src_orgs_"):
+        return "orgs"
+    if name.startswith("src_risks_"):
+        return "risks"
+    if name.startswith("src_controls_") or name.startswith("ai_controls_"):
+        return "controls"
+    if name.startswith("src_au_"):
+        return "orgs"
+    return "system"
+
+
 async def get_connection_status() -> Dict[str, Any]:
     """Check PostgreSQL connection and return status."""
     settings = get_settings()
@@ -112,6 +126,7 @@ async def get_tables_with_counts() -> List[Dict[str, Any]]:
             tables.append({
                 "name": table_name,
                 "category": categorize_table(table_name),
+                "domain": domain_of_table(table_name),
                 "record_count": count,
                 "is_relation": table_name in _RELATION_TABLE_NAMES,
             })

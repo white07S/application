@@ -1,10 +1,11 @@
-"""Generate mock organisation-chart JSONL data into the context_providers directory.
+"""Generate mock organisation-chart and assessment-unit JSONL data.
 
-Produces three files::
+Produces four files::
 
     {CONTEXT_PROVIDERS_PATH}/organization/{today}/functions.jsonl
     {CONTEXT_PROVIDERS_PATH}/organization/{today}/locations.jsonl
     {CONTEXT_PROVIDERS_PATH}/organization/{today}/consolidated.jsonl
+    {CONTEXT_PROVIDERS_PATH}/assessment_unit/{today}/assessment_units.jsonl
 
 Reads CONTEXT_PROVIDERS_PATH from .env by default.
 
@@ -46,6 +47,7 @@ SEED = 42
 _FUNCTIONS_TOTAL_ROWS = 64907
 _LOCATIONS_TOTAL_ROWS = 21186
 _CONSOLIDATED_TOTAL_ROWS = 21570
+_ASSESSMENT_UNITS_DEFAULT_ROWS = 200
 
 # ---------------------------------------------------------------------------
 # Helper utilities
@@ -779,6 +781,86 @@ def iter_mock_consolidated(rng: random.Random) -> Iterator[dict[str, object]]:
 
 
 # ---------------------------------------------------------------------------
+# ASSESSMENT UNITS generator
+# ---------------------------------------------------------------------------
+
+def _extract_leaf_ids(jsonl_path: Path, id_field: str) -> list[str]:
+    """Extract IDs of leaf nodes (out_id is empty) from a JSONL file."""
+    ids: list[str] = []
+    with jsonl_path.open("rb") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                if b"orjson" in sys.modules:
+                    import orjson as _oj
+                    row = _oj.loads(line)
+                else:
+                    row = json.loads(line)
+            except Exception:
+                continue
+            out = row.get("out_id")
+            if isinstance(out, list) and len(out) == 0:
+                sid = str(row.get(id_field, "")).strip()
+                if sid:
+                    ids.append(sid)
+    return ids
+
+
+def generate_assessment_units_jsonl(
+    out_path: Path,
+    functions_path: Path,
+    locations_path: Path,
+    consolidated_path: Path,
+    *,
+    seed: int = SEED,
+    rows: int = _ASSESSMENT_UNITS_DEFAULT_ROWS,
+) -> int:
+    """Generate mock assessment-unit records from existing org leaf nodes.
+
+    Reads leaf-node IDs from the three org JSONL files and produces
+    *rows* assessment-unit records referencing valid function and
+    location/consolidated IDs.
+    """
+    rng = random.Random(seed)
+
+    func_ids = _extract_leaf_ids(functions_path, "id")
+    loc_ids = _extract_leaf_ids(locations_path, "id")
+    cons_ids = _extract_leaf_ids(consolidated_path, "location_id")
+
+    if not func_ids:
+        raise SystemExit("No function leaf IDs found — generate org data first")
+    if not loc_ids and not cons_ids:
+        raise SystemExit("No location/consolidated leaf IDs found — generate org data first")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with out_path.open("w", encoding="utf-8") as f:
+        for i in range(1, rows + 1):
+            func_id = rng.choice(func_ids)
+            if cons_ids and loc_ids:
+                loc_type = rng.choices(["location", "consolidated"], weights=[60, 40])[0]
+            elif loc_ids:
+                loc_type = "location"
+            else:
+                loc_type = "consolidated"
+            loc_id = rng.choice(loc_ids if loc_type == "location" else cons_ids)
+            status = rng.choices(["Active", "Inactive"], weights=[80, 20])[0]
+            row = {
+                "id": f"AU-{i:04d}",
+                "name": f"Mock Assessment Unit {i:04d}",
+                "status": status,
+                "function_id": func_id,
+                "location_id": loc_id,
+                "location_type": loc_type,
+            }
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            count += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
 # JSONL writer
 # ---------------------------------------------------------------------------
 
@@ -821,6 +903,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--date", type=str, default=None, help="Date folder name (default: today, YYYY-MM-DD).")
     parser.add_argument("--seed", type=int, default=SEED, help="RNG seed.")
+    parser.add_argument("--au-rows", type=int, default=_ASSESSMENT_UNITS_DEFAULT_ROWS, help="Number of assessment-unit rows to generate.")
     return parser.parse_args(argv)
 
 
@@ -865,6 +948,21 @@ def main(argv: Optional[List[str]] = None) -> None:
         desc="consolidated",
     )
     print(f"  consolidated.jsonl: {n:,} rows")
+
+    # --- Assessment units (reads the just-generated org files) ---
+    au_dir = ctx_path / "assessment_unit" / date_str
+    au_dir.mkdir(parents=True, exist_ok=True)
+    au_path = au_dir / "assessment_units.jsonl"
+    print(f"\nGenerating mock assessment units -> {au_dir}")
+    n = generate_assessment_units_jsonl(
+        au_path,
+        functions_path=out_dir / "functions.jsonl",
+        locations_path=out_dir / "locations.jsonl",
+        consolidated_path=out_dir / "consolidated.jsonl",
+        seed=seed + 4,
+        rows=args.au_rows,
+    )
+    print(f"  assessment_units.jsonl: {n:,} rows")
 
     print("Done.")
 

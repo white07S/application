@@ -15,6 +15,7 @@ class ConnectionStatus(BaseModel):
 class TableInfo(BaseModel):
     name: str
     category: str
+    domain: str
     record_count: int
     is_relation: bool
 

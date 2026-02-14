@@ -1,7 +1,8 @@
-"""Ingest org charts and risk themes into PostgreSQL.
+"""Ingest org charts, risk themes, and assessment units into PostgreSQL.
 
 Standalone CLI script for loading context-provider data (organization
-hierarchies and risk-theme taxonomies) from date-partitioned JSONL files.
+hierarchies, risk-theme taxonomies, and assessment units) from
+date-partitioned JSONL files.
 
 Supports delta detection: compares file contents against the current DB
 state and creates / closes / updates version records accordingly.
@@ -21,6 +22,9 @@ Directory layout expected under *context_providers_path*::
     risk_theme/
       2026-02-11/
         risk_theme.jsonl
+    assessment_unit/
+      2026-02-11/
+        assessment_units.jsonl
 """
 
 from __future__ import annotations
@@ -62,6 +66,10 @@ from server.pipelines.risks.schema import (  # noqa: E402
     src_risks_ref_theme,
     src_risks_ver_theme,
     src_risks_rel_taxonomy_theme,
+)
+from server.pipelines.assessment_units.schema import (  # noqa: E402
+    src_au_ref_unit,
+    src_au_ver_unit,
 )
 from server.settings import get_settings  # noqa: E402
 
@@ -135,13 +143,14 @@ class IngestionStats:
 
 @dataclass
 class AllStats:
-    """Container for per-tree and per-risk stats."""
+    """Container for per-tree, per-risk, and per-AU stats."""
 
     orgs_function: IngestionStats = field(default_factory=IngestionStats)
     orgs_location: IngestionStats = field(default_factory=IngestionStats)
     orgs_consolidated: IngestionStats = field(default_factory=IngestionStats)
     risks_taxonomy: IngestionStats = field(default_factory=IngestionStats)
     risks_theme: IngestionStats = field(default_factory=IngestionStats)
+    assessment_units: IngestionStats = field(default_factory=IngestionStats)
 
     def print_summary(self) -> None:
         sections = [
@@ -150,6 +159,7 @@ class AllStats:
             ("Orgs / consolidated", self.orgs_consolidated),
             ("Risks / taxonomy", self.risks_taxonomy),
             ("Risks / theme", self.risks_theme),
+            ("Assessment units", self.assessment_units),
         ]
         print("\n" + "=" * 72)
         print("  INGESTION SUMMARY")
@@ -1015,6 +1025,261 @@ async def ingest_risk_themes(
 
 
 # ---------------------------------------------------------------------------
+# Assessment unit ingestion
+# ---------------------------------------------------------------------------
+
+def _au_unit_id(source_id: str) -> str:
+    """Build the composite text PK for src_au_ref_unit."""
+    return f"au:{source_id}"
+
+
+async def _get_current_au_units(engine: AsyncEngine) -> Dict[str, Dict[str, Any]]:
+    """Return {source_id: {name, status, function_node_id, location_node_id, location_type}}
+    for all current assessment-unit versions (tx_to IS NULL).
+    """
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            select(
+                src_au_ref_unit.c.source_id,
+                src_au_ver_unit.c.name,
+                src_au_ver_unit.c.status,
+                src_au_ver_unit.c.function_node_id,
+                src_au_ver_unit.c.location_node_id,
+                src_au_ver_unit.c.location_type,
+            ).select_from(
+                src_au_ver_unit.join(
+                    src_au_ref_unit,
+                    src_au_ver_unit.c.ref_unit_id == src_au_ref_unit.c.unit_id,
+                )
+            ).where(src_au_ver_unit.c.tx_to.is_(None))
+        )
+        rows = result.fetchall()
+
+    result_map: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        sid = row.source_id
+        if sid:
+            result_map[sid] = {
+                "name": _normalise_str(row.name),
+                "status": _normalise_str(row.status),
+                "function_node_id": _normalise_str(row.function_node_id),
+                "location_node_id": _normalise_str(row.location_node_id),
+                "location_type": _normalise_str(row.location_type),
+            }
+    return result_map
+
+
+async def ingest_assessment_units(
+    engine: AsyncEngine,
+    date_dir: Path,
+    stats: IngestionStats,
+    dry_run: bool,
+) -> None:
+    """Ingest assessment_units.jsonl with delta detection."""
+    file_path = date_dir / "assessment_units.jsonl"
+    if not file_path.exists():
+        logger.warning("assessment_units.jsonl not found: {}", file_path)
+        return
+
+    tx_from = _date_dir_to_tx_from(date_dir)
+    tx_from_dt = _parse_iso(tx_from)
+    now = _now_iso()
+    now_dt = _parse_iso(now)
+
+    rows = load_jsonl(file_path)
+    logger.info("Loaded {} assessment-unit rows", len(rows))
+
+    # Build file-side lookup
+    file_units: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        sid = str(row.get("id", "")).strip()
+        if not sid:
+            continue
+        loc_type = _normalise_str(row.get("location_type"))
+        func_id = _normalise_str(row.get("function_id"))
+        loc_id = _normalise_str(row.get("location_id"))
+        if not loc_type or not func_id or not loc_id:
+            stats.add_error(f"Skipping AU row with missing fields: {sid}")
+            continue
+        file_units[sid] = {
+            "name": _normalise_str(row.get("name")),
+            "status": _normalise_str(row.get("status")),
+            "function_node_id": f"function:{func_id}",
+            "location_node_id": f"{loc_type}:{loc_id}",
+            "location_type": loc_type,
+        }
+
+    # Load DB current state
+    db_units = await _get_current_au_units(engine)
+
+    file_ids = set(file_units.keys())
+    db_ids = set(db_units.keys())
+    new_ids = file_ids - db_ids
+    disappeared_ids = db_ids - file_ids
+    common_ids = file_ids & db_ids
+
+    logger.info(
+        "Assessment units delta: new={}, disappeared={}, common={}",
+        len(new_ids), len(disappeared_ids), len(common_ids),
+    )
+
+    # ------------------------------------------------------------------
+    # NEW units
+    # ------------------------------------------------------------------
+    ref_inserts: List[Dict[str, Any]] = []
+    ver_inserts: List[Dict[str, Any]] = []
+
+    for sid in new_ids:
+        unit = file_units[sid]
+        uid = _au_unit_id(sid)
+        ref_inserts.append({"unit_id": uid, "source_id": sid})
+        ver_inserts.append({
+            "ref_unit_id": uid,
+            "name": unit["name"],
+            "status": unit["status"],
+            "function_node_id": unit["function_node_id"],
+            "location_node_id": unit["location_node_id"],
+            "location_type": unit["location_type"],
+            "tx_from": tx_from_dt,
+            "tx_to": None,
+        })
+        stats.new += 1
+
+    if ref_inserts or ver_inserts:
+        if dry_run:
+            logger.info(
+                "[DRY RUN] [assessment_units] ref_inserts={}, ver_inserts={}",
+                len(ref_inserts), len(ver_inserts),
+            )
+        else:
+            try:
+                async with engine.begin() as conn:
+                    if ref_inserts:
+                        for batch_start in range(0, len(ref_inserts), BATCH_SIZE):
+                            batch = ref_inserts[batch_start:batch_start + BATCH_SIZE]
+                            stmt = pg_insert(src_au_ref_unit).on_conflict_do_nothing(
+                                index_elements=["unit_id"]
+                            )
+                            await conn.execute(stmt, batch)
+                    if ver_inserts:
+                        for batch_start in range(0, len(ver_inserts), BATCH_SIZE):
+                            batch = ver_inserts[batch_start:batch_start + BATCH_SIZE]
+                            await conn.execute(insert(src_au_ver_unit), batch)
+            except Exception as exc:
+                msg = f"[assessment_units] New batch failed: {exc}"
+                logger.error(msg)
+                stats.add_error(msg)
+
+    # ------------------------------------------------------------------
+    # DISAPPEARED units — close current ver, create Inactive ver
+    # ------------------------------------------------------------------
+    ver_close_stmts: List[Any] = []
+    ver_inserts_dis: List[Dict[str, Any]] = []
+
+    for sid in disappeared_ids:
+        uid = _au_unit_id(sid)
+        db_unit = db_units[sid]
+
+        ver_close_stmts.append(
+            update(src_au_ver_unit)
+            .where(and_(
+                src_au_ver_unit.c.ref_unit_id == uid,
+                src_au_ver_unit.c.tx_to.is_(None),
+            ))
+            .values(tx_to=now_dt)
+        )
+        ver_inserts_dis.append({
+            "ref_unit_id": uid,
+            "name": db_unit["name"],
+            "status": "Inactive",
+            "function_node_id": db_unit["function_node_id"],
+            "location_node_id": db_unit["location_node_id"],
+            "location_type": db_unit["location_type"],
+            "tx_from": now_dt,
+            "tx_to": None,
+        })
+        stats.disappeared += 1
+
+    if ver_close_stmts or ver_inserts_dis:
+        if dry_run:
+            logger.info(
+                "[DRY RUN] [assessment_units] disappeared: ver_closes={}, ver_inserts={}",
+                len(ver_close_stmts), len(ver_inserts_dis),
+            )
+        else:
+            try:
+                async with engine.begin() as conn:
+                    for close_stmt in ver_close_stmts:
+                        await conn.execute(close_stmt)
+                    if ver_inserts_dis:
+                        await conn.execute(insert(src_au_ver_unit), ver_inserts_dis)
+            except Exception as exc:
+                msg = f"[assessment_units] Disappeared batch failed: {exc}"
+                logger.error(msg)
+                stats.add_error(msg)
+
+    # ------------------------------------------------------------------
+    # EXISTING — compare and update if changed
+    # ------------------------------------------------------------------
+    ver_close_stmts_chg: List[Any] = []
+    ver_inserts_chg: List[Dict[str, Any]] = []
+
+    for sid in common_ids:
+        file_unit = file_units[sid]
+        db_unit = db_units[sid]
+
+        changed = (
+            file_unit["name"] != db_unit.get("name")
+            or file_unit["status"] != db_unit.get("status")
+            or file_unit["function_node_id"] != db_unit.get("function_node_id")
+            or file_unit["location_node_id"] != db_unit.get("location_node_id")
+            or file_unit["location_type"] != db_unit.get("location_type")
+        )
+        if not changed:
+            stats.unchanged += 1
+            continue
+
+        uid = _au_unit_id(sid)
+        ver_close_stmts_chg.append(
+            update(src_au_ver_unit)
+            .where(and_(
+                src_au_ver_unit.c.ref_unit_id == uid,
+                src_au_ver_unit.c.tx_to.is_(None),
+            ))
+            .values(tx_to=now_dt)
+        )
+        ver_inserts_chg.append({
+            "ref_unit_id": uid,
+            "name": file_unit["name"],
+            "status": file_unit["status"],
+            "function_node_id": file_unit["function_node_id"],
+            "location_node_id": file_unit["location_node_id"],
+            "location_type": file_unit["location_type"],
+            "tx_from": now_dt,
+            "tx_to": None,
+        })
+        stats.changed += 1
+
+    if ver_close_stmts_chg or ver_inserts_chg:
+        if dry_run:
+            logger.info(
+                "[DRY RUN] [assessment_units] changed: ver_closes={}, ver_inserts={}",
+                len(ver_close_stmts_chg), len(ver_inserts_chg),
+            )
+        else:
+            try:
+                async with engine.begin() as conn:
+                    for close_stmt in ver_close_stmts_chg:
+                        await conn.execute(close_stmt)
+                    if ver_inserts_chg:
+                        await conn.execute(insert(src_au_ver_unit), ver_inserts_chg)
+            except Exception as exc:
+                msg = f"[assessment_units] Changed batch failed: {exc}"
+                logger.error(msg)
+                stats.add_error(msg)
+
+
+# ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
@@ -1029,14 +1294,16 @@ async def run_ingestion(
     # ----- Resolve directory structure -----
     org_base = context_providers_path / "organization"
     risk_base = context_providers_path / "risk_theme"
+    au_base = context_providers_path / "assessment_unit"
 
     org_date_dir = _find_latest_date_dir(org_base)
     risk_date_dir = _find_latest_date_dir(risk_base)
+    au_date_dir = _find_latest_date_dir(au_base)
 
-    if org_date_dir is None and risk_date_dir is None:
+    if org_date_dir is None and risk_date_dir is None and au_date_dir is None:
         logger.error(
-            "No date-partitioned directories found under {} or {}",
-            org_base, risk_base,
+            "No date-partitioned directories found under {}, {}, or {}",
+            org_base, risk_base, au_base,
         )
         raise SystemExit(1)
 
@@ -1044,6 +1311,8 @@ async def run_ingestion(
         logger.info("Organization data directory: {}", org_date_dir)
     if risk_date_dir:
         logger.info("Risk theme data directory:    {}", risk_date_dir)
+    if au_date_dir:
+        logger.info("Assessment unit data directory: {}", au_date_dir)
 
     # ----- Init PostgreSQL engine -----
     settings = get_settings()
@@ -1088,6 +1357,19 @@ async def run_ingestion(
                 all_stats.risks_taxonomy.add_error(str(exc))
                 all_stats.risks_theme.add_error(str(exc))
 
+        # ----- Assessment units -----
+        if au_date_dir:
+            logger.info("--- Ingesting assessment units ---")
+            try:
+                await ingest_assessment_units(
+                    engine, au_date_dir,
+                    all_stats.assessment_units,
+                    dry_run,
+                )
+            except Exception as exc:
+                logger.error("Failed ingesting assessment units: {}", exc, exc_info=True)
+                all_stats.assessment_units.add_error(str(exc))
+
     finally:
         await dispose_engine()
 
@@ -1101,14 +1383,14 @@ async def run_ingestion(
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m server.scripts.ingest_context_providers",
-        description="Ingest org charts and risk themes into PostgreSQL.",
+        description="Ingest org charts, risk themes, and assessment units into PostgreSQL.",
     )
     parser.add_argument(
         "--context-providers-path",
         type=Path,
         default=None,
-        help="Root directory containing organization/ and risk_theme/ subdirectories. "
-             "Defaults to CONTEXT_PROVIDERS_PATH from .env.",
+        help="Root directory containing organization/, risk_theme/, and assessment_unit/ "
+             "subdirectories. Defaults to CONTEXT_PROVIDERS_PATH from .env.",
     )
     parser.add_argument(
         "--postgres-url",
@@ -1180,7 +1462,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         getattr(all_stats, attr).errors
         for attr in (
             "orgs_function", "orgs_location", "orgs_consolidated",
-            "risks_taxonomy", "risks_theme",
+            "risks_taxonomy", "risks_theme", "assessment_units",
         )
     )
     if total_errors > 0:

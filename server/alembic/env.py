@@ -12,6 +12,7 @@ from server.settings import get_settings
 from server.pipelines.orgs.schema import *  # noqa: F401,F403
 from server.pipelines.risks.schema import *  # noqa: F401,F403
 from server.pipelines.controls.schema import *  # noqa: F401,F403
+from server.pipelines.assessment_units.schema import *  # noqa: F401,F403
 from server.jobs.models import *  # noqa: F401,F403
 
 from server.pipelines.schema.base import metadata as target_metadata

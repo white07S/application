@@ -7,6 +7,7 @@
     "@azure/msal-react": "^5.0.2",
     "@mdx-js/mdx": "^3.0.0",
     "@mdx-js/react": "^3.0.0",
+    "@saehrimnir/druidjs": "^0.7.3",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
@@ -19,7 +20,9 @@
     "@uppy/dashboard": "^5.1.0",
     "@uppy/react": "^5.1.1",
     "@uppy/tus": "^5.1.0",
+    "chart.js": "^4.5.1",
     "flexsearch": "^0.7.31",
+    "force-graph": "^1.51.1",
     "katex": "^0.16.9",
     "lucide-react": "^0.563.0",
     "mermaid": "^10.6.0",
@@ -32,7 +35,8 @@
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.11"
   },
   "scripts": {
     "start": "react-scripts start",
