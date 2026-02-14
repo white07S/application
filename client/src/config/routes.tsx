@@ -6,6 +6,7 @@ import DocsPage from '../pages/Docs/DocsPage';
 import Pipelines from '../pages/Pipelines/Pipelines';
 import Processing from '../pages/Pipelines/Processing';
 import DevDataLayout from '../pages/DevData/DevDataLayout';
+import ExplorerLayout from '../pages/Explorer/ExplorerLayout';
 
 export interface RouteConfig {
     path: string;
@@ -35,11 +36,32 @@ export const routes: RouteConfig[] = [
         protected: false,
     },
     {
-        path: "/dashboard",
-        component: () => <MockPage title="Dashboard" />,
-        name: "Dashboard",
+        path: "/explorer",
+        component: ExplorerLayout,
+        name: "Explorer",
         protected: true,
-        accessRight: "hasDashboardAccess",
+        accessRight: "hasExplorerAccess",
+    },
+    {
+        path: "/explorer/controls",
+        component: ExplorerLayout,
+        name: "Explorer - Controls",
+        protected: true,
+        accessRight: "hasExplorerAccess",
+    },
+    {
+        path: "/explorer/events",
+        component: ExplorerLayout,
+        name: "Explorer - Events",
+        protected: true,
+        accessRight: "hasExplorerAccess",
+    },
+    {
+        path: "/explorer/issues",
+        component: ExplorerLayout,
+        name: "Explorer - Issues",
+        protected: true,
+        accessRight: "hasExplorerAccess",
     },
     {
         path: "/chat",

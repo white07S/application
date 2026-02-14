@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     client_secret: str = Field(description="Azure AD Client Secret")
     graph_scopes: str = Field(description="Comma-separated Graph scopes")
     group_chat_access: str = Field(description="Group ID for chat access")
-    group_dashboard_access: str = Field(description="Group ID for dashboard access")
+    group_explorer_access: str = Field(description="Group ID for explorer access")
     group_pipelines_ingestion_access: str = Field(description="Group ID for ingestion")
     group_pipelines_admin_access: str = Field(description="Group ID for admin access")
     group_dev_data_access: str = Field(description="Group ID for dev data access")
@@ -163,7 +163,7 @@ CLIENT_SECRET = settings.client_secret
 AUTHORITY = settings.authority
 GRAPH_SCOPES = settings.graph_scopes_list
 GROUP_CHAT_ACCESS = settings.group_chat_access
-GROUP_DASHBOARD_ACCESS = settings.group_dashboard_access
+GROUP_EXPLORER_ACCESS = settings.group_explorer_access
 GROUP_PIPELINES_INGESTION_ACCESS = settings.group_pipelines_ingestion_access
 GROUP_PIPELINES_ADMIN_ACCESS = settings.group_pipelines_admin_access
 GROUP_DEV_DATA_ACCESS = settings.group_dev_data_access

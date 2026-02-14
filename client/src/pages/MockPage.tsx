@@ -14,7 +14,7 @@ const MockPage: React.FC<MockPageProps> = ({ title = "Coming Soon" }) => {
                 <p className="text-text-sub mb-6">This feature is currently under development.</p>
                 <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-border-light rounded hover:bg-surface-hover text-sm font-medium text-text-main transition-colors">
                     <span className="material-symbols-outlined text-[16px]">home</span>
-                    Back to Dashboard
+                    Back to Home
                 </Link>
             </div>
         </div>

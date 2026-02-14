@@ -9,7 +9,7 @@ description: Welcome to NFR Connect Documentation
 Welcome to **NFR Connect** - your comprehensive platform for Non-Financial Risk intelligence and management.
 
 :::info Prerequisites
-This documentation is publicly available and does not require authentication. For access to the Dashboard and Chat features, please sign in to the main application.
+This documentation is publicly available and does not require authentication. For access to the Explorer and Chat features, please sign in to the main application.
 :::
 
 ## What is NFR Connect?
@@ -25,7 +25,7 @@ NFR Connect is an enterprise-grade platform designed to transform how organizati
 
 | Component | Description | Access |
 |-----------|-------------|--------|
-| Dashboard | Visual analytics and KPI monitoring | Requires authentication |
+| Explorer | Visual analytics and KPI monitoring | Requires authentication |
 | Chat | Agentic AI assistant for risk queries | Requires authentication |
 | Glossary | NFR terminology and definitions | Requires authentication |
 | Documentation | Technical guides and API reference | Public |

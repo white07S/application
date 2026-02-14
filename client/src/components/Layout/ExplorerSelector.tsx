@@ -1,32 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-interface DashboardOption {
+interface ExplorerOption {
     id: string;
     label: string;
     icon: string;
     path: string;
 }
 
-const dashboardOptions: DashboardOption[] = [
-    { id: 'controls', label: 'Controls', icon: 'shield', path: '/dashboard' },
-    { id: 'events', label: 'Events', icon: 'event_note', path: '/dashboard' },
-    { id: 'issues', label: 'Issues', icon: 'report_problem', path: '/dashboard' },
+const explorerOptions: ExplorerOption[] = [
+    { id: 'controls', label: 'Controls', icon: 'shield', path: '/explorer/controls' },
+    { id: 'events', label: 'Events', icon: 'event_note', path: '/explorer/events' },
+    { id: 'issues', label: 'Issues', icon: 'report_problem', path: '/explorer/issues' },
 ];
 
-interface DashboardSelectorProps {
+interface ExplorerSelectorProps {
     disabled?: boolean;
 }
 
-export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ disabled = false }) => {
+export const ExplorerSelector: React.FC<ExplorerSelectorProps> = ({ disabled = false }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isCompactMode, setIsCompactMode] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isActive = location.pathname.startsWith('/dashboard');
-    const currentOption = dashboardOptions.find(opt => location.pathname.startsWith(opt.path));
+    const isActive = location.pathname.startsWith('/explorer');
+    const currentOption = explorerOptions.find(opt => location.pathname.startsWith(opt.path));
 
     // Check screen width for compact mode (icons only on medium screens)
     useEffect(() => {
@@ -69,21 +69,21 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ disabled =
         return () => document.removeEventListener('keydown', handleEscape);
     }, [isExpanded]);
 
-    const handleSelect = (option: DashboardOption) => {
+    const handleSelect = (option: ExplorerOption) => {
         setIsExpanded(false);
         navigate(option.path);
     };
 
-    const handleDashboardClick = () => {
+    const handleExplorerClick = () => {
         if (disabled) return;
         setIsExpanded(!isExpanded);
     };
 
     return (
         <div ref={containerRef} className="flex items-center">
-            {/* Dashboard button - always visible */}
+            {/* Explorer button - always visible */}
             <button
-                onClick={handleDashboardClick}
+                onClick={handleExplorerClick}
                 className={`
                     flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors group
                     ${isActive ? 'text-primary bg-surface-light' : 'text-text-sub hover:text-text-main hover:bg-surface-light'}
@@ -91,9 +91,9 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ disabled =
                 `}
             >
                 <span className={`material-symbols-outlined text-[16px] ${isActive ? 'text-primary' : 'text-text-sub group-hover:text-primary'}`}>
-                    dashboard
+                    {currentOption ? currentOption.icon : 'explore'}
                 </span>
-                Dashboard
+                {currentOption ? currentOption.label : 'Explorer'}
                 <span
                     className={`material-symbols-outlined text-[12px] text-text-sub transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                 >
@@ -110,7 +110,7 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ disabled =
             >
                 {/* Options container - elevated with shadow to distinguish from header */}
                 <div className="flex items-center bg-white border border-border-light shadow-md ml-1 px-1 py-0.5">
-                    {dashboardOptions.map((option, index) => (
+                    {explorerOptions.map((option, index) => (
                         <React.Fragment key={option.id}>
                             {index > 0 && (
                                 <div className="w-px h-4 bg-border-light mx-0.5" />

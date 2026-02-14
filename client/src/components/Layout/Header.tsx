@@ -4,7 +4,7 @@ import { Menu, X } from 'lucide-react';
 import { appConfig } from '../../config/appConfig';
 import { useAuth } from '../../auth/useAuth';
 import { useAccessControl } from '../../context/AccessControlContext';
-import { DashboardSelector } from './DashboardSelector';
+import { ExplorerSelector } from './ExplorerSelector';
 
 const Header = () => {
     const location = useLocation();
@@ -99,8 +99,8 @@ const Header = () => {
                         </span>
                         Docs
                     </Link>
-                    {/* Animated Dashboard Selector - expands horizontally */}
-                    <DashboardSelector disabled={!isAuthenticated} />
+                    {/* Animated Explorer Selector - expands horizontally */}
+                    <ExplorerSelector disabled={!isAuthenticated} />
                     <Link
                         to="/chat"
                         className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors group ${location.pathname === '/chat'
@@ -252,49 +252,49 @@ const Header = () => {
                             </span>
                             Docs
                         </Link>
-                        {/* Dashboard with sub-options */}
+                        {/* Explorer with sub-options */}
                         <div className={`${!isAuthenticated ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
                             <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-text-sub">
-                                <span className="material-symbols-outlined">dashboard</span>
-                                Dashboard
+                                <span className="material-symbols-outlined">explore</span>
+                                Explorer
                                 {!isAuthenticated && <span className="text-[10px] text-text-sub ml-auto">(Sign in required)</span>}
                             </div>
                             <div className="pl-8 flex flex-col gap-0.5">
                                 <Link
-                                    to="/dashboard/controls"
-                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/controls')
+                                    to="/explorer/controls"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/explorer/controls')
                                         ? 'text-primary bg-surface-light'
                                         : 'text-text-sub hover:text-text-main hover:bg-surface-light'
                                         }`}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
-                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/controls') ? 'text-primary' : 'text-text-sub'}`}>
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/explorer/controls') ? 'text-primary' : 'text-text-sub'}`}>
                                         shield
                                     </span>
                                     Controls
                                 </Link>
                                 <Link
-                                    to="/dashboard/events"
-                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/events')
+                                    to="/explorer/events"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/explorer/events')
                                         ? 'text-primary bg-surface-light'
                                         : 'text-text-sub hover:text-text-main hover:bg-surface-light'
                                         }`}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
-                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/events') ? 'text-primary' : 'text-text-sub'}`}>
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/explorer/events') ? 'text-primary' : 'text-text-sub'}`}>
                                         event_note
                                     </span>
                                     Events
                                 </Link>
                                 <Link
-                                    to="/dashboard/issues"
-                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/dashboard/issues')
+                                    to="/explorer/issues"
+                                    className={`flex items-center gap-2 px-3 py-2 min-h-[40px] text-sm font-medium rounded transition-colors ${location.pathname.startsWith('/explorer/issues')
                                         ? 'text-primary bg-surface-light'
                                         : 'text-text-sub hover:text-text-main hover:bg-surface-light'
                                         }`}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
-                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/dashboard/issues') ? 'text-primary' : 'text-text-sub'}`}>
+                                    <span className={`material-symbols-outlined text-[18px] ${location.pathname.startsWith('/explorer/issues') ? 'text-primary' : 'text-text-sub'}`}>
                                         report_problem
                                     </span>
                                     Issues

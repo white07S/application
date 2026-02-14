@@ -37,7 +37,7 @@ NFR Connect implements role-based access control through Azure AD groups:
 | Access Right | Azure AD Group | Features |
 |--------------|----------------|----------|
 | `hasChatAccess` | NFR-Chat-Users | Agentic chat interface |
-| `hasDashboardAccess` | NFR-Dashboard-Users | Analytics dashboard |
+| `hasExplorerAccess` | NFR-Explorer-Users | Analytics explorer |
 
 ## Configuration
 
@@ -75,7 +75,7 @@ async def check_access(token: str = Depends(oauth2_scheme)):
 
     return {
         "hasChatAccess": CHAT_GROUP_ID in groups,
-        "hasDashboardAccess": DASHBOARD_GROUP_ID in groups,
+        "hasExplorerAccess": EXPLORER_GROUP_ID in groups,
         "user": get_user_display_name(token)
     }
 ```

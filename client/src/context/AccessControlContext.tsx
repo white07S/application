@@ -6,7 +6,7 @@ import { appConfig } from "../config/appConfig";
 
 interface AccessState {
     hasChatAccess: boolean;
-    hasDashboardAccess: boolean;
+    hasExplorerAccess: boolean;
     hasPipelinesIngestionAccess: boolean;
     hasDevDataAccess: boolean;
     user: string;
@@ -16,7 +16,7 @@ interface AccessState {
 
 const AccessControlContext = createContext<AccessState>({
     hasChatAccess: false,
-    hasDashboardAccess: false,
+    hasExplorerAccess: false,
     hasPipelinesIngestionAccess: false,
     hasDevDataAccess: false,
     user: "",
@@ -33,7 +33,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
 
     const [accessState, setAccessState] = useState<AccessState>({
         hasChatAccess: false,
-        hasDashboardAccess: false,
+        hasExplorerAccess: false,
         hasPipelinesIngestionAccess: false,
         hasDevDataAccess: false,
         user: "",
@@ -139,7 +139,7 @@ export const AccessControlProvider = ({ children }: { children: ReactNode }) => 
                 if (!cancelled) {
                     setAccessState({
                         hasChatAccess: data.hasChatAccess,
-                        hasDashboardAccess: data.hasDashboardAccess,
+                        hasExplorerAccess: data.hasExplorerAccess,
                         hasPipelinesIngestionAccess: data.hasPipelinesIngestionAccess,
                         hasDevDataAccess: data.hasDevDataAccess,
                         user: data.user,

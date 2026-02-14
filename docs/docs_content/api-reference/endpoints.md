@@ -40,7 +40,7 @@ Returns the current user's access rights.
 ```json
 {
   "hasChatAccess": true,
-  "hasDashboardAccess": true,
+  "hasExplorerAccess": true,
   "user": "John Doe"
 }
 ```

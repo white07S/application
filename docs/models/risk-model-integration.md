@@ -14,7 +14,7 @@ The `v1.2` schema will be deprecated on Dec 31, 2024. Please migrate to schema `
 
 ## Overview
 
-The integration process allows risk quant teams to push model outputs directly into the central operational risk database. This ensures that all [Capital at Risk (CaR)](/core-concepts/impact-analysis#capital-at-risk-car) calculations are synchronized across the dashboard in real-time.
+The integration process allows risk quant teams to push model outputs directly into the central operational risk database. This ensures that all [Capital at Risk (CaR)](/core-concepts/impact-analysis#capital-at-risk-car) calculations are synchronized across the explorer in real-time.
 
 Models are identified by a unique URN and must be registered in the Model Inventory before data ingestion can occur.
 

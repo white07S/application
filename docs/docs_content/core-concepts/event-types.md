@@ -51,7 +51,7 @@ Events classified as **High** or **Critical** trigger automatic escalation to th
 
 Events can be ingested through multiple channels:
 
-1. **Manual Entry** - Through the NFR Connect Dashboard
+1. **Manual Entry** - Through the NFR Connect Explorer
 2. **API Integration** - Programmatic submission via REST API
 3. **Automated Detection** - From monitoring systems and log analysis
 

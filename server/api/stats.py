@@ -1,4 +1,4 @@
-"""Dashboard statistics endpoints (public, no auth required)."""
+"""Explorer statistics endpoints (public, no auth required)."""
 
 from datetime import datetime, timezone
 
@@ -23,7 +23,7 @@ class ControlsStats(BaseModel):
 
 @router.get("/controls", response_model=ControlsStats)
 async def get_controls_stats(db: AsyncSession = Depends(get_jobs_db)):
-    """Return real-time controls statistics for the dashboard."""
+    """Return real-time controls statistics for the explorer."""
     total_controls = 0
     ingested_today = 0
     last_sync: str | None = None

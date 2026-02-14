@@ -68,5 +68,5 @@ The what-if analysis tool allows real-time exploration:
 | Credit Spread | 0 to +500 bps | 50 bps |
 
 <Tip title="Interactive Mode">
-Use the Dashboard's interactive scenario builder for real-time what-if analysis with instant visual feedback.
+Use the Explorer's interactive scenario builder for real-time what-if analysis with instant visual feedback.
 </Tip>

@@ -1,6 +1,9 @@
 import asyncio
+import hashlib
+import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
 import httpx
 import msal
@@ -14,6 +17,21 @@ logger = get_logger(name=__name__)
 
 # Thread pool for blocking MSAL operations
 _msal_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="msal")
+_GRAPH_TIMEOUT = httpx.Timeout(6.0, connect=3.0)
+_ACCESS_CACHE_TTL_SECONDS = 120.0
+_ACCESS_CACHE_STALE_GRACE_SECONDS = 600.0
+_access_cache_lock = asyncio.Lock()
+_access_fetch_locks: Dict[str, asyncio.Lock] = {}
+
+
+@dataclass
+class _AccessCacheEntry:
+    access: AccessResponse
+    expires_at: float
+    stale_expires_at: float
+
+
+_access_cache: Dict[str, _AccessCacheEntry] = {}
 
 cca = msal.ConfidentialClientApplication(
     settings.CLIENT_ID,
@@ -44,80 +62,176 @@ async def _acquire_graph_token(user_token: str) -> str:
 
 
 async def _fetch_user_groups(client: httpx.AsyncClient, graph_token: str) -> List[str]:
-    response = await client.get(
-        "https://graph.microsoft.com/v1.0/me/transitiveMemberOf?$select=id",
-        headers={"Authorization": f"Bearer {graph_token}"},
-    )
+    try:
+        response = await client.get(
+            "https://graph.microsoft.com/v1.0/me/transitiveMemberOf?$select=id",
+            headers={"Authorization": f"Bearer {graph_token}"},
+        )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Timed out fetching user groups from Microsoft Graph") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Microsoft Graph is unavailable") from exc
 
     if response.status_code != 200:
-        logger.error("Graph API Error (groups): %s", response.text)
-        raise HTTPException(status_code=500, detail="Failed to fetch user groups")
+        logger.error("Graph API Error (groups): {}", response.text)
+        if response.status_code in {401, 403}:
+            raise HTTPException(status_code=401, detail="Could not authorize with Microsoft Graph")
+        raise HTTPException(status_code=502, detail="Failed to fetch user groups from Microsoft Graph")
 
     groups_data = response.json()
     return [g["id"] for g in groups_data.get("value", [])]
 
 
 async def _fetch_user_profile(client: httpx.AsyncClient, graph_token: str) -> Tuple[str, str]:
-    response = await client.get(
-        "https://graph.microsoft.com/v1.0/me",
-        headers={"Authorization": f"Bearer {graph_token}"},
-    )
+    try:
+        response = await client.get(
+            "https://graph.microsoft.com/v1.0/me",
+            headers={"Authorization": f"Bearer {graph_token}"},
+        )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Timed out fetching user profile from Microsoft Graph") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Microsoft Graph is unavailable") from exc
 
     if response.status_code != 200:
-        logger.error("Graph API Error (profile): %s", response.text)
-        raise HTTPException(status_code=500, detail="Failed to fetch user profile")
+        logger.error("Graph API Error (profile): {}", response.text)
+        if response.status_code in {401, 403}:
+            raise HTTPException(status_code=401, detail="Could not authorize with Microsoft Graph")
+        raise HTTPException(status_code=502, detail="Failed to fetch user profile from Microsoft Graph")
 
     profile = response.json()
     return profile.get("displayName", "User"), profile.get("id", "Unknown")
 
 
-async def get_access_control(user_token: str) -> AccessResponse:
-    graph_token = await _acquire_graph_token(user_token)
+def _cache_key_for_token(user_token: str) -> str:
+    return hashlib.sha256(user_token.encode("utf-8")).hexdigest()
 
-    async with httpx.AsyncClient() as client:
-        group_ids = await _fetch_user_groups(client, graph_token)
-        user_name, user_id = await _fetch_user_profile(client, graph_token)
 
+def _build_access_response(*, group_ids: List[str], user_name: str) -> AccessResponse:
     has_chat = settings.GROUP_CHAT_ACCESS in group_ids
-    has_dashboard = settings.GROUP_DASHBOARD_ACCESS in group_ids
+    has_explorer = settings.GROUP_EXPLORER_ACCESS in group_ids
     has_pipelines_ingestion = settings.GROUP_PIPELINES_INGESTION_ACCESS in group_ids
     has_pipelines_admin = settings.GROUP_PIPELINES_ADMIN_ACCESS in group_ids
     has_dev_data = settings.GROUP_DEV_DATA_ACCESS in group_ids
 
-    logger.info("--- Access Check for User: {} ({}) ---", user_name, user_id)
-    logger.info("User Groups ({}): {}", len(group_ids), group_ids)
-    logger.info(
-        "Checking Chat Access (Required: {}): {}",
-        settings.GROUP_CHAT_ACCESS,
-        "GRANTED" if has_chat else "DENIED",
-    )
-    logger.info(
-        "Checking Dashboard Access (Required: {}): {}",
-        settings.GROUP_DASHBOARD_ACCESS,
-        "GRANTED" if has_dashboard else "DENIED",
-    )
-    logger.info(
-        "Checking Pipelines Ingestion Access (Required: {}): {}",
-        settings.GROUP_PIPELINES_INGESTION_ACCESS,
-        "GRANTED" if has_pipelines_ingestion else "DENIED",
-    )
-    logger.info(
-        "Checking Pipelines Admin Access (Required: {}): {}",
-        settings.GROUP_PIPELINES_ADMIN_ACCESS,
-        "GRANTED" if has_pipelines_admin else "DENIED",
-    )
-    logger.info(
-        "Checking Dev Data Access (Required: {}): {}",
-        settings.GROUP_DEV_DATA_ACCESS,
-        "GRANTED" if has_dev_data else "DENIED",
-    )
-    logger.info("---------------------------------------------------")
-
     return AccessResponse(
         hasChatAccess=has_chat,
-        hasDashboardAccess=has_dashboard,
+        hasExplorerAccess=has_explorer,
         hasPipelinesIngestionAccess=has_pipelines_ingestion,
         hasPipelinesAdminAccess=has_pipelines_admin,
         hasDevDataAccess=has_dev_data,
         user=user_name,
     )
+
+
+async def _get_cached_access(cache_key: str) -> AccessResponse | None:
+    now = time.monotonic()
+    async with _access_cache_lock:
+        entry = _access_cache.get(cache_key)
+        if entry and entry.expires_at > now:
+            return entry.access
+    return None
+
+
+async def _get_stale_cached_access(cache_key: str) -> AccessResponse | None:
+    now = time.monotonic()
+    async with _access_cache_lock:
+        entry = _access_cache.get(cache_key)
+        if entry and entry.stale_expires_at > now:
+            return entry.access
+    return None
+
+
+async def _store_cached_access(cache_key: str, access: AccessResponse) -> None:
+    now = time.monotonic()
+    entry = _AccessCacheEntry(
+        access=access,
+        expires_at=now + _ACCESS_CACHE_TTL_SECONDS,
+        stale_expires_at=now + _ACCESS_CACHE_TTL_SECONDS + _ACCESS_CACHE_STALE_GRACE_SECONDS,
+    )
+    async with _access_cache_lock:
+        _access_cache[cache_key] = entry
+        expired_keys = [
+            key
+            for key, value in _access_cache.items()
+            if value.stale_expires_at <= now
+        ]
+        for key in expired_keys:
+            _access_cache.pop(key, None)
+            _access_fetch_locks.pop(key, None)
+
+
+async def _get_fetch_lock(cache_key: str) -> asyncio.Lock:
+    async with _access_cache_lock:
+        lock = _access_fetch_locks.get(cache_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _access_fetch_locks[cache_key] = lock
+        return lock
+
+
+async def get_access_control(user_token: str) -> AccessResponse:
+    cache_key = _cache_key_for_token(user_token)
+    cached = await _get_cached_access(cache_key)
+    if cached is not None:
+        return cached
+
+    fetch_lock = await _get_fetch_lock(cache_key)
+    async with fetch_lock:
+        # Another request may have populated the cache while we were waiting.
+        cached_after_wait = await _get_cached_access(cache_key)
+        if cached_after_wait is not None:
+            return cached_after_wait
+
+        graph_token = await _acquire_graph_token(user_token)
+
+        try:
+            async with httpx.AsyncClient(timeout=_GRAPH_TIMEOUT) as client:
+                group_ids = await _fetch_user_groups(client, graph_token)
+                user_name, user_id = await _fetch_user_profile(client, graph_token)
+        except HTTPException as exc:
+            # Degrade gracefully for transient IdP outages by using stale cache when available.
+            if exc.status_code in {502, 503, 504}:
+                stale = await _get_stale_cached_access(cache_key)
+                if stale is not None:
+                    logger.warning(
+                        "Using stale access cache for token hash {} due to Graph error {}",
+                        cache_key[:8],
+                        exc.status_code,
+                    )
+                    return stale
+            raise
+
+        access = _build_access_response(group_ids=group_ids, user_name=user_name)
+
+        logger.info("--- Access Check for User: {} ({}) ---", user_name, user_id)
+        logger.info("User Groups ({}): {}", len(group_ids), group_ids)
+        logger.info(
+            "Checking Chat Access (Required: {}): {}",
+            settings.GROUP_CHAT_ACCESS,
+            "GRANTED" if access.hasChatAccess else "DENIED",
+        )
+        logger.info(
+            "Checking Explorer Access (Required: {}): {}",
+            settings.GROUP_EXPLORER_ACCESS,
+            "GRANTED" if access.hasExplorerAccess else "DENIED",
+        )
+        logger.info(
+            "Checking Pipelines Ingestion Access (Required: {}): {}",
+            settings.GROUP_PIPELINES_INGESTION_ACCESS,
+            "GRANTED" if access.hasPipelinesIngestionAccess else "DENIED",
+        )
+        logger.info(
+            "Checking Pipelines Admin Access (Required: {}): {}",
+            settings.GROUP_PIPELINES_ADMIN_ACCESS,
+            "GRANTED" if access.hasPipelinesAdminAccess else "DENIED",
+        )
+        logger.info(
+            "Checking Dev Data Access (Required: {}): {}",
+            settings.GROUP_DEV_DATA_ACCESS,
+            "GRANTED" if access.hasDevDataAccess else "DENIED",
+        )
+        logger.info("---------------------------------------------------")
+
+        await _store_cached_access(cache_key, access)
+        return access
