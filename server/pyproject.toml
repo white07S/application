@@ -25,4 +25,5 @@ dependencies = [
     "qdrant-client>=1.14.0",
     "tuspyserver>=4.2.3",
     "orjson>=3.11.7",
+    "redis[hiredis]>=5.0.0",
 ]

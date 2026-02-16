@@ -81,6 +81,9 @@ class Settings(BaseSettings):
         """Get collection name for a specific data type."""
         return f"{self.qdrant_collection_prefix}_{data_type}"
 
+    # === Redis ===
+    redis_url: str = Field(description="Redis connection URL (redis://host:port)")
+
     # === Paths - ALL REQUIRED ===
     # Context providers (org charts + risk themes, date-partitioned)
     context_providers_path: Path = Field(description="Base path for context provider data")

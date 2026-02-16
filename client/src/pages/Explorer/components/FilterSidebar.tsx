@@ -1,16 +1,18 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { FilterState, FilterAction, TreeNode, FlatItem, RiskTaxonomy } from '../types';
 import { getSelectionCount } from '../hooks/useFilterState';
 import { useFunctionTree } from '../hooks/useFunctionTree';
 import { useLocationTree } from '../hooks/useLocationTree';
 import { useCESearch } from '../hooks/useCESearch';
 import { useFilterData } from '../hooks/useFilterData';
+import { useCascadeSuggestions, CascadeSuggestion } from '../hooks/useCascadeSuggestions';
 import { FilterSection } from './FilterSection';
 import { DateFilter } from './DateFilter';
 import { HierarchyFilter } from './HierarchyFilter';
 import { FlatListFilter } from './FlatListFilter';
 import { RiskThemeFilter } from './RiskThemeFilter';
 import { FilterChips } from './FilterChips';
+import { CascadeBanner } from './CascadeBanner';
 
 interface FilterSidebarProps {
     state: FilterState;
@@ -80,6 +82,33 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
     const ceSearch = useCESearch(state.asOfDate);
     const { aus, riskThemes } = useFilterData(state.asOfDate);
 
+    // Cascade suggestions
+    const { suggestions, dismiss } = useCascadeSuggestions(
+        state,
+        aus.items,
+        ceSearch.items,
+        locTree.nodes,
+    );
+
+    // Section expansion state
+    const SECTIONS = ['date', 'functions', 'locations', 'ces', 'aus', 'risk'] as const;
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({
+        date: true,
+        functions: true,
+        locations: false,
+        ces: false,
+        aus: false,
+        risk: false,
+    });
+    const toggleSection = useCallback((key: string) => {
+        setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+    }, []);
+    const allCollapsed = SECTIONS.every((k) => !expanded[k]);
+    const toggleAll = useCallback(() => {
+        const newVal = allCollapsed; // if all collapsed, expand all; otherwise collapse all
+        setExpanded(Object.fromEntries(SECTIONS.map((k) => [k, newVal])));
+    }, [allCollapsed]);
+
     // Collect date warning from any hook that reports a date fallback
     const dateWarning = funcTree.dateWarning || locTree.dateWarning || ceSearch.dateWarning || aus.dateWarning || riskThemes.dateWarning || null;
 
@@ -99,6 +128,18 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
         const type = actionMap[chip.section];
         if (type) dispatch({ type, payload: chip.id } as FilterAction);
     };
+
+    const handleAcceptSuggestion = (suggestion: CascadeSuggestion) => {
+        dispatch({
+            type: 'SELECT_MANY',
+            payload: { section: suggestion.targetSection, ids: suggestion.suggestedIds },
+        });
+        dismiss(suggestion);
+    };
+
+    // Helper: get banners targeting a specific section
+    const bannersFor = (targetSection: CascadeSuggestion['targetSection']) =>
+        suggestions.filter((s) => s.targetSection === targetSection);
 
     const handleApply = () => {
         console.log('Apply filters:', {
@@ -127,14 +168,28 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                         </span>
                     )}
                 </div>
-                {totalCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                    {totalCount > 0 && (
+                        <button
+                            onClick={() => dispatch({ type: 'RESET_ALL' })}
+                            className="flex items-center gap-1 text-[10px] text-text-sub hover:text-primary font-medium border border-border-light rounded px-1.5 py-0.5 transition-colors"
+                            title="Reset all filters"
+                        >
+                            <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                            Reset
+                        </button>
+                    )}
                     <button
-                        onClick={() => dispatch({ type: 'RESET_ALL' })}
-                        className="text-[10px] text-text-sub hover:text-primary font-medium"
+                        onClick={toggleAll}
+                        className="flex items-center gap-1 text-[10px] text-text-sub hover:text-primary font-medium border border-border-light rounded px-1.5 py-0.5 transition-colors"
+                        title={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
                     >
-                        Reset all
+                        <span className="material-symbols-outlined text-[12px]">
+                            {allCollapsed ? 'unfold_more' : 'unfold_less'}
+                        </span>
+                        {allCollapsed ? 'Expand' : 'Collapse'}
                     </button>
-                )}
+                </div>
             </div>
 
             {/* Cascade Toggle */}
@@ -180,7 +235,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     title="As of Date"
                     count={0}
                     onClear={() => dispatch({ type: 'SET_DATE', payload: new Date().toISOString().split('T')[0] })}
-                    defaultExpanded
+                    expanded={expanded.date}
+                    onToggle={() => toggleSection('date')}
                 >
                     <DateFilter
                         value={state.asOfDate}
@@ -195,7 +251,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     count={state.selectedFunctions.size}
                     onClear={() => dispatch({ type: 'CLEAR_SECTION', payload: 'selectedFunctions' })}
                     loading={funcTree.loading}
-                    defaultExpanded
+                    expanded={expanded.functions}
+                    onToggle={() => toggleSection('functions')}
                 >
                     <HierarchyFilter
                         nodes={funcTree.nodes}
@@ -217,7 +274,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     count={state.selectedLocations.size}
                     onClear={() => dispatch({ type: 'CLEAR_SECTION', payload: 'selectedLocations' })}
                     loading={locTree.loading}
+                    expanded={expanded.locations}
+                    onToggle={() => toggleSection('locations')}
                 >
+                    {bannersFor('selectedLocations').map((s) => (
+                        <CascadeBanner
+                            key={`${s.sourceSection}-${s.targetSection}`}
+                            suggestion={s}
+                            onAccept={() => handleAcceptSuggestion(s)}
+                            onDismiss={() => dismiss(s)}
+                        />
+                    ))}
                     <HierarchyFilter
                         nodes={locTree.nodes}
                         selected={state.selectedLocations}
@@ -238,7 +305,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     count={state.selectedCEs.size}
                     onClear={() => dispatch({ type: 'CLEAR_SECTION', payload: 'selectedCEs' })}
                     loading={ceSearch.loading}
+                    expanded={expanded.ces}
+                    onToggle={() => toggleSection('ces')}
                 >
+                    {bannersFor('selectedCEs').map((s) => (
+                        <CascadeBanner
+                            key={`${s.sourceSection}-${s.targetSection}`}
+                            suggestion={s}
+                            onAccept={() => handleAcceptSuggestion(s)}
+                            onDismiss={() => dismiss(s)}
+                        />
+                    ))}
                     <FlatListFilter
                         items={ceSearch.items}
                         selected={state.selectedCEs}
@@ -257,7 +334,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     count={state.selectedAUs.size}
                     onClear={() => dispatch({ type: 'CLEAR_SECTION', payload: 'selectedAUs' })}
                     loading={aus.loading}
+                    expanded={expanded.aus}
+                    onToggle={() => toggleSection('aus')}
                 >
+                    {bannersFor('selectedAUs').map((s) => (
+                        <CascadeBanner
+                            key={`${s.sourceSection}-${s.targetSection}`}
+                            suggestion={s}
+                            onAccept={() => handleAcceptSuggestion(s)}
+                            onDismiss={() => dismiss(s)}
+                        />
+                    ))}
                     <FlatListFilter
                         items={aus.items}
                         selected={state.selectedAUs}
@@ -274,6 +361,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                     count={state.selectedRiskThemes.size}
                     onClear={() => dispatch({ type: 'CLEAR_SECTION', payload: 'selectedRiskThemes' })}
                     loading={riskThemes.loading}
+                    expanded={expanded.risk}
+                    onToggle={() => toggleSection('risk')}
                 >
                     <RiskThemeFilter
                         taxonomies={riskThemes.taxonomies}

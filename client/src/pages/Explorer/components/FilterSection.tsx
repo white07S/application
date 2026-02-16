@@ -8,6 +8,9 @@ interface FilterSectionProps {
     children: React.ReactNode;
     defaultExpanded?: boolean;
     loading?: boolean;
+    /** Controlled mode: parent manages expanded state */
+    expanded?: boolean;
+    onToggle?: () => void;
 }
 
 export const FilterSection: React.FC<FilterSectionProps> = ({
@@ -18,13 +21,17 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
     children,
     defaultExpanded = false,
     loading = false,
+    expanded: controlledExpanded,
+    onToggle,
 }) => {
-    const [expanded, setExpanded] = useState(defaultExpanded);
+    const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+    const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+    const toggle = onToggle || (() => setInternalExpanded((v) => !v));
 
     return (
         <div className="py-2">
             <button
-                onClick={() => setExpanded(!expanded)}
+                onClick={toggle}
                 className="w-full flex items-center gap-1.5 py-1 group"
             >
                 <span className="material-symbols-outlined text-[14px] text-text-sub">

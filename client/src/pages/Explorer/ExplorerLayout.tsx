@@ -1,9 +1,25 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { useFilterState } from './hooks/useFilterState';
 import { FilterSidebar } from './components/FilterSidebar';
+import ControlsExplorer from './controls/ControlsExplorer';
+
+const PlaceholderView: React.FC<{ title: string; icon: string }> = ({ title, icon }) => (
+    <div className="flex flex-col items-center justify-center h-64 text-text-sub">
+        <span className="material-symbols-outlined text-[32px] mb-2">{icon}</span>
+        <span className="text-sm font-medium">{title} Explorer</span>
+        <span className="text-xs mt-1">Coming soon</span>
+    </div>
+);
 
 const ExplorerLayout: React.FC = () => {
     const [state, dispatch] = useFilterState();
+    const location = useLocation();
+
+    const activeView = location.pathname.includes('/controls') ? 'controls'
+        : location.pathname.includes('/events') ? 'events'
+        : location.pathname.includes('/issues') ? 'issues'
+        : 'controls';
 
     return (
         <main>
@@ -15,10 +31,10 @@ const ExplorerLayout: React.FC = () => {
                     </div>
 
                     {/* Content area */}
-                    <div className="flex-1 min-w-0 py-4 pl-4 flex flex-col gap-4">
-                        <div className="text-text-sub text-sm">
-                            <p>Select filters and click Apply to view data.</p>
-                        </div>
+                    <div className="flex-1 min-w-0 py-4 pl-4 flex flex-col">
+                        {activeView === 'controls' && <ControlsExplorer />}
+                        {activeView === 'events' && <PlaceholderView title="Events" icon="event_note" />}
+                        {activeView === 'issues' && <PlaceholderView title="Issues" icon="report_problem" />}
                     </div>
                 </div>
             </div>

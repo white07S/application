@@ -1,12 +1,11 @@
 import asyncio
 import hashlib
-import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 import httpx
 import msal
+import orjson
 from fastapi import HTTPException
 
 from server import settings
@@ -18,20 +17,12 @@ logger = get_logger(name=__name__)
 # Thread pool for blocking MSAL operations
 _msal_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="msal")
 _GRAPH_TIMEOUT = httpx.Timeout(6.0, connect=3.0)
-_ACCESS_CACHE_TTL_SECONDS = 120.0
-_ACCESS_CACHE_STALE_GRACE_SECONDS = 600.0
-_access_cache_lock = asyncio.Lock()
+_ACCESS_CACHE_TTL_SECONDS = 120
+_ACCESS_CACHE_STALE_GRACE_SECONDS = 600
+
+# Per-token asyncio.Lock for thundering herd prevention (must stay in-process)
+_fetch_locks_guard = asyncio.Lock()
 _access_fetch_locks: Dict[str, asyncio.Lock] = {}
-
-
-@dataclass
-class _AccessCacheEntry:
-    access: AccessResponse
-    expires_at: float
-    stale_expires_at: float
-
-
-_access_cache: Dict[str, _AccessCacheEntry] = {}
 
 cca = msal.ConfidentialClientApplication(
     settings.CLIENT_ID,
@@ -125,44 +116,67 @@ def _build_access_response(*, group_ids: List[str], user_name: str) -> AccessRes
 
 
 async def _get_cached_access(cache_key: str) -> AccessResponse | None:
-    now = time.monotonic()
-    async with _access_cache_lock:
-        entry = _access_cache.get(cache_key)
-        if entry and entry.expires_at > now:
-            return entry.access
+    """Check Redis for a fresh (primary TTL) cached access response."""
+    from server.config.redis import get_redis
+
+    try:
+        redis = get_redis()
+        raw = await redis.get(f"auth:access:{cache_key}")
+        if raw is not None:
+            data = orjson.loads(raw)
+            return AccessResponse.model_validate(data)
+    except RuntimeError:
+        pass  # Redis not initialized
+    except Exception as e:
+        logger.warning("Redis GET failed for auth cache: {}", e)
     return None
 
 
 async def _get_stale_cached_access(cache_key: str) -> AccessResponse | None:
-    now = time.monotonic()
-    async with _access_cache_lock:
-        entry = _access_cache.get(cache_key)
-        if entry and entry.stale_expires_at > now:
-            return entry.access
+    """Check Redis for a stale (grace period) cached access response."""
+    from server.config.redis import get_redis
+
+    try:
+        redis = get_redis()
+        raw = await redis.get(f"auth:stale:{cache_key}")
+        if raw is not None:
+            data = orjson.loads(raw)
+            return AccessResponse.model_validate(data)
+    except RuntimeError:
+        pass
+    except Exception as e:
+        logger.warning("Redis GET failed for auth stale cache: {}", e)
     return None
 
 
 async def _store_cached_access(cache_key: str, access: AccessResponse) -> None:
-    now = time.monotonic()
-    entry = _AccessCacheEntry(
-        access=access,
-        expires_at=now + _ACCESS_CACHE_TTL_SECONDS,
-        stale_expires_at=now + _ACCESS_CACHE_TTL_SECONDS + _ACCESS_CACHE_STALE_GRACE_SECONDS,
-    )
-    async with _access_cache_lock:
-        _access_cache[cache_key] = entry
-        expired_keys = [
-            key
-            for key, value in _access_cache.items()
-            if value.stale_expires_at <= now
-        ]
-        for key in expired_keys:
-            _access_cache.pop(key, None)
-            _access_fetch_locks.pop(key, None)
+    """Store access response in Redis with dual-key TTL pattern.
+
+    Primary key (auth:access:) expires after _ACCESS_CACHE_TTL_SECONDS (120s).
+    Stale key (auth:stale:) expires after TTL + grace (720s) for fallback
+    during Graph API outages.
+    """
+    from server.config.redis import get_redis
+
+    try:
+        redis = get_redis()
+        data = orjson.dumps(access.model_dump(mode="json")).decode("utf-8")
+        await redis.set(
+            f"auth:access:{cache_key}", data, ex=_ACCESS_CACHE_TTL_SECONDS
+        )
+        stale_ttl = _ACCESS_CACHE_TTL_SECONDS + _ACCESS_CACHE_STALE_GRACE_SECONDS
+        await redis.set(
+            f"auth:stale:{cache_key}", data, ex=stale_ttl
+        )
+    except RuntimeError:
+        pass  # Redis not initialized
+    except Exception as e:
+        logger.warning("Redis SET failed for auth cache: {}", e)
 
 
 async def _get_fetch_lock(cache_key: str) -> asyncio.Lock:
-    async with _access_cache_lock:
+    """Get or create a per-token asyncio.Lock for thundering herd prevention."""
+    async with _fetch_locks_guard:
         lock = _access_fetch_locks.get(cache_key)
         if lock is None:
             lock = asyncio.Lock()

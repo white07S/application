@@ -316,6 +316,14 @@ async def _run_ingestion_background(job_id: str, batch_id: int, upload_id: str) 
 
             await bg_db.commit()
 
+            # Invalidate caches that depend on ingested data
+            try:
+                from server.cache import invalidate_namespace
+                await invalidate_namespace("explorer")
+                await invalidate_namespace("stats")
+            except Exception as cache_err:
+                logger.warning("Cache invalidation after ingestion failed (non-fatal): {}", cache_err)
+
             logger.info(
                 "Ingestion job completed: job_id={}, total={}, new={}, changed={}, unchanged={}",
                 job_id, result.counts.total, result.counts.new,

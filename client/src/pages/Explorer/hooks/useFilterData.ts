@@ -33,6 +33,9 @@ export function useFilterData(asOfDate: string) {
                         id: i.id,
                         label: i.label,
                         description: i.description,
+                        function_node_id: i.function_node_id ?? undefined,
+                        location_node_id: i.location_node_id ?? undefined,
+                        location_type: i.location_type ?? undefined,
                     })));
                     setAuDateWarning(auData.date_warning || null);
                     setTaxonomies(riskData.taxonomies.map((t) => ({

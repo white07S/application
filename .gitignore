@@ -11,6 +11,8 @@ venv/
 env/
 .env
 .env.*
+!server/.env.template
+!client/.env.template
 *.egg-info/
 .eggs/
 *.egg

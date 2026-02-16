@@ -15,6 +15,7 @@ from server.explorer.shared.models import (
     RiskTaxonomyResponse,
     RiskThemeResponse,
 )
+from server.cache import cached
 from server.logging_config import get_logger
 
 from server.pipelines.orgs.schema import (
@@ -88,6 +89,7 @@ def _build_tree(rows: list[dict], max_preloaded_level: int) -> list[TreeNodeResp
 # Functions tree
 # ---------------------------------------------------------------------------
 
+@cached(namespace="explorer", ttl=3600)
 async def get_function_tree(
     as_of: date,
     parent_id: str | None = None,
@@ -172,6 +174,7 @@ async def get_function_tree(
 # Locations tree
 # ---------------------------------------------------------------------------
 
+@cached(namespace="explorer", ttl=3600)
 async def get_location_tree(
     as_of: date,
     parent_id: str | None = None,
@@ -472,6 +475,7 @@ async def _load_children(
 # Consolidated entities
 # ---------------------------------------------------------------------------
 
+@cached(namespace="explorer", ttl=3600)
 async def get_consolidated_entities(
     as_of: date,
     search: str | None = None,
@@ -497,7 +501,11 @@ async def get_consolidated_entities(
             .where(tc_ver)
         )
         if search:
-            base = base.where(ver.c.names[1].ilike(f"%{search}%"))
+            search_pattern = f"%{search}%"
+            base = base.where(or_(
+                ver.c.names[1].ilike(search_pattern),
+                ref.c.node_id.ilike(search_pattern),
+            ))
 
         count_q = select(func.count()).select_from(base.subquery())
         total = (await conn.execute(count_q)).scalar_one()
@@ -525,6 +533,7 @@ async def get_consolidated_entities(
 # Assessment units
 # ---------------------------------------------------------------------------
 
+@cached(namespace="explorer", ttl=3600)
 async def get_assessment_units(as_of: date) -> dict:
     """Return all assessment units (small dataset)."""
     engine = get_engine()
@@ -540,13 +549,26 @@ async def get_assessment_units(as_of: date) -> dict:
                 ref.c.unit_id.label("id"),
                 ver.c.name.label("label"),
                 ver.c.status.label("description"),
+                ver.c.function_node_id,
+                ver.c.location_node_id,
+                ver.c.location_type,
             )
             .join(ver, ver.c.ref_unit_id == ref.c.unit_id)
             .where(tc_ver)
             .order_by(ver.c.name)
         )
         rows = (await conn.execute(q)).mappings().all()
-        items = [FlatItemResponse(id=r["id"], label=r["label"], description=r["description"]) for r in rows]
+        items = [
+            FlatItemResponse(
+                id=r["id"],
+                label=r["label"],
+                description=r["description"],
+                function_node_id=r["function_node_id"],
+                location_node_id=r["location_node_id"],
+                location_type=r["location_type"],
+            )
+            for r in rows
+        ]
         return {
             "items": items,
             "total": len(items),
@@ -562,6 +584,7 @@ async def get_assessment_units(as_of: date) -> dict:
 # Risk themes
 # ---------------------------------------------------------------------------
 
+@cached(namespace="explorer", ttl=3600)
 async def get_risk_taxonomies(as_of: date) -> tuple[list[RiskTaxonomyResponse], str | None]:
     """Return all risk taxonomies with their active themes.
 

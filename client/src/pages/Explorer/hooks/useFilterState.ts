@@ -37,6 +37,14 @@ function filterReducer(state: FilterState, action: FilterAction): FilterState {
             return { ...state, selectedAUs: toggleInSet(state.selectedAUs, action.payload) };
         case 'TOGGLE_RISK_THEME':
             return { ...state, selectedRiskThemes: toggleInSet(state.selectedRiskThemes, action.payload) };
+        case 'SELECT_MANY': {
+            const current = state[action.payload.section];
+            const next = new Set(current);
+            for (const id of action.payload.ids) {
+                next.add(id);
+            }
+            return { ...state, [action.payload.section]: next };
+        }
         case 'CLEAR_SECTION':
             return { ...state, [action.payload]: new Set<string>() };
         case 'RESET_ALL':

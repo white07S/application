@@ -64,6 +64,14 @@ async def lifespan(app: FastAPI):
         logger.error("Qdrant initialization failed: {}", e)
         raise
 
+    # Initialize Redis cache
+    try:
+        from server.config.redis import init_redis
+        await init_redis(s.redis_url)
+    except Exception as e:
+        logger.error("Redis initialization failed: {}", e)
+        raise
+
     # Initialize storage directories
     from server.pipelines.storage import init_storage_directories
     logger.info("Initializing storage directories...")
@@ -91,6 +99,13 @@ async def lifespan(app: FastAPI):
         logger.info("Token manager thread pool shut down")
     except Exception as e:
         logger.warning("Error shutting down token manager executor: {}", e)
+
+    # Close Redis client
+    try:
+        from server.config.redis import close_redis
+        await close_redis()
+    except Exception as e:
+        logger.warning("Error closing Redis client: {}", e)
 
     # Close Qdrant client
     try:

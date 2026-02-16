@@ -23,6 +23,9 @@ export interface ApiFlatItem {
     id: string;
     label: string;
     description?: string;
+    function_node_id?: string | null;
+    location_node_id?: string | null;
+    location_type?: string | null;
 }
 
 export interface FlatItemsResponse {

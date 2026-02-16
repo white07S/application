@@ -14,6 +14,9 @@ export interface FlatItem {
     id: string;
     label: string;
     description?: string;
+    function_node_id?: string;
+    location_node_id?: string;
+    location_type?: string;
 }
 
 export interface RiskTaxonomy {
@@ -40,5 +43,6 @@ export type FilterAction =
     | { type: 'TOGGLE_CE'; payload: string }
     | { type: 'TOGGLE_AU'; payload: string }
     | { type: 'TOGGLE_RISK_THEME'; payload: string }
+    | { type: 'SELECT_MANY'; payload: { section: 'selectedFunctions' | 'selectedLocations' | 'selectedCEs' | 'selectedAUs' | 'selectedRiskThemes'; ids: string[] } }
     | { type: 'CLEAR_SECTION'; payload: 'selectedFunctions' | 'selectedLocations' | 'selectedCEs' | 'selectedAUs' | 'selectedRiskThemes' }
     | { type: 'RESET_ALL' };
