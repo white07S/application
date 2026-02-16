@@ -1,4 +1,4 @@
-"""API endpoints for Dev Data — read-only PostgreSQL + Qdrant browser."""
+"""API endpoints for Dev Data — PostgreSQL + Qdrant browser with snapshot management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -22,6 +22,7 @@ from server.devdata.service import (
     get_qdrant_stats,
     get_data_consistency_stats,
 )
+from server.devdata.api.snapshot_router import router as snapshot_router
 
 logger = get_logger(name=__name__)
 
@@ -103,3 +104,7 @@ async def qdrant_stats(_=Depends(_require_dev_data_access)):
 async def data_consistency(_=Depends(_require_dev_data_access)):
     """Get data consistency stats between PostgreSQL and Qdrant."""
     return await get_data_consistency_stats()
+
+
+# Include snapshot subrouter
+router.include_router(snapshot_router)

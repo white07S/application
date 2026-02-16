@@ -62,6 +62,29 @@ class Settings(BaseSettings):
         ge=1,
     )
 
+    # === PostgreSQL Backup Settings ===
+    postgres_backup_retention_days: int = Field(
+        default=30,
+        description="Number of days to retain backup snapshots",
+        ge=1,
+    )
+    postgres_backup_compression: bool = Field(
+        default=True,
+        description="Whether to compress backup files with gzip",
+    )
+    postgres_backup_max_concurrent: int = Field(
+        default=1,
+        description="Maximum concurrent backup/restore operations",
+        ge=1,
+        le=5,
+    )
+    postgres_backup_parallel_jobs: int = Field(
+        default=4,
+        description="Number of parallel jobs for pg_dump/pg_restore (1-8)",
+        ge=1,
+        le=8,
+    )
+
     # === Qdrant ===
     qdrant_url: str = Field(
         default="http://localhost:16333",
@@ -91,6 +114,9 @@ class Settings(BaseSettings):
     # Data ingested (controls, model runs, TUS temp, state)
     data_ingested_path: Path = Field(description="Base path for ingested controls and model outputs")
 
+    # PostgreSQL backups
+    postgres_backup_path: Path = Field(description="Base path for PostgreSQL backup snapshots")
+
     # Documentation
     docs_content_dir: Path = Field(description="Path to docs content directory")
 
@@ -103,6 +129,7 @@ class Settings(BaseSettings):
     @field_validator(
         'context_providers_path',
         'data_ingested_path',
+        'postgres_backup_path',
         'docs_content_dir',
         mode='before'
     )
@@ -146,6 +173,10 @@ def get_settings() -> Settings:
     (settings.data_ingested_path / "model_runs" / "embeddings").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / ".tus_temp").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / ".state").mkdir(parents=True, exist_ok=True)
+
+    # PostgreSQL backup directory
+    settings.postgres_backup_path.mkdir(parents=True, exist_ok=True)
+    (settings.postgres_backup_path / ".locks").mkdir(parents=True, exist_ok=True)
 
     # Docs directory - must exist, don't auto-create
     if not settings.docs_content_dir.exists():

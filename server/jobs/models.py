@@ -83,7 +83,7 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID
-    job_type: Mapped[str] = mapped_column(String(20), nullable=False)  # ingestion, model_run
+    job_type: Mapped[str] = mapped_column(String(20), nullable=False)  # ingestion, snapshot_creation, snapshot_restore
     batch_id: Mapped[int] = mapped_column(nullable=False)
     upload_id: Mapped[str] = mapped_column(String(20), nullable=False)  # UPL-YYYY-XXXX
     status: Mapped[str] = mapped_column(String(20), default="pending")
@@ -108,7 +108,7 @@ class ProcessingJob(Base):
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'running', 'completed', 'failed')"),
-        CheckConstraint("job_type IN ('ingestion')"),
+        CheckConstraint("job_type IN ('ingestion', 'snapshot_creation', 'snapshot_restore')"),
         Index('idx_processing_jobs_batch', 'batch_id'),
         Index('idx_processing_jobs_status', 'status'),
     )

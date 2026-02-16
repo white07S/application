@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import TableViewer from './components/TableViewer';
 import DevDataQdrantView from '../DevDataQdrant/DevDataQdrantView';
+import SnapshotManager from './components/SnapshotManager';
 import { useConnectionStatus } from './hooks/useConnectionStatus';
 import { useQdrantStatus } from './hooks/useQdrantStatus';
 import { useDataConsistency } from './hooks/useDataConsistency';
@@ -85,6 +86,8 @@ const DevDataLayout: React.FC = () => {
                 return renderQdrantView();
             case 'consistency':
                 return renderConsistencyView();
+            case 'snapshots':
+                return <SnapshotManager />;
             case 'overview':
             default:
                 return renderOverview();
@@ -407,8 +410,8 @@ const DevDataLayout: React.FC = () => {
     }
 
     // Available tabs based on domain
-    const allTabs: ViewMode[] = ['overview', 'postgres', 'qdrant', 'consistency'];
-    const availableTabs = hasQdrant ? allTabs : (['overview', 'postgres'] as ViewMode[]);
+    const allTabs: ViewMode[] = ['overview', 'postgres', 'qdrant', 'consistency', 'snapshots'];
+    const availableTabs = hasQdrant ? allTabs : (['overview', 'postgres', 'snapshots'] as ViewMode[]);
 
     return (
         <div className="max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-3 sm:px-4 py-4">

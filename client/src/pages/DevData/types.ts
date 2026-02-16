@@ -53,7 +53,7 @@ export interface DomainGroup {
 }
 
 // View modes for the DevData page
-export type ViewMode = 'overview' | 'postgres' | 'qdrant' | 'consistency';
+export type ViewMode = 'overview' | 'postgres' | 'qdrant' | 'consistency' | 'snapshots';
 
 // Data domains
 export type DataType = 'all' | 'orgs' | 'risks' | 'controls' | 'system';
