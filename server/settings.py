@@ -6,7 +6,7 @@ Missing values will raise an error at startup.
 
 from pathlib import Path
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -106,6 +106,18 @@ class Settings(BaseSettings):
 
     # === Redis ===
     redis_url: str = Field(description="Redis connection URL (redis://host:port)")
+
+    # === OpenAI (optional — for semantic search query embedding) ===
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key for query embeddings (text-embedding-3-large)",
+    )
+
+    # === Mock Data ===
+    mock_qdrant_dataset_path: Optional[Path] = Field(
+        default=None,
+        description="Path to Qdrant/DBpedia Arrow IPC dataset for real text + embeddings in mock data",
+    )
 
     # === Paths - ALL REQUIRED ===
     # Context providers (org charts + risk themes, date-partitioned)

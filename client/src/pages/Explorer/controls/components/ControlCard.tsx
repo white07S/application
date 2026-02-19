@@ -25,7 +25,7 @@ export const ControlCard: React.FC<Props> = ({ item }) => {
 
             {/* Section 3: AI Enrichment */}
             <div className="flex-[1.5] min-w-0 border-t md:border-t-0 border-border-light bg-surface-light/50 rounded-b md:rounded-bl-none md:rounded-r">
-                <ControlCardAI ai={item.ai} />
+                <ControlCardAI ai={item.ai} parentScore={item.parentL1Score} similarControls={item.similarControls} />
             </div>
         </div>
     );

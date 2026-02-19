@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
 
-from sqlalchemy import select, func, text, and_, or_, exists
+from sqlalchemy import select, func, or_, exists
 
 from server.config.postgres import get_engine
-from server.explorer.shared.temporal import temporal_condition, find_effective_date
 from server.explorer.shared.models import (
     TreeNodeResponse,
     FlatItemResponse,
@@ -42,6 +40,10 @@ logger = get_logger(name=__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _is_current(tx_to_col):
+    return tx_to_col.is_(None)
 
 def _build_tree(rows: list[dict], max_preloaded_level: int) -> list[TreeNodeResponse]:
     """Convert flat rows (node_id, name, level, parent_id, has_children) into nested tree."""
@@ -91,17 +93,16 @@ def _build_tree(rows: list[dict], max_preloaded_level: int) -> list[TreeNodeResp
 
 @cached(namespace="explorer", ttl=3600)
 async def get_function_tree(
-    as_of: date,
     parent_id: str | None = None,
     search: str | None = None,
-) -> tuple[list[TreeNodeResponse], str | None]:
+) -> list[TreeNodeResponse]:
     """Return function hierarchy nodes.
 
     - parent_id=None, search=None: roots + 2 levels via recursive CTE.
     - parent_id set: direct children of that node (lazy load).
     - search set: ILIKE search across ALL nodes (flat results).
 
-    Returns (nodes, date_warning_or_None).
+    Returns current nodes only (tx_to IS NULL).
     """
     engine = get_engine()
     ref = src_orgs_ref_node
@@ -110,16 +111,13 @@ async def get_function_tree(
 
     async with engine.connect() as conn:
         if parent_id:
-            nodes = await _load_children(conn, parent_id, "function", ver, as_of)
-            return nodes, None
-
-        as_of, warning = await find_effective_date(conn, ver, as_of)
+            return await _load_children(conn, parent_id, "function", ver)
 
         if search:
-            return await _search_nodes(conn, "function", ver, as_of, search), warning
+            return await _search_nodes(conn, "function", ver, search)
 
-        tc_ver = temporal_condition(ver.c.tx_from, ver.c.tx_to, as_of)
-        tc_rel = temporal_condition(rel.c.tx_from, rel.c.tx_to, as_of)
+        tc_ver = _is_current(ver.c.tx_to)
+        tc_rel = _is_current(rel.c.tx_to)
 
         child_ids = (
             select(rel.c.out_node_id)
@@ -159,15 +157,15 @@ async def get_function_tree(
 
         if root_rows:
             root_ids = [r["node_id"] for r in root_rows]
-            l1_rows = await _fetch_children_batch(conn, root_ids, "function", ver, as_of)
+            l1_rows = await _fetch_children_batch(conn, root_ids, "function", ver)
             all_rows.extend(l1_rows)
 
             l1_ids = [r["node_id"] for r in l1_rows]
             if l1_ids:
-                l2_rows = await _fetch_children_batch(conn, l1_ids, "function", ver, as_of)
+                l2_rows = await _fetch_children_batch(conn, l1_ids, "function", ver)
                 all_rows.extend(l2_rows)
 
-        return _build_tree(all_rows, max_preloaded_level=2), warning
+        return _build_tree(all_rows, max_preloaded_level=2)
 
 
 # ---------------------------------------------------------------------------
@@ -176,13 +174,12 @@ async def get_function_tree(
 
 @cached(namespace="explorer", ttl=3600)
 async def get_location_tree(
-    as_of: date,
     parent_id: str | None = None,
     search: str | None = None,
-) -> tuple[list[TreeNodeResponse], str | None]:
+) -> list[TreeNodeResponse]:
     """Return location hierarchy nodes. Same approach as functions.
 
-    Returns (nodes, date_warning_or_None).
+    Returns current nodes only (tx_to IS NULL).
     """
     engine = get_engine()
     ref = src_orgs_ref_node
@@ -191,16 +188,13 @@ async def get_location_tree(
 
     async with engine.connect() as conn:
         if parent_id:
-            nodes = await _load_children(conn, parent_id, "location", ver, as_of, name_is_array=True)
-            return nodes, None
-
-        as_of, warning = await find_effective_date(conn, ver, as_of)
+            return await _load_children(conn, parent_id, "location", ver, name_is_array=True)
 
         if search:
-            return await _search_nodes(conn, "location", ver, as_of, search, name_is_array=True), warning
+            return await _search_nodes(conn, "location", ver, search, name_is_array=True)
 
-        tc_ver = temporal_condition(ver.c.tx_from, ver.c.tx_to, as_of)
-        tc_rel = temporal_condition(rel.c.tx_from, rel.c.tx_to, as_of)
+        tc_ver = _is_current(ver.c.tx_to)
+        tc_rel = _is_current(rel.c.tx_to)
 
         roots_q = (
             select(
@@ -233,15 +227,15 @@ async def get_location_tree(
 
         if root_rows:
             root_ids = [r["node_id"] for r in root_rows]
-            l1_rows = await _fetch_children_batch(conn, root_ids, "location", ver, as_of, name_is_array=True)
+            l1_rows = await _fetch_children_batch(conn, root_ids, "location", ver, name_is_array=True)
             all_rows.extend(l1_rows)
 
             l1_ids = [r["node_id"] for r in l1_rows]
             if l1_ids:
-                l2_rows = await _fetch_children_batch(conn, l1_ids, "location", ver, as_of, name_is_array=True)
+                l2_rows = await _fetch_children_batch(conn, l1_ids, "location", ver, name_is_array=True)
                 all_rows.extend(l2_rows)
 
-        return _build_tree(all_rows, max_preloaded_level=2), warning
+        return _build_tree(all_rows, max_preloaded_level=2)
 
 
 # ---------------------------------------------------------------------------
@@ -252,15 +246,14 @@ async def _search_nodes(
     conn,
     tree_type: str,
     ver_table,
-    as_of: date,
     search: str,
     name_is_array: bool = False,
 ) -> list[TreeNodeResponse]:
     """Search all nodes by name or node_id (ILIKE), return results as a tree with ancestors."""
     ref = src_orgs_ref_node
     rel = src_orgs_rel_child
-    tc_ver = temporal_condition(ver_table.c.tx_from, ver_table.c.tx_to, as_of)
-    tc_rel = temporal_condition(rel.c.tx_from, rel.c.tx_to, as_of)
+    tc_ver = _is_current(ver_table.c.tx_to)
+    tc_rel = _is_current(rel.c.tx_to)
     name_col = ver_table.c.names[1] if name_is_array else ver_table.c.name
     search_pattern = f"%{search}%"
 
@@ -392,19 +385,18 @@ async def _fetch_children_batch(
     parent_ids: list[str],
     tree_type: str,
     ver_table,
-    as_of: date,
     name_is_array: bool = False,
 ) -> list[dict]:
     """Fetch direct children for a batch of parent IDs, with has_children flag."""
     ref = src_orgs_ref_node
     rel = src_orgs_rel_child
-    tc_ver = temporal_condition(ver_table.c.tx_from, ver_table.c.tx_to, as_of)
-    tc_rel = temporal_condition(rel.c.tx_from, rel.c.tx_to, as_of)
+    tc_ver = _is_current(ver_table.c.tx_to)
+    tc_rel = _is_current(rel.c.tx_to)
 
     name_col = ver_table.c.names[1] if name_is_array else ver_table.c.name
 
     grandchild_rel = src_orgs_rel_child.alias("gc_rel")
-    tc_gc = temporal_condition(grandchild_rel.c.tx_from, grandchild_rel.c.tx_to, as_of)
+    tc_gc = _is_current(grandchild_rel.c.tx_to)
     has_gc = exists(
         select(grandchild_rel.c.edge_id)
         .where(grandchild_rel.c.in_node_id == rel.c.out_node_id)
@@ -452,11 +444,10 @@ async def _load_children(
     parent_id: str,
     tree_type: str,
     ver_table,
-    as_of: date,
     name_is_array: bool = False,
 ) -> list[TreeNodeResponse]:
     """Lazy-load direct children for a single parent node."""
-    rows = await _fetch_children_batch(conn, [parent_id], tree_type, ver_table, as_of, name_is_array)
+    rows = await _fetch_children_batch(conn, [parent_id], tree_type, ver_table, name_is_array)
     return [
         TreeNodeResponse(
             id=r["node_id"],
@@ -477,7 +468,6 @@ async def _load_children(
 
 @cached(namespace="explorer", ttl=3600)
 async def get_consolidated_entities(
-    as_of: date,
     search: str | None = None,
     page: int = 1,
     page_size: int = 50,
@@ -488,9 +478,7 @@ async def get_consolidated_entities(
     ver = src_orgs_ver_consolidated
 
     async with engine.connect() as conn:
-        as_of, warning = await find_effective_date(conn, ver, as_of)
-
-        tc_ver = temporal_condition(ver.c.tx_from, ver.c.tx_to, as_of)
+        tc_ver = _is_current(ver.c.tx_to)
         base = (
             select(
                 ref.c.node_id.label("id"),
@@ -524,8 +512,6 @@ async def get_consolidated_entities(
             "page": page,
             "page_size": page_size,
             "has_more": (page * page_size) < total,
-            "effective_date": as_of.isoformat(),
-            "date_warning": warning,
         }
 
 
@@ -534,16 +520,14 @@ async def get_consolidated_entities(
 # ---------------------------------------------------------------------------
 
 @cached(namespace="explorer", ttl=3600)
-async def get_assessment_units(as_of: date) -> dict:
+async def get_assessment_units() -> dict:
     """Return all assessment units (small dataset)."""
     engine = get_engine()
     ref = src_au_ref_unit
     ver = src_au_ver_unit
 
     async with engine.connect() as conn:
-        as_of, warning = await find_effective_date(conn, ver, as_of)
-
-        tc_ver = temporal_condition(ver.c.tx_from, ver.c.tx_to, as_of)
+        tc_ver = _is_current(ver.c.tx_to)
         q = (
             select(
                 ref.c.unit_id.label("id"),
@@ -575,8 +559,6 @@ async def get_assessment_units(as_of: date) -> dict:
             "page": 1,
             "page_size": len(items),
             "has_more": False,
-            "effective_date": as_of.isoformat(),
-            "date_warning": warning,
         }
 
 
@@ -585,26 +567,14 @@ async def get_assessment_units(as_of: date) -> dict:
 # ---------------------------------------------------------------------------
 
 @cached(namespace="explorer", ttl=3600)
-async def get_risk_taxonomies(as_of: date) -> tuple[list[RiskTaxonomyResponse], str | None]:
+async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
     """Return all risk taxonomies with their active themes.
-
-    Returns (taxonomies, date_warning_or_None).
     """
     engine = get_engine()
 
     async with engine.connect() as conn:
-        as_of, warning = await find_effective_date(conn, src_risks_ver_taxonomy, as_of)
-
-        tc_tax = temporal_condition(
-            src_risks_ver_taxonomy.c.tx_from,
-            src_risks_ver_taxonomy.c.tx_to,
-            as_of,
-        )
-        tc_theme = temporal_condition(
-            src_risks_ver_theme.c.tx_from,
-            src_risks_ver_theme.c.tx_to,
-            as_of,
-        )
+        tc_tax = _is_current(src_risks_ver_taxonomy.c.tx_to)
+        tc_theme = _is_current(src_risks_ver_theme.c.tx_to)
         tax_q = (
             select(
                 src_risks_ref_taxonomy.c.taxonomy_id.label("id"),
@@ -650,4 +620,4 @@ async def get_risk_taxonomies(as_of: date) -> tuple[list[RiskTaxonomyResponse], 
             )
             for t in tax_rows
         ]
-        return taxonomies, warning
+        return taxonomies

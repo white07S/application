@@ -199,13 +199,13 @@ def main() -> int:
 
     # Build records (no previous run reuse in simplified version)
     output_records = []
-    hash_by_control_id = {}
+    hashes_by_control_id: Dict[str, Dict[str, Optional[str]]] = {}
     matched_count = 0
 
     for row in controls_rows:
         control_id = str(row["control_id"])
         hash_value = taxonomy_hash(row)
-        hash_by_control_id[control_id] = hash_value
+        hashes_by_control_id[control_id] = {"hash": hash_value}
         record = build_record(row=row, hash_value=hash_value, catalog=catalog, previous_row=None)
         output_records.append(record)
         if matches_taxonomy_filter(row):
@@ -214,7 +214,7 @@ def main() -> int:
     index_path = write_jsonl_with_index(
         records=output_records, output_path=output_path,
         model_name=MODEL_NAME, run_date=run_date,
-        hash_by_control_id=hash_by_control_id,
+        hashes_by_control_id=hashes_by_control_id,
     )
 
     print(f"output={output_path}")

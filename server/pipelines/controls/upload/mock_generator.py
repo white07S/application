@@ -6,11 +6,15 @@ Used temporarily until real CSV-to-JSONL conversion is implemented.
 Loads actual org node IDs and risk theme IDs from context_providers JSONL files
 so that generated controls have valid FK references.
 
+Optionally loads real text from a Qdrant/DBpedia Arrow IPC dataset for the 6 text
+fields: control_title, control_description, evidence_description,
+local_functional_information, control_as_event, control_as_issues.
+
 Adapted from new_mock_data/mock_data/controls/controls_mock.py.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -43,7 +47,7 @@ STRING_NULL_COUNTS = {
     "control_owner": 14558,
     "control_owner_gpn": 14558,
     "control_status": 0,
-    "control_status_date_change": 47122,
+    "control_status_date_change": 54581,
     "control_title": 0,
     "evidence_available_from": 37798,
     "evidence_description": 12014,
@@ -54,7 +58,7 @@ STRING_NULL_COUNTS = {
     "kpci_governance_forum": 26073,
     "last_control_modification_requested_by": 4271,
     "last_control_modification_requested_by_gpn": 4271,
-    "last_modification_on": 4498,
+    "last_modification_on": 2274,
     "last_modified_on": 0,
     "local_functional_information": 20220,
     "manual_automated": 24123,
@@ -295,13 +299,9 @@ def _make_multiline(field: str, cid: str) -> str:
 
 
 def _make_iso_dt(base: datetime, i: int) -> str:
+    """Generate an ISO-format timestamp string."""
     dt = base + timedelta(seconds=(i * 9973) % (365 * 24 * 3600))
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _make_mon_dt(base: datetime, i: int) -> str:
-    dt = base + timedelta(seconds=(i * 9973) % (365 * 24 * 3600))
-    return dt.strftime("%d-%b-%Y %I:%M:%S %p")
+    return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
 def _make_iso_date(base: datetime, i: int) -> str:
@@ -315,6 +315,7 @@ def generate_mock_jsonl(
     output_path: Path,
     num_controls: int = NUM_CONTROLS,
     seed: int = SEED,
+    qdrant_dataset_path: Optional[Path] = None,
 ) -> int:
     """Generate mock controls JSONL file.
 
@@ -325,6 +326,8 @@ def generate_mock_jsonl(
         output_path: Path where the JSONL file will be written.
         num_controls: Number of control records to generate.
         seed: Random seed for reproducibility.
+        qdrant_dataset_path: Optional path to Qdrant/DBpedia Arrow IPC dataset
+            for sourcing real text in the 4 control text fields.
 
     Returns:
         Number of records written.
@@ -357,6 +360,14 @@ def generate_mock_jsonl(
             "Run context provider ingestion first."
         )
 
+    # Load real text from dataset if path provided
+    text_pool: Optional[List[Dict[str, str]]] = None
+    if qdrant_dataset_path is not None:
+        from server.pipelines.controls.model_runners.dataset_pool import load_text_pool
+        logger.info("Loading text pool from dataset: {}", qdrant_dataset_path)
+        text_pool = load_text_pool(qdrant_dataset_path, num_controls)
+        logger.info("Loaded text pool for {} controls", len(text_pool))
+
     # Build theme_id → taxonomy_id mapping for risk_theme entries
     # Re-read to get the pairing
     rt_base = ctx_path / "risk_theme"
@@ -379,13 +390,18 @@ def generate_mock_jsonl(
     level1_ratio = float(STRING_NULL_COUNTS["parent_control_id"]) / float(BASE_N)
     n_level1 = max(1, min(num_controls, int(round(num_controls * level1_ratio))))
 
-    base_dt = datetime(2026, 2, 1, 9, 0, 0)
+    base_dt = datetime(2026, 2, 1, 9, 0, 0, tzinfo=timezone.utc)
     level1_ids = [f"CTRL-{i:010d}" for i in range(1, n_level1 + 1)]
+
+    # Store L1 title/desc for L2 inheritance (real data: L2 copies parent 99.9%)
+    l1_texts: Dict[str, Dict[str, Optional[str]]] = {}
+    L2_INHERIT_RATE = 0.999  # probability L2 inherits parent's title/desc
 
     written = 0
     with output_path.open("wb") as out_f:
         for i in range(1, num_controls + 1):
             cid = f"CTRL-{i:010d}"
+            ctrl_idx = i - 1  # 0-based index for text pool
 
             record: Dict[str, Any] = {k: None for k in ControlRecord.model_fields.keys()}
             for list_field in [
@@ -408,13 +424,55 @@ def generate_mock_jsonl(
                 record["parent_control_id"] = rng.choice(level1_ids)
 
             # ---- required-ish strings
-            record["control_title"] = f"Mock Control Title {i}"
             record["control_status"] = _weighted_choice(rng, CONTROL_STATUS_WEIGHTS)
 
-            # ---- core text
-            record["control_description"] = _make_multiline("control_description", cid) if rng.random() > _prob_null("control_description") else None
-            record["evidence_description"] = _make_multiline("evidence_description", cid) if rng.random() > _prob_null("evidence_description") else None
-            record["local_functional_information"] = _make_multiline("local_functional_information", cid) if rng.random() > _prob_null("local_functional_information") else None
+            is_l1 = i <= n_level1
+            parent_cid = record["parent_control_id"]
+
+            # ---- core text — L1/L2 patterns from real data:
+            #   L1: has own title/desc, NO evidence_desc, NO local_func_info
+            #   L2: title/desc inherited from parent 99.9%, HAS evidence_desc/local_func_info
+            if is_l1:
+                # L1: generate own title/desc
+                if text_pool is not None and ctrl_idx < len(text_pool):
+                    pool_entry = text_pool[ctrl_idx]
+                    record["control_title"] = pool_entry["control_title"]
+                    record["control_description"] = pool_entry["control_description"] if rng.random() > _prob_null("control_description") else None
+                else:
+                    record["control_title"] = f"Mock Control Title {i}"
+                    record["control_description"] = _make_multiline("control_description", cid) if rng.random() > _prob_null("control_description") else None
+                # L1: no evidence_desc or local_func_info (real data pattern)
+                record["evidence_description"] = None
+                record["local_functional_information"] = None
+                # Store for L2 inheritance
+                l1_texts[cid] = {
+                    "control_title": record["control_title"],
+                    "control_description": record["control_description"],
+                }
+            else:
+                # L2: inherit parent's title/desc 99.9% of the time
+                parent_text = l1_texts.get(parent_cid, {})
+                if parent_text and rng.random() < L2_INHERIT_RATE:
+                    record["control_title"] = parent_text.get("control_title")
+                    record["control_description"] = parent_text.get("control_description")
+                else:
+                    # 0.1%: L2 has its own distinct title/desc
+                    if text_pool is not None and ctrl_idx < len(text_pool):
+                        pool_entry = text_pool[ctrl_idx]
+                        record["control_title"] = pool_entry["control_title"]
+                        record["control_description"] = pool_entry["control_description"] if rng.random() > _prob_null("control_description") else None
+                    else:
+                        record["control_title"] = f"Mock Control Title {i}"
+                        record["control_description"] = _make_multiline("control_description", cid) if rng.random() > _prob_null("control_description") else None
+                # L2: populate evidence_desc and local_func_info
+                if text_pool is not None and ctrl_idx < len(text_pool):
+                    pool_entry = text_pool[ctrl_idx]
+                    record["evidence_description"] = pool_entry["evidence_description"] if rng.random() > _prob_null("evidence_description") else None
+                    record["local_functional_information"] = pool_entry["local_functional_information"] if rng.random() > _prob_null("local_functional_information") else None
+                else:
+                    record["evidence_description"] = _make_multiline("evidence_description", cid) if rng.random() > _prob_null("evidence_description") else None
+                    record["local_functional_information"] = _make_multiline("local_functional_information", cid) if rng.random() > _prob_null("local_functional_information") else None
+
             record["status_updates"] = _make_multiline("status_updates", cid) if rng.random() > _prob_null("status_updates") else None
 
             # ---- enumerations
@@ -442,11 +500,19 @@ def generate_mock_jsonl(
                 f"Mock PM source {rng.randint(1, 10)}" if rng.random() > _prob_null("performance_measures_available_from") else None
             )
 
-            # ---- dates
-            record["last_modified_on"] = _make_iso_dt(base_dt, i)
-            record["control_created_on"] = _make_mon_dt(base_dt, i)
-            record["last_modification_on"] = _make_mon_dt(base_dt, i) if rng.random() > _prob_null("last_modification_on") else None
-            record["control_status_date_change"] = _make_mon_dt(base_dt, i) if rng.random() > _prob_null("control_status_date_change") else None
+            # ---- dates (all ISO timestamps)
+            # control_created_on: always populated (100%)
+            record["control_created_on"] = _make_iso_dt(base_dt, i)
+
+            # last_modification_on: populated ~96% of the time
+            record["last_modification_on"] = _make_iso_dt(base_dt, i) if rng.random() > _prob_null("last_modification_on") else None
+
+            # control_status_date_change: populated ~4% of the time
+            record["control_status_date_change"] = _make_iso_dt(base_dt, i + 500) if rng.random() > _prob_null("control_status_date_change") else None
+
+            # last_modified_on: derived from last_modification_on if present, else control_status_date_change
+            record["last_modified_on"] = record["last_modification_on"] or record["control_status_date_change"]
+
             record["valid_from"] = _make_iso_date(base_dt, i) if rng.random() > _prob_null("valid_from") else None
             record["valid_until"] = _make_iso_date(base_dt, i + 90) if rng.random() > _prob_null("valid_until") else None
 

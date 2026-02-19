@@ -576,8 +576,20 @@ async def _process_controls_upload(db: AsyncSession, batch: UploadBatch, upload_
 
         jsonl_path = storage.get_control_jsonl_path(upload_id)
 
-        logger.info("Generating mock JSONL for upload {}", upload_id)
-        total_records = generate_mock_jsonl(output_path=jsonl_path)
+        from server.settings import get_settings
+        _settings = get_settings()
+
+        if jsonl_path.exists():
+            logger.info("JSONL already exists for upload {}, skipping mock generation", upload_id)
+        else:
+            logger.info("Generating mock JSONL for upload {}", upload_id)
+            generate_mock_jsonl(
+                output_path=jsonl_path,
+                qdrant_dataset_path=_settings.mock_qdrant_dataset_path,
+            )
+
+        # Count actual JSONL lines (source of truth for record count)
+        total_records = sum(1 for line in jsonl_path.open("rb") if line.strip())
 
         logger.info("Validating JSONL schema for upload {}", upload_id)
         _validate_controls_jsonl(jsonl_path)

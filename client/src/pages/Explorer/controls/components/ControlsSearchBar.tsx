@@ -4,6 +4,7 @@ import { SearchMode, SemanticFeature, SEMANTIC_FEATURES, ControlsAction } from '
 interface Props {
     value: string;
     searchMode: SearchMode;
+    searchTags: string[];
     semanticFeatures: Set<SemanticFeature>;
     dispatch: React.Dispatch<ControlsAction>;
 }
@@ -17,22 +18,33 @@ const MODE_OPTIONS: { key: SearchMode; label: string; icon: string; description:
 
 const PLACEHOLDER: Record<SearchMode, string> = {
     id: 'Enter control ID (e.g. CTRL-001)...',
-    keyword: 'Search by title, description, owner...',
-    semantic: 'Describe the control you\'re looking for...',
-    hybrid: 'Search by keywords or describe what you need...',
+    keyword: 'Type keyword, press Enter or |',
+    semantic: 'Describe what you\'re looking for, press Enter or |',
+    hybrid: 'Type keyword or description, press Enter or |',
 };
 
-export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semanticFeatures, dispatch }) => {
+const DELIMITER_RE = /[|,;]/;
+
+export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTags, semanticFeatures, dispatch }) => {
+    // ID mode: local text with debounce
     const [localValue, setLocalValue] = useState(value);
+    // Tag mode: current text being typed (not yet committed)
+    const [tagInput, setTagInput] = useState('');
+
     const [modeOpen, setModeOpen] = useState(false);
     const [featuresOpen, setFeaturesOpen] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const modeRef = useRef<HTMLDivElement>(null);
     const featuresRef = useRef<HTMLDivElement>(null);
+    const tagInputRef = useRef<HTMLInputElement>(null);
 
+    const isIdMode = searchMode === 'id';
+
+    // Sync external value for ID mode
     useEffect(() => { setLocalValue(value); }, [value]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // ID mode: debounced text input
+    const handleIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const v = e.target.value;
         setLocalValue(v);
         clearTimeout(timerRef.current);
@@ -40,6 +52,53 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semantic
     };
 
     useEffect(() => () => clearTimeout(timerRef.current), []);
+
+    // Tag mode: commit current input as a tag
+    const commitTag = (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        dispatch({ type: 'SET_SEARCH_TAGS', payload: [...searchTags, trimmed] });
+    };
+
+    // Tag mode: handle input changes — check for delimiters
+    const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const v = e.target.value;
+        if (DELIMITER_RE.test(v)) {
+            // Split on any delimiter, commit non-empty parts
+            const parts = v.split(DELIMITER_RE).map(s => s.trim()).filter(Boolean);
+            if (parts.length > 0) {
+                dispatch({ type: 'SET_SEARCH_TAGS', payload: [...searchTags, ...parts] });
+            }
+            setTagInput('');
+        } else {
+            setTagInput(v);
+        }
+    };
+
+    // Tag mode: handle key events
+    const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (tagInput.trim()) {
+                commitTag(tagInput);
+                setTagInput('');
+            }
+        } else if (e.key === 'Backspace' && tagInput === '' && searchTags.length > 0) {
+            dispatch({ type: 'SET_SEARCH_TAGS', payload: searchTags.slice(0, -1) });
+        }
+    };
+
+    // Tag mode: commit on blur
+    const handleTagBlur = () => {
+        if (tagInput.trim()) {
+            commitTag(tagInput);
+            setTagInput('');
+        }
+    };
+
+    const removeTag = (index: number) => {
+        dispatch({ type: 'SET_SEARCH_TAGS', payload: searchTags.filter((_, i) => i !== index) });
+    };
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -55,7 +114,7 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semantic
     const showFeatures = searchMode === 'semantic' || searchMode === 'hybrid';
 
     return (
-        <div className="flex items-stretch gap-0">
+        <div className="flex items-stretch gap-0 min-h-[32px]">
             {/* Mode selector dropdown */}
             <div ref={modeRef} className="relative flex-shrink-0">
                 <button
@@ -96,17 +155,53 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semantic
                 )}
             </div>
 
-            {/* Search input */}
-            <div className="flex-1 flex items-center border border-border-light bg-white min-w-0">
-                <span className="material-symbols-outlined text-[16px] text-text-sub pl-2 flex-shrink-0">search</span>
-                <input
-                    type="text"
-                    value={localValue}
-                    onChange={handleChange}
-                    placeholder={PLACEHOLDER[searchMode]}
-                    className="flex-1 text-xs px-2 py-1.5 border-none focus:ring-0 focus:outline-none bg-transparent text-text-main placeholder-text-sub min-w-0"
-                />
-            </div>
+            {/* Search input area */}
+            {isIdMode ? (
+                /* ID mode: plain text input */
+                <div className="flex-1 flex items-center border border-border-light bg-white min-w-0">
+                    <span className="material-symbols-outlined text-[16px] text-text-sub pl-2 flex-shrink-0">search</span>
+                    <input
+                        type="text"
+                        value={localValue}
+                        onChange={handleIdChange}
+                        placeholder={PLACEHOLDER.id}
+                        className="h-full flex-1 text-xs px-2 py-0 border-none focus:ring-0 focus:outline-none bg-transparent text-text-main placeholder-text-sub min-w-0"
+                    />
+                </div>
+            ) : (
+                /* Tag mode: chip input */
+                <div
+                    className="flex-1 flex items-center flex-wrap gap-1 border border-border-light bg-white min-w-0 px-2 py-1 cursor-text"
+                    onClick={() => tagInputRef.current?.focus()}
+                >
+                    <span className="material-symbols-outlined text-[16px] text-text-sub flex-shrink-0">search</span>
+                    {searchTags.map((tag, i) => (
+                        <span
+                            key={i}
+                            className="inline-flex items-center gap-0.5 bg-primary/10 text-primary text-[11px] font-medium pl-2 pr-1 py-0.5 rounded select-none"
+                        >
+                            {tag}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); removeTag(i); }}
+                                className="hover:text-red-500 transition-colors ml-0.5 flex items-center"
+                                tabIndex={-1}
+                            >
+                                <span className="material-symbols-outlined text-[12px]">close</span>
+                            </button>
+                        </span>
+                    ))}
+                    <input
+                        ref={tagInputRef}
+                        type="text"
+                        value={tagInput}
+                        onChange={handleTagInputChange}
+                        onKeyDown={handleTagKeyDown}
+                        onBlur={handleTagBlur}
+                        placeholder={searchTags.length === 0 ? PLACEHOLDER[searchMode] : ''}
+                        className="flex-1 min-w-[80px] text-xs px-1 py-0 border-none focus:ring-0 focus:outline-none bg-transparent text-text-main placeholder-text-sub"
+                    />
+                </div>
+            )}
 
             {/* Semantic feature toggles (only for semantic/hybrid) */}
             {showFeatures && (
@@ -144,7 +239,7 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semantic
                             <div className="mt-1.5 pt-1.5 border-t border-border-light px-1">
                                 <span className="text-[10px] text-text-sub italic flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[10px]">info</span>
-                                    Qdrant backend not connected
+                                    {semanticFeatures.size} of {SEMANTIC_FEATURES.length} vector fields active
                                 </span>
                             </div>
                         </div>
@@ -154,7 +249,7 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, semantic
 
             {/* Right cap — round the corner */}
             {!showFeatures && (
-                <div className="border-r border-y border-border-light rounded-r w-0" />
+                <div className="h-full border-r border-y border-border-light rounded-r w-0" />
             )}
             {showFeatures && (
                 <div className="rounded-r" />

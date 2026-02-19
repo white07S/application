@@ -7,7 +7,6 @@ import { useCESearch } from '../hooks/useCESearch';
 import { useFilterData } from '../hooks/useFilterData';
 import { useCascadeSuggestions, CascadeSuggestion } from '../hooks/useCascadeSuggestions';
 import { FilterSection } from './FilterSection';
-import { DateFilter } from './DateFilter';
 import { HierarchyFilter } from './HierarchyFilter';
 import { FlatListFilter } from './FlatListFilter';
 import { RiskThemeFilter } from './RiskThemeFilter';
@@ -17,6 +16,7 @@ import { CascadeBanner } from './CascadeBanner';
 interface FilterSidebarProps {
     state: FilterState;
     dispatch: React.Dispatch<FilterAction>;
+    onApply?: () => void;
 }
 
 function collectChips(
@@ -73,14 +73,14 @@ function collectChips(
     return chips;
 }
 
-export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch }) => {
+export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, onApply }) => {
     const totalCount = getSelectionCount(state);
 
     // Data hooks
-    const funcTree = useFunctionTree(state.asOfDate);
-    const locTree = useLocationTree(state.asOfDate);
-    const ceSearch = useCESearch(state.asOfDate);
-    const { aus, riskThemes } = useFilterData(state.asOfDate);
+    const funcTree = useFunctionTree();
+    const locTree = useLocationTree();
+    const ceSearch = useCESearch();
+    const { aus, riskThemes } = useFilterData();
 
     // Cascade suggestions
     const { suggestions, dismiss } = useCascadeSuggestions(
@@ -91,9 +91,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
     );
 
     // Section expansion state
-    const SECTIONS = ['date', 'functions', 'locations', 'ces', 'aus', 'risk'] as const;
+    const SECTIONS = ['functions', 'locations', 'ces', 'aus', 'risk'] as const;
     const [expanded, setExpanded] = useState<Record<string, boolean>>({
-        date: true,
         functions: true,
         locations: false,
         ces: false,
@@ -108,9 +107,6 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
         const newVal = allCollapsed; // if all collapsed, expand all; otherwise collapse all
         setExpanded(Object.fromEntries(SECTIONS.map((k) => [k, newVal])));
     }, [allCollapsed]);
-
-    // Collect date warning from any hook that reports a date fallback
-    const dateWarning = funcTree.dateWarning || locTree.dateWarning || ceSearch.dateWarning || aus.dateWarning || riskThemes.dateWarning || null;
 
     const chips = useMemo(
         () => collectChips(state, funcTree.nodes, locTree.nodes, ceSearch.items, aus.items, riskThemes.taxonomies),
@@ -142,15 +138,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
         suggestions.filter((s) => s.targetSection === targetSection);
 
     const handleApply = () => {
-        console.log('Apply filters:', {
-            asOfDate: state.asOfDate,
-            cascadeEnabled: state.cascadeEnabled,
-            functions: Array.from(state.selectedFunctions),
-            locations: Array.from(state.selectedLocations),
-            ces: Array.from(state.selectedCEs),
-            aus: Array.from(state.selectedAUs),
-            riskThemes: Array.from(state.selectedRiskThemes),
-        });
+        onApply?.();
     };
 
     return (
@@ -212,38 +200,11 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch })
                 </button>
             </div>
 
-            {/* Date Warning */}
-            {dateWarning && (
-                <div className="flex items-start gap-1.5 px-2 py-1.5 bg-amber-50 border-b border-amber-200">
-                    <span className="material-symbols-outlined text-[14px] text-amber-600 mt-0.5 flex-shrink-0">
-                        info
-                    </span>
-                    <span className="text-[10px] text-amber-800 leading-tight">
-                        {dateWarning}
-                    </span>
-                </div>
-            )}
-
             {/* Chips */}
             <FilterChips chips={chips} onRemove={handleRemoveChip} />
 
             {/* Scrollable filter sections — min-h-0 allows flex child to shrink and scroll */}
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border-light">
-                {/* As of Date */}
-                <FilterSection
-                    icon="calendar_today"
-                    title="As of Date"
-                    count={0}
-                    onClear={() => dispatch({ type: 'SET_DATE', payload: new Date().toISOString().split('T')[0] })}
-                    expanded={expanded.date}
-                    onToggle={() => toggleSection('date')}
-                >
-                    <DateFilter
-                        value={state.asOfDate}
-                        onChange={(date) => dispatch({ type: 'SET_DATE', payload: date })}
-                    />
-                </FilterSection>
-
                 {/* Functions */}
                 <FilterSection
                     icon="account_tree"

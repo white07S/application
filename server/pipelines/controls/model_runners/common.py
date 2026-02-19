@@ -1,11 +1,27 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import orjson
+
+
+# ---------------------------------------------------------------------------
+# Feature names (single source of truth for all 6 searchable/embeddable fields)
+# ---------------------------------------------------------------------------
+
+FEATURE_NAMES: List[str] = [
+    "control_title",
+    "control_description",
+    "evidence_description",
+    "local_functional_information",
+    "control_as_event",
+    "control_as_issues",
+]
+
+HASH_COLUMN_NAMES: List[str] = [f"hash_{f}" for f in FEATURE_NAMES]
+MASK_COLUMN_NAMES: List[str] = [f"mask_{f}" for f in FEATURE_NAMES]
 
 
 # ---------------------------------------------------------------------------
@@ -128,12 +144,17 @@ def write_jsonl_with_index(
     output_path: Path,
     model_name: str,
     run_date: str,
-    hash_by_control_id: Mapping[str, str],
+    hashes_by_control_id: Mapping[str, Dict[str, Optional[str]]],
 ) -> Path:
+    """Write JSONL records and a companion index JSON file.
+
+    Args:
+        hashes_by_control_id: Maps control_id → {hash_control_title: ..., hash_control_description: ..., ...}
+            Each value is a dict of 6 per-feature hashes (or None for empty features).
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     by_control_id: Dict[str, Dict[str, Any]] = {}
-    by_hash: Dict[str, List[str]] = defaultdict(list)
     seen_control_ids = set()
 
     with output_path.open("wb") as f:
@@ -149,14 +170,13 @@ def write_jsonl_with_index(
             f.write(orjson.dumps(record))
             f.write(b"\n")
 
-            hash_value = hash_by_control_id.get(control_id)
-            by_control_id[control_id] = {
+            feature_hashes = hashes_by_control_id.get(control_id, {})
+            entry: Dict[str, Any] = {
                 "row": row_index,
                 "offset": offset,
-                "hash": hash_value,
             }
-            if hash_value is not None:
-                by_hash[hash_value].append(control_id)
+            entry.update(feature_hashes)
+            by_control_id[control_id] = entry
 
     index_doc = {
         "model": model_name,
@@ -165,7 +185,6 @@ def write_jsonl_with_index(
         "output_file": str(output_path),
         "records": len(records),
         "by_control_id": by_control_id,
-        "by_hash": by_hash,
     }
     index_path = output_path.with_suffix(output_path.suffix + ".index.json")
     index_path.write_bytes(
@@ -180,17 +199,21 @@ def write_npz_index(
     model_name: str,
     run_date: str,
     control_ids: Sequence[str],
-    hash_by_control_id: Mapping[str, str],
+    hashes_by_control_id: Mapping[str, Dict[str, Optional[str]]],
     embedding_dim: int,
 ) -> Path:
+    """Write NPZ index JSON file with per-feature hashes.
+
+    Args:
+        hashes_by_control_id: Maps control_id → {hash_control_title: ..., ...}
+    """
     by_control_id: Dict[str, Dict[str, Any]] = {}
-    by_hash: Dict[str, List[str]] = defaultdict(list)
 
     for row_index, control_id in enumerate(control_ids):
-        hash_value = hash_by_control_id.get(control_id)
-        by_control_id[control_id] = {"row": row_index, "hash": hash_value}
-        if hash_value is not None:
-            by_hash[hash_value].append(control_id)
+        feature_hashes = hashes_by_control_id.get(control_id, {})
+        entry: Dict[str, Any] = {"row": row_index}
+        entry.update(feature_hashes)
+        by_control_id[control_id] = entry
 
     index_doc = {
         "model": model_name,
@@ -200,7 +223,6 @@ def write_npz_index(
         "records": len(control_ids),
         "embedding_dim": embedding_dim,
         "by_control_id": by_control_id,
-        "by_hash": by_hash,
     }
     index_path = output_npz_path.with_suffix(output_npz_path.suffix + ".index.json")
     index_path.write_bytes(

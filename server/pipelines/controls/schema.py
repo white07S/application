@@ -14,8 +14,10 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
+    SmallInteger,
     Table,
     Text,
     UniqueConstraint,
@@ -40,6 +42,8 @@ CONTROLS_TABLES = [
     "ai_controls_model_enrichment",
     "ai_controls_model_taxonomy",
     "ai_controls_model_clean_text",
+    # AI (1) — precomputed similarity
+    "ai_controls_similar_controls",
 ]
 
 # ──────────────────────────────────────────────────────────────────────
@@ -76,13 +80,13 @@ src_controls_ver_control = Table(
     Column("performance_measures_required", Boolean, nullable=True),
     Column("performance_measures_available_from", Text, nullable=True),
 
-    # Dates (stored as source strings)
-    Column("valid_from", Text, nullable=True),
-    Column("valid_until", Text, nullable=True),
-    Column("last_modified_on", Text, nullable=True),
-    Column("control_created_on", Text, nullable=True),
-    Column("last_modification_on", Text, nullable=True),
-    Column("control_status_date_change", Text, nullable=True),
+    # Dates
+    Column("valid_from", DateTime(timezone=True), nullable=True),
+    Column("valid_until", DateTime(timezone=True), nullable=True),
+    Column("last_modified_on", DateTime(timezone=True), nullable=True),
+    Column("control_created_on", DateTime(timezone=True), nullable=True),
+    Column("last_modification_on", DateTime(timezone=True), nullable=True),
+    Column("control_status_date_change", DateTime(timezone=True), nullable=True),
 
     # Deactivation
     Column("reason_for_deactivation", Text, nullable=True),
@@ -318,8 +322,15 @@ ai_controls_model_clean_text = Table(
     metadata,
     Column("ver_id", BigInteger, primary_key=True, autoincrement=True),
     Column("ref_control_id", Text, ForeignKey("src_controls_ref_control.control_id"), nullable=False),
-    Column("hash", Text, nullable=True),
     Column("model_run_timestamp", DateTime(timezone=True), nullable=False),
+
+    # Per-feature hashes (for embedding delta detection)
+    Column("hash_control_title", Text, nullable=True),
+    Column("hash_control_description", Text, nullable=True),
+    Column("hash_evidence_description", Text, nullable=True),
+    Column("hash_local_functional_information", Text, nullable=True),
+    Column("hash_control_as_event", Text, nullable=True),
+    Column("hash_control_as_issues", Text, nullable=True),
 
     # Clean text fields
     Column("control_title", Text, nullable=True),
@@ -377,3 +388,35 @@ FTS_TRIGGER_DROP_SQL = """
 DROP TRIGGER IF EXISTS trg_clean_text_tsvectors ON ai_controls_model_clean_text;
 DROP FUNCTION IF EXISTS update_clean_text_tsvectors();
 """
+
+
+# ──────────────────────────────────────────────────────────────────────
+# AI Similar Controls (precomputed)
+# ──────────────────────────────────────────────────────────────────────
+
+ai_controls_similar_controls = Table(
+    "ai_controls_similar_controls",
+    metadata,
+    Column("ref_control_id", Text, ForeignKey("src_controls_ref_control.control_id"), nullable=False),
+    Column("similar_control_id", Text, ForeignKey("src_controls_ref_control.control_id"), nullable=False),
+    Column("rank", SmallInteger, nullable=False),
+    Column("score", Float, nullable=False),
+    Column("feature_scores", JSONB, nullable=True),
+    Column("tx_from", DateTime(timezone=True), nullable=False),
+    Column("tx_to", DateTime(timezone=True), nullable=True),
+
+    CheckConstraint("tx_to IS NULL OR tx_to > tx_from", name="chk_tx_order_similar_controls"),
+)
+
+Index(
+    "ix_similar_controls_current",
+    ai_controls_similar_controls.c.ref_control_id,
+    postgresql_where=ai_controls_similar_controls.c.tx_to.is_(None),
+)
+
+# Reverse index: find all controls that point to a given control (for incremental similarity)
+Index(
+    "ix_similar_controls_reverse_current",
+    ai_controls_similar_controls.c.similar_control_id,
+    postgresql_where=ai_controls_similar_controls.c.tx_to.is_(None),
+)

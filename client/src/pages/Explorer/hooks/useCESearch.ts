@@ -3,7 +3,7 @@ import { useAuth } from '../../../auth/useAuth';
 import { FlatItem } from '../types';
 import { fetchCEs } from '../api/explorerApi';
 
-export function useCESearch(asOfDate: string) {
+export function useCESearch() {
     const { getApiAccessToken } = useAuth();
     const [items, setItems] = useState<FlatItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -11,7 +11,6 @@ export function useCESearch(asOfDate: string) {
     const [search, setSearch] = useState('');
     const [total, setTotal] = useState(0);
     const [hasMore, setHasMore] = useState(false);
-    const [dateWarning, setDateWarning] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -21,12 +20,11 @@ export function useCESearch(asOfDate: string) {
             try {
                 const token = await getApiAccessToken();
                 if (!token || cancelled) return;
-                const data = await fetchCEs(token, asOfDate, search || undefined, 1);
+                const data = await fetchCEs(token, search || undefined, 1);
                 if (!cancelled) {
                     setItems(data.items.map((i) => ({ id: i.id, label: i.label, description: i.description })));
                     setTotal(data.total);
                     setHasMore(data.has_more);
-                    setDateWarning(data.date_warning || null);
                 }
             } catch (err: any) {
                 if (!cancelled) setError(err.message || 'Failed to load entities');
@@ -39,7 +37,7 @@ export function useCESearch(asOfDate: string) {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [search, asOfDate]);
+    }, [search, getApiAccessToken]);
 
-    return { items, loading, error, search, setSearch, total, hasMore, dateWarning };
+    return { items, loading, error, search, setSearch, total, hasMore };
 }

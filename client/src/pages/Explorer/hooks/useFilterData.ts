@@ -3,7 +3,7 @@ import { useAuth } from '../../../auth/useAuth';
 import { FlatItem, RiskTaxonomy } from '../types';
 import { fetchAUs, fetchRiskThemes } from '../api/explorerApi';
 
-export function useFilterData(asOfDate: string) {
+export function useFilterData() {
     const { getApiAccessToken } = useAuth();
 
     const [auItems, setAuItems] = useState<FlatItem[]>([]);
@@ -11,8 +11,6 @@ export function useFilterData(asOfDate: string) {
 
     const [taxonomies, setTaxonomies] = useState<RiskTaxonomy[]>([]);
     const [riskLoading, setRiskLoading] = useState(true);
-    const [auDateWarning, setAuDateWarning] = useState<string | null>(null);
-    const [riskDateWarning, setRiskDateWarning] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -24,8 +22,8 @@ export function useFilterData(asOfDate: string) {
                 if (!token || cancelled) return;
 
                 const [auData, riskData] = await Promise.all([
-                    fetchAUs(token, asOfDate),
-                    fetchRiskThemes(token, asOfDate),
+                    fetchAUs(token),
+                    fetchRiskThemes(token),
                 ]);
 
                 if (!cancelled) {
@@ -37,13 +35,11 @@ export function useFilterData(asOfDate: string) {
                         location_node_id: i.location_node_id ?? undefined,
                         location_type: i.location_type ?? undefined,
                     })));
-                    setAuDateWarning(auData.date_warning || null);
                     setTaxonomies(riskData.taxonomies.map((t) => ({
                         id: t.id,
                         name: t.name,
                         themes: t.themes.map((th) => ({ id: th.id, name: th.name })),
                     })));
-                    setRiskDateWarning(riskData.date_warning || null);
                 }
             } catch (err: any) {
                 // Errors are non-fatal for individual sections
@@ -56,10 +52,10 @@ export function useFilterData(asOfDate: string) {
         };
         load();
         return () => { cancelled = true; };
-    }, [asOfDate]);
+    }, [getApiAccessToken]);
 
     return {
-        aus: { items: auItems, loading: auLoading, dateWarning: auDateWarning },
-        riskThemes: { taxonomies, loading: riskLoading, dateWarning: riskDateWarning },
+        aus: { items: auItems, loading: auLoading },
+        riskThemes: { taxonomies, loading: riskLoading },
     };
 }

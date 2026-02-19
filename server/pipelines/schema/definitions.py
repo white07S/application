@@ -45,6 +45,7 @@ from server.pipelines.controls.schema import (  # noqa: F401
     ai_controls_model_enrichment,
     ai_controls_model_taxonomy,
     ai_controls_model_clean_text,
+    ai_controls_similar_controls,
 )
 from server.pipelines.assessment_units.schema import (  # noqa: F401
     AU_TABLES,

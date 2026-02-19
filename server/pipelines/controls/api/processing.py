@@ -165,6 +165,26 @@ async def start_ingestion(
                 detail=f"Batch {request.batch_id} is not in a re-runnable state (status: {batch.status})"
             )
 
+        # Check predecessor upload was successfully ingested
+        predecessor = await db.execute(
+            select(UploadBatch)
+            .where(UploadBatch.upload_id < batch.upload_id)
+            .where(UploadBatch.data_type == batch.data_type)
+            .order_by(UploadBatch.upload_id.desc())
+            .limit(1)
+        )
+        prev_batch = predecessor.scalar_one_or_none()
+
+        if prev_batch and prev_batch.status != "success":
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Cannot ingest {batch.upload_id}: predecessor {prev_batch.upload_id} "
+                    f"has status '{prev_batch.status}' (must be 'success'). "
+                    f"Please ingest {prev_batch.upload_id} first."
+                ),
+            )
+
         # Check readiness
         readiness = check_ingestion_readiness(batch.upload_id)
         if not readiness.ready:

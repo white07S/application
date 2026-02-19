@@ -2,7 +2,6 @@ import { useReducer } from 'react';
 import { FilterState, FilterAction } from '../types';
 
 const initialState: FilterState = {
-    asOfDate: new Date().toISOString().split('T')[0],
     cascadeEnabled: true,
     selectedFunctions: new Set<string>(),
     selectedLocations: new Set<string>(),
@@ -23,8 +22,6 @@ function toggleInSet(set: Set<string>, id: string): Set<string> {
 
 function filterReducer(state: FilterState, action: FilterAction): FilterState {
     switch (action.type) {
-        case 'SET_DATE':
-            return { ...state, asOfDate: action.payload };
         case 'TOGGLE_CASCADE':
             return { ...state, cascadeEnabled: !state.cascadeEnabled };
         case 'TOGGLE_FUNCTION':
@@ -50,7 +47,6 @@ function filterReducer(state: FilterState, action: FilterAction): FilterState {
         case 'RESET_ALL':
             return {
                 ...initialState,
-                asOfDate: new Date().toISOString().split('T')[0],
                 cascadeEnabled: state.cascadeEnabled,
                 selectedFunctions: new Set<string>(),
                 selectedLocations: new Set<string>(),

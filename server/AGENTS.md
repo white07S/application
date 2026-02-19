@@ -20,7 +20,7 @@ Redis is used as a service-level cache via the `server/cache` package. Caching i
 from server.cache import cached
 
 @cached(namespace="explorer", ttl=3600)
-async def get_function_tree(as_of: date, ...) -> tuple[list[TreeNodeResponse], str | None]:
+async def get_function_tree(parent_id: str | None = None, search: str | None = None) -> list[TreeNodeResponse]:
     ...
 ```
 

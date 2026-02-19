@@ -40,6 +40,11 @@ from server.pipelines.controls.schema import (
 from server.pipelines.orgs.schema import src_orgs_ref_node
 from server.pipelines.risks.schema import src_risks_ref_theme
 from server.pipelines.controls import qdrant_service
+from server.pipelines.controls.model_runners.common import (
+    FEATURE_NAMES,
+    HASH_COLUMN_NAMES,
+    MASK_COLUMN_NAMES,
+)
 from server.settings import get_settings
 
 logger = get_logger(name=__name__)
@@ -48,16 +53,11 @@ _SETTINGS = get_settings()
 BATCH_SIZE = _SETTINGS.postgres_write_batch_size
 DEFAULT_EMBEDDING_DIM = 3072
 EMBEDDING_FEATURES: List[tuple[str, str]] = [
-    ("control_title", "control_title_embedding"),
-    ("control_description", "control_description_embedding"),
-    ("evidence_description", "evidence_description_embedding"),
-    ("local_functional_information", "local_functional_information_embedding"),
-    ("control_as_event", "control_as_event_embedding"),
-    ("control_as_issues", "control_as_issues_embedding"),
+    (f, f"{f}_embedding") for f in FEATURE_NAMES
 ]
 
 # Qdrant named vector keys (feature names without _embedding suffix)
-QDRANT_VECTOR_NAMES = [feat[0] for feat in EMBEDDING_FEATURES]
+QDRANT_VECTOR_NAMES = FEATURE_NAMES
 
 
 @dataclass
@@ -147,6 +147,14 @@ def _parse_timestamp(value: Any, fallback_iso: str) -> datetime:
     return datetime.fromisoformat(iso)
 
 
+def _parse_optional_timestamp(value: Any) -> Optional[datetime]:
+    """Parse a timestamp value into a tz-aware datetime, or None."""
+    parsed = _coerce_utc_iso(value)
+    if parsed is None:
+        return None
+    return datetime.fromisoformat(parsed)
+
+
 def _coerce_list_str(value: Any) -> List[str]:
     """Coerce a value to a list of strings, filtering None."""
     if not isinstance(value, list) or not value:
@@ -220,11 +228,35 @@ async def _get_existing_control_ids(conn) -> Dict[str, str]:
 
 
 async def _get_existing_model_hashes(conn, table) -> Dict[str, Optional[str]]:
-    """Get current hash by control_id for an AI model table."""
+    """Get current hash by control_id for an AI model table (enrichment, taxonomy)."""
     result = await conn.execute(
         select(table.c.ref_control_id, table.c.hash).where(table.c.tx_to.is_(None))
     )
     return {row.ref_control_id: row.hash for row in result}
+
+
+async def _get_existing_clean_text_hashes(conn) -> Dict[str, Dict[str, Optional[str]]]:
+    """Get current per-feature hashes from ai_controls_model_clean_text.
+
+    Returns:
+        Dict mapping control_id → {hash_control_title: ..., hash_control_description: ..., ...}
+    """
+    cols = [ai_controls_model_clean_text.c.ref_control_id]
+    for hash_col_name in HASH_COLUMN_NAMES:
+        cols.append(getattr(ai_controls_model_clean_text.c, hash_col_name))
+
+    result = await conn.execute(
+        select(*cols).where(ai_controls_model_clean_text.c.tx_to.is_(None))
+    )
+
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for row in result:
+        cid = row.ref_control_id
+        hashes = {}
+        for hash_col_name in HASH_COLUMN_NAMES:
+            hashes[hash_col_name] = getattr(row, hash_col_name, None)
+        out[cid] = hashes
+    return out
 
 
 async def _load_valid_org_node_ids(conn) -> Set[str]:
@@ -322,11 +354,11 @@ def _build_ver_control_row(control: Dict[str, Any], tx_from: datetime) -> dict:
         "performance_measures_required": control.get("performance_measures_required"),
         "performance_measures_available_from": control.get("performance_measures_available_from"),
         "control_status": control.get("control_status"),
-        "valid_from": control.get("valid_from"),
-        "valid_until": control.get("valid_until"),
+        "valid_from": _parse_optional_timestamp(control.get("valid_from")),
+        "valid_until": _parse_optional_timestamp(control.get("valid_until")),
         "reason_for_deactivation": control.get("reason_for_deactivation"),
         "status_updates": control.get("status_updates"),
-        "last_modified_on": control.get("last_modified_on"),
+        "last_modified_on": _parse_timestamp(control.get("last_modified_on"), tx_from.isoformat()) if control.get("last_modified_on") else None,
         "control_owner": control.get("control_owner"),
         "control_owner_gpn": control.get("control_owner_gpn"),
         "control_instance_owner_role": control.get("control_instance_owner_role"),
@@ -349,11 +381,11 @@ def _build_ver_control_row(control: Dict[str, Any], tx_from: datetime) -> dict:
         "additional_information_on_deactivation": control.get("additional_information_on_deactivation"),
         "control_created_by": control.get("control_created_by"),
         "control_created_by_gpn": control.get("control_created_by_gpn"),
-        "control_created_on": control.get("control_created_on"),
+        "control_created_on": _parse_timestamp(control.get("control_created_on"), tx_from.isoformat()) if control.get("control_created_on") else None,
         "last_control_modification_requested_by": control.get("last_control_modification_requested_by"),
         "last_control_modification_requested_by_gpn": control.get("last_control_modification_requested_by_gpn"),
-        "last_modification_on": control.get("last_modification_on"),
-        "control_status_date_change": control.get("control_status_date_change"),
+        "last_modification_on": _parse_timestamp(control.get("last_modification_on"), tx_from.isoformat()) if control.get("last_modification_on") else None,
+        "control_status_date_change": _parse_timestamp(control.get("control_status_date_change"), tx_from.isoformat()) if control.get("control_status_date_change") else None,
         "category_flags": _coerce_list_str(control.get("category_flags", [])),
         "sox_assertions": _coerce_list_str(control.get("sox_assertions", [])),
         "unlinked_risk_themes": unlinked_risk_themes,
@@ -567,6 +599,9 @@ async def run_controls_ingestion(
             async with engine.connect() as c:
                 return await query_fn(c, *args)
 
+        # Read current Qdrant hashes in parallel with PG queries
+        qdrant_hashes_task = qdrant_service.read_current_hashes()
+
         (
             existing,
             existing_taxonomy_hashes,
@@ -574,13 +609,15 @@ async def run_controls_ingestion(
             existing_clean_text_hashes,
             valid_node_ids,
             valid_theme_ids,
+            current_qdrant_hashes,
         ) = await asyncio.gather(
             _pq(_get_existing_control_ids),
             _pq(_get_existing_model_hashes, ai_controls_model_taxonomy),
             _pq(_get_existing_model_hashes, ai_controls_model_enrichment),
-            _pq(_get_existing_model_hashes, ai_controls_model_clean_text),
+            _pq(_get_existing_clean_text_hashes),
             _pq(_load_valid_org_node_ids),
             _pq(_load_valid_theme_ids),
+            qdrant_hashes_task,
         )
         existing_ids = set(existing.keys())
         logger.info(
@@ -615,9 +652,6 @@ async def run_controls_ingestion(
             cids_to_close_enrichment: List[str] = []
             cids_to_close_clean_text: List[str] = []
 
-            # Embedding tracking
-            embedding_cids_to_upsert: Set[str] = set()
-
             total_pending = 0
 
             for idx, control in enumerate(controls):
@@ -627,8 +661,10 @@ async def run_controls_ingestion(
                 cid = cid_raw.strip()
 
                 is_new = cid not in existing_ids
-                old_lmo = existing.get(cid)
-                new_lmo = control.get("last_modified_on")
+                # Normalize both sides to ISO string for comparison
+                # (old_lmo is datetime from DB, new_lmo is string from JSONL)
+                old_lmo = _coerce_utc_iso(existing.get(cid))
+                new_lmo = _coerce_utc_iso(control.get("last_modified_on"))
                 source_changed = is_new or old_lmo != new_lmo
 
                 if is_new:
@@ -714,20 +750,23 @@ async def run_controls_ingestion(
                         ai_enrichment_rows.append(row_dict)
                         existing_enrichment_hashes[cid] = incoming_hash
 
-                # AI Clean Text
+                # AI Clean Text (6 per-feature hashes)
                 clean_row = clean_text_rows.get(cid)
                 if clean_row:
-                    incoming_hash = clean_row.get("hash")
-                    if not isinstance(incoming_hash, str):
-                        incoming_hash = None
-                    existing_hash = existing_clean_text_hashes.get(cid)
-                    if existing_hash != incoming_hash:
-                        if existing_hash is not None:
+                    incoming_ct_hashes = {
+                        h: clean_row.get(h) for h in HASH_COLUMN_NAMES
+                    }
+                    existing_ct_hashes = existing_clean_text_hashes.get(cid, {})
+                    ct_changed = any(
+                        incoming_ct_hashes.get(h) != existing_ct_hashes.get(h)
+                        for h in HASH_COLUMN_NAMES
+                    )
+                    if ct_changed:
+                        if existing_ct_hashes:
                             cids_to_close_clean_text.append(cid)
                         model_run_ts = _parse_timestamp(clean_row.get("last_modified_on"), tx_from_iso)
-                        ai_clean_text_rows.append({
+                        row_dict = {
                             "ref_control_id": cid,
-                            "hash": incoming_hash,
                             "model_run_timestamp": model_run_ts,
                             "control_title": clean_row.get("control_title"),
                             "control_description": clean_row.get("control_description"),
@@ -737,17 +776,14 @@ async def run_controls_ingestion(
                             "control_as_issues": clean_row.get("control_as_issues"),
                             "tx_from": tx_from,
                             "tx_to": None,
-                        })
-                        existing_clean_text_hashes[cid] = incoming_hash
+                        }
+                        for h in HASH_COLUMN_NAMES:
+                            row_dict[h] = incoming_ct_hashes.get(h)
+                        ai_clean_text_rows.append(row_dict)
+                        existing_clean_text_hashes[cid] = incoming_ct_hashes
 
-                # Embedding delta detection (hash-based, upsert to Qdrant later)
-                if embeddings_npz is not None:
-                    emb_meta = embeddings_by_cid.get(cid)
-                    incoming_hash = emb_meta.get("hash") if isinstance(emb_meta, dict) else None
-                    if not isinstance(incoming_hash, str):
-                        incoming_hash = None
-                    # Always upsert on first load or hash change
-                    embedding_cids_to_upsert.add(cid)
+                # Embedding delta detection is done after the loop via Qdrant hashes
+                # (no per-control work needed here)
 
                 counts.processed += 1
 
@@ -817,30 +853,31 @@ async def run_controls_ingestion(
 
         # Transaction committed at this point
 
-        # ── Upsert embeddings to Qdrant (outside Postgres transaction) ──
-        if embeddings_npz is not None and embedding_cids_to_upsert:
-            emb_total = len(embedding_cids_to_upsert)
-            logger.info(
-                "Upserting embeddings to Qdrant for {} controls",
-                emb_total,
+        # ── Qdrant delta upsert (outside Postgres transaction) ──────────
+        if embeddings_npz is not None and embeddings_by_cid:
+            if progress_callback:
+                await progress_callback("Computing embedding delta...", counts.processed, counts.total, 91)
+
+            # Build incoming hashes + masks from embeddings index (per-feature)
+            incoming_emb_hashes: Dict[str, Dict[str, Optional[str]]] = {}
+            for cid_str, meta in embeddings_by_cid.items():
+                if not isinstance(meta, dict):
+                    continue
+                hashes: Dict[str, Any] = {h: meta.get(h) for h in HASH_COLUMN_NAMES}
+                for m in MASK_COLUMN_NAMES:
+                    hashes[m] = meta.get(m, True)
+                incoming_emb_hashes[cid_str] = hashes
+
+            # Per-feature delta detection against Qdrant
+            new_cids, changed_features, unchanged_cids = qdrant_service.compute_embedding_delta(
+                incoming_emb_hashes, current_qdrant_hashes,
             )
 
-            # Optimize collection for bulk ingestion (disable HNSW)
-            await qdrant_service.optimize_collection_for_ingestion()
-
-            if progress_callback:
-                await progress_callback(
-                    f"Upserting embeddings to Qdrant (0/{emb_total})",
-                    counts.processed,
-                    counts.total,
-                    91,
-                )
-
-            # Build embedding_data dict for qdrant_service
+            # Build embedding_data for controls that need Qdrant updates
+            all_upsert_cids = new_cids | set(changed_features.keys())
             embedding_data: Dict[str, Dict[str, Any]] = {}
-            zero_vec = [0.0] * embedding_dim
 
-            for cid_str in embedding_cids_to_upsert:
+            for cid_str in all_upsert_cids:
                 emb_meta = embeddings_by_cid.get(cid_str)
                 row_idx: Optional[int] = None
                 row_idx_raw = emb_meta.get("row") if isinstance(emb_meta, dict) else None
@@ -863,78 +900,64 @@ async def run_controls_ingestion(
                         except Exception:
                             raw_vec = None
                     cid_vectors[feature_name] = raw_vec
-
                 embedding_data[cid_str] = cid_vectors
 
-            # Upsert to Qdrant in batches (handled by qdrant_service)
-            sorted_cids = sorted(embedding_cids_to_upsert)
-
-            # Build a progress adapter for Qdrant upload
-            async def _qdrant_upload_progress(step: str, uploaded: int, total: int):
+            # Progress adapter
+            async def _qdrant_progress(step: str, uploaded: int, total: int):
                 if progress_callback:
-                    await progress_callback(
-                        f"Uploading to Qdrant: {uploaded}/{total} points",
-                        counts.processed,
-                        counts.total,
-                        92,  # Keep at 92% during upload
-                    )
+                    await progress_callback(step, counts.processed, counts.total, 93)
 
-            # Upload points to Qdrant
-            points_upserted = await qdrant_service.upsert_embeddings(
-                sorted_cids,
-                embedding_data,
-                progress_callback=_qdrant_upload_progress,
+            # Upsert new controls (full points)
+            points_new = await qdrant_service.upsert_new_controls(
+                sorted(new_cids), embedding_data, incoming_emb_hashes,
+                progress_callback=_qdrant_progress,
             )
 
-            # Restore collection settings (re-enable HNSW for fast searches)
-            await qdrant_service.restore_collection_after_ingestion()
+            # Update changed features on existing controls
+            points_updated = await qdrant_service.update_changed_features(
+                changed_features, embedding_data, incoming_emb_hashes,
+                progress_callback=_qdrant_progress,
+            )
+
+            total_qdrant = points_new + points_updated
+
+            # Wait for indexing if we did a large batch (HNSW was toggled)
+            if points_new > qdrant_service.HNSW_TOGGLE_THRESHOLD:
+                if progress_callback:
+                    await progress_callback("Waiting for Qdrant indexing...", counts.processed, counts.total, 95)
+
+                async def _indexing_progress(step: str, indexed: int, total: int):
+                    if progress_callback:
+                        await progress_callback(step, counts.processed, counts.total, 95)
+
+                green_status = await qdrant_service.wait_for_collection_green(
+                    progress_callback=_indexing_progress
+                )
+                if not green_status:
+                    logger.warning("Qdrant indexing timeout")
+
+            logger.info(
+                "Qdrant delta complete: {} new, {} updated, {} unchanged",
+                points_new, points_updated, len(unchanged_cids),
+            )
 
             if progress_callback:
-                await progress_callback(
-                    "Upload complete, waiting for Qdrant indexing...",
-                    counts.processed,
-                    counts.total,
-                    94,
+                await progress_callback(f"Qdrant complete ({total_qdrant} points)", counts.processed, counts.total, 96)
+
+            # ── Compute similar controls (incremental) ────────────
+            if embedding_arrays and len(embedding_arrays) >= len(EMBEDDING_FEATURES):
+                from server.pipelines.controls.similarity import compute_similar_controls
+
+                await compute_similar_controls(
+                    embedding_arrays=embedding_arrays,
+                    embeddings_index=embeddings_index,
+                    changed_control_ids=set(changed_features.keys()),
+                    new_control_ids=new_cids,
+                    progress_callback=progress_callback,
                 )
 
-            # Wait for collection to turn green (indexing complete)
-            # Build progress callback for indexing status
-            async def _indexing_progress(step: str, indexed: int, total: int):
-                if progress_callback:
-                    # Show actual indexing status
-                    await progress_callback(
-                        step,
-                        counts.processed,
-                        counts.total,
-                        95,  # 95% during indexing
-                    )
-
-            green_status = await qdrant_service.wait_for_collection_green(
-                progress_callback=_indexing_progress
-            )
-
-            if not green_status:
-                logger.warning("Qdrant indexing timeout - collection may not be fully indexed")
-                if progress_callback:
-                    await progress_callback(
-                        f"Qdrant indexing timeout (may still be indexing in background)",
-                        counts.processed,
-                        counts.total,
-                        98,
-                    )
-            else:
-                if progress_callback:
-                    await progress_callback(
-                        f"Qdrant complete ({points_upserted} points fully indexed)",
-                        counts.processed,
-                        counts.total,
-                        99,
-                    )
-
-            logger.info("Qdrant embedding upsert and indexing complete: {} points", points_upserted)
-
         elif embeddings_npz is not None:
-            logger.info("No embeddings to upsert, skipping Qdrant")
+            logger.info("No embeddings index found, skipping Qdrant")
 
         logger.info(
             "Ingestion complete: total={}, new={}, changed={}, unchanged={}, failed={}",

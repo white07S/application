@@ -8,6 +8,9 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from server.pipelines.controls.model_runners.common import (
+    FEATURE_NAMES,
+    HASH_COLUMN_NAMES,
+    MASK_COLUMN_NAMES,
     controls_jsonl_path,
     default_run_date,
     load_controls,
@@ -18,45 +21,17 @@ from server.pipelines.controls.model_runners.common import (
 )
 
 MODEL_NAME = "embeddings"
-EMBEDDING_FIELDS = [
-    "control_title_embedding",
-    "control_description_embedding",
-    "evidence_description_embedding",
-    "local_functional_information_embedding",
-    "control_as_event_embedding",
-    "control_as_issues_embedding",
-]
-
-
-def embeddings_hash(
-    control_row: Dict[str, Any],
-    clean_row: Optional[Dict[str, Any]],
-) -> str:
-    clean_row = clean_row or {}
-    parts = [
-        str(clean_row.get("control_title") or "").strip().lower(),
-        str(clean_row.get("control_description") or "").strip().lower(),
-        str(clean_row.get("evidence_description") or "").strip().lower(),
-        str(clean_row.get("local_functional_information") or "").strip().lower(),
-        str(clean_row.get("control_as_event") or "").strip().lower(),
-        str(clean_row.get("control_as_issues") or "").strip().lower(),
-    ]
-    payload = "|".join(parts)
-    if not payload:
-        payload = str(control_row.get("control_id") or "")
-    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    bucket = int(digest[:16], 16) % 10000
-    return "EM{:04d}".format(bucket)
+EMBEDDING_FIELDS = [f"{f}_embedding" for f in FEATURE_NAMES]
 
 
 def text_to_embedding(text: Any, dim: int) -> np.ndarray:
+    """Generate a deterministic sparse mock embedding from text hash."""
     if text is None or str(text).strip() == "":
         return np.zeros((dim,), dtype=np.float16)
 
     digest = hashlib.sha256(str(text).encode("utf-8")).digest()
     vec = np.zeros((dim,), dtype=np.float16)
 
-    # Sparse deterministic mock embedding: stable and compact on disk.
     for i in range(0, 24, 2):
         idx = ((digest[i] << 8) | digest[i + 1]) % dim
         raw = digest[(i + 8) % len(digest)]
@@ -75,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-ingested-path", type=Path, default=None, help="Base data_ingested directory (default: from .env)")
     parser.add_argument("--run-date", type=str, default=None, help="ISO date (default: today)")
     parser.add_argument("--embedding-dim", type=int, default=3072)
+    parser.add_argument("--qdrant-dataset-path", type=Path, default=None, help="Path to Qdrant/DBpedia Arrow IPC dataset for real embeddings")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -91,7 +67,7 @@ def main() -> int:
         return 1
     controls_rows = load_controls(input_path, limit=args.limit)
 
-    # Load clean_text output (required dependency)
+    # Load clean_text output (required dependency — provides per-feature hashes)
     clean_text_path = model_output_path(data_ingested_path, "clean_text", args.upload_id)
     if not clean_text_path.exists():
         print(f"ERROR: Clean text output not found: {clean_text_path}")
@@ -105,35 +81,72 @@ def main() -> int:
         return 1
     output_npz_path.parent.mkdir(parents=True, exist_ok=True)
 
-    control_ids = []
-    hash_by_control_id = {}
-    hash_null_col = []
-    last_modified_on_col = []
+    # Load real embeddings from dataset if path provided
+    dataset_embeddings: Optional[Dict[str, np.ndarray]] = None
+    if args.qdrant_dataset_path is not None:
+        from server.pipelines.controls.model_runners.dataset_pool import load_embeddings_for_controls
+        print(f"Loading real embeddings from dataset: {args.qdrant_dataset_path}")
+        dataset_embeddings = load_embeddings_for_controls(
+            args.qdrant_dataset_path,
+            len(controls_rows),
+            dim=args.embedding_dim,
+            dtype=np.float16,
+        )
+        print(f"Loaded real embeddings for {len(controls_rows)} controls")
+
+    control_ids: List[str] = []
+    hashes_by_control_id: Dict[str, Dict[str, Optional[str]]] = {}
 
     # Allocate embedding arrays
     n = len(controls_rows)
     embeddings_by_field = {name: np.zeros((n, args.embedding_dim), dtype=np.float16) for name in EMBEDDING_FIELDS}
 
+    features_generated = 0
+    features_skipped = 0
+    features_masked = 0
+
     for row_idx, row in enumerate(controls_rows):
         control_id = str(row["control_id"])
         clean_row = clean_text_rows.get(control_id, {})
-        hash_value = embeddings_hash(row, clean_row)
-        hash_by_control_id[control_id] = hash_value
         control_ids.append(control_id)
-        hash_null_col.append(None)
-        last_modified_on_col.append(row.get("last_modified_on"))
 
-        embeddings_by_field["control_title_embedding"][row_idx] = text_to_embedding(clean_row.get("control_title"), args.embedding_dim)
-        embeddings_by_field["control_description_embedding"][row_idx] = text_to_embedding(clean_row.get("control_description"), args.embedding_dim)
-        embeddings_by_field["evidence_description_embedding"][row_idx] = text_to_embedding(clean_row.get("evidence_description"), args.embedding_dim)
-        embeddings_by_field["local_functional_information_embedding"][row_idx] = text_to_embedding(clean_row.get("local_functional_information"), args.embedding_dim)
-        embeddings_by_field["control_as_event_embedding"][row_idx] = text_to_embedding(clean_row.get("control_as_event"), args.embedding_dim)
-        embeddings_by_field["control_as_issues_embedding"][row_idx] = text_to_embedding(clean_row.get("control_as_issues"), args.embedding_dim)
+        # Read 6 per-feature hashes + masks from clean_text output
+        feature_hashes: Dict[str, Optional[str]] = {}
+        for hash_col in HASH_COLUMN_NAMES:
+            feature_hashes[hash_col] = clean_row.get(hash_col)
+        # Include mask values in the index for downstream consumers
+        for mask_col in MASK_COLUMN_NAMES:
+            feature_hashes[mask_col] = clean_row.get(mask_col, True)
+        hashes_by_control_id[control_id] = feature_hashes
+
+        # Generate embeddings only for distinguishing features (mask=True AND hash non-None)
+        for feat_idx, (feat_name, emb_field) in enumerate(zip(FEATURE_NAMES, EMBEDDING_FIELDS)):
+            hash_val = feature_hashes.get(f"hash_{feat_name}")
+            mask_val = feature_hashes.get(f"mask_{feat_name}", True)
+
+            if hash_val is None:
+                # No text for this feature → zero vector (already initialized)
+                features_skipped += 1
+                continue
+
+            if not mask_val:
+                # Feature is inherited from parent → zero vector (not distinguishing)
+                features_masked += 1
+                continue
+
+            features_generated += 1
+
+            if dataset_embeddings is not None:
+                # Use real embeddings from dataset
+                if emb_field in dataset_embeddings:
+                    embeddings_by_field[emb_field][row_idx] = dataset_embeddings[emb_field][row_idx]
+            else:
+                # Fallback: deterministic hash-based sparse embeddings
+                text = clean_row.get(feat_name)
+                embeddings_by_field[emb_field][row_idx] = text_to_embedding(text, args.embedding_dim)
 
     npz_payload = {
         "control_id": np.array(control_ids, dtype=np.str_),
-        "hash": np.array(hash_null_col, dtype=object),
-        "last_modified_on": np.array(last_modified_on_col, dtype=object),
     }
     npz_payload.update(embeddings_by_field)
     np.savez_compressed(output_npz_path, **npz_payload)
@@ -141,7 +154,7 @@ def main() -> int:
     index_path = write_npz_index(
         output_npz_path=output_npz_path, model_name=MODEL_NAME,
         run_date=run_date, control_ids=control_ids,
-        hash_by_control_id=hash_by_control_id, embedding_dim=args.embedding_dim,
+        hashes_by_control_id=hashes_by_control_id, embedding_dim=args.embedding_dim,
     )
 
     print(f"clean_text_input={clean_text_path if clean_text_rows else 'none'}")
@@ -149,6 +162,8 @@ def main() -> int:
     print(f"index={index_path}")
     print(f"rows={len(control_ids)}")
     print(f"embedding_dim={args.embedding_dim}")
+    print(f"features_generated={features_generated}, features_skipped={features_skipped}, features_masked={features_masked}")
+    print(f"source={'dataset' if dataset_embeddings is not None else 'hash-based'}")
     return 0
 
 

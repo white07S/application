@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { ControlGroup } from '../types';
 import { ControlCard } from './ControlCard';
 import { GroupHeader } from './GroupHeader';
@@ -8,10 +8,37 @@ interface Props {
     expandedGroups: Set<string>;
     onToggleGroup: (key: string) => void;
     isGrouped: boolean;
+    hasMore?: boolean;
+    loadingMore?: boolean;
+    onLoadMore?: () => void;
 }
 
-export const ControlsList: React.FC<Props> = ({ groups, expandedGroups, onToggleGroup, isGrouped }) => {
+export const ControlsList: React.FC<Props> = ({
+    groups, expandedGroups, onToggleGroup, isGrouped,
+    hasMore = false, loadingMore = false, onLoadMore,
+}) => {
+    const sentinelRef = useRef<HTMLDivElement>(null);
     const totalControls = groups.reduce((sum, g) => sum + g.controls.length, 0);
+
+    // Infinite scroll via IntersectionObserver
+    useEffect(() => {
+        if (!hasMore || loadingMore || !onLoadMore) return;
+
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) {
+                    onLoadMore();
+                }
+            },
+            { rootMargin: '200px' },
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [hasMore, loadingMore, onLoadMore]);
 
     if (totalControls === 0) {
         return (
@@ -26,6 +53,18 @@ export const ControlsList: React.FC<Props> = ({ groups, expandedGroups, onToggle
     // When expandedGroups is empty, treat all groups as expanded (initial state)
     const isExpanded = (key: string) => expandedGroups.size === 0 || expandedGroups.has(key);
 
+    const loadMoreIndicator = (
+        <>
+            {loadingMore && (
+                <div className="flex items-center justify-center py-4 text-text-sub">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mr-2" />
+                    <span className="text-xs">Loading more...</span>
+                </div>
+            )}
+            {hasMore && <div ref={sentinelRef} className="h-1" />}
+        </>
+    );
+
     if (!isGrouped) {
         // Flat list — single group, no header
         return (
@@ -33,6 +72,7 @@ export const ControlsList: React.FC<Props> = ({ groups, expandedGroups, onToggle
                 {groups[0]?.controls.map((item) => (
                     <ControlCard key={item.control.control_id} item={item} />
                 ))}
+                {loadMoreIndicator}
             </div>
         );
     }
@@ -56,6 +96,7 @@ export const ControlsList: React.FC<Props> = ({ groups, expandedGroups, onToggle
                     )}
                 </div>
             ))}
+            {loadMoreIndicator}
         </div>
     );
 };

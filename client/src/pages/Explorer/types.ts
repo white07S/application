@@ -26,7 +26,6 @@ export interface RiskTaxonomy {
 }
 
 export interface FilterState {
-    asOfDate: string;
     cascadeEnabled: boolean;
     selectedFunctions: Set<string>;
     selectedLocations: Set<string>;
@@ -36,7 +35,6 @@ export interface FilterState {
 }
 
 export type FilterAction =
-    | { type: 'SET_DATE'; payload: string }
     | { type: 'TOGGLE_CASCADE' }
     | { type: 'TOGGLE_FUNCTION'; payload: string }
     | { type: 'TOGGLE_LOCATION'; payload: string }

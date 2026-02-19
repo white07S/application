@@ -4,51 +4,47 @@ Manages embedding upserts and deletions in the controls_embeddings collection.
 Each control has a single point with 6 named vectors, identified by a UUID5
 derived deterministically from the control_id.
 
-Optimized using Strategy C benchmarks: upload_points with multiprocessing
-for 4x faster ingestion compared to sequential upsert.
+Supports per-feature delta detection: only re-uploads vectors whose hash
+changed, using hashes stored in each point's payload.
 """
 
 import asyncio
 import uuid
-from typing import Callable, Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any, Set, Tuple
 
 import numpy as np
 from qdrant_client import QdrantClient  # Sync client for upload_points
-from qdrant_client.models import PointStruct, NamedVector
+from qdrant_client.models import PointStruct
 
 from server.config.qdrant import get_qdrant_client
 from server.logging_config import get_logger
+from server.pipelines.controls.model_runners.common import FEATURE_NAMES, HASH_COLUMN_NAMES, MASK_COLUMN_NAMES
 from server.settings import get_settings
 
 logger = get_logger(name=__name__)
 
 # Control-specific embedding configuration
 EMBEDDING_DIM = 3072
-NAMED_VECTORS: List[str] = [
-    "control_title",
-    "control_description",
-    "evidence_description",
-    "local_functional_information",
-    "control_as_event",
-    "control_as_issues",
-]
+NAMED_VECTORS: List[str] = FEATURE_NAMES
 
 # Fixed namespace for UUID5 generation (deterministic point IDs)
 CONTROLS_UUID_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 
-# Optimal batch size from benchmarks (for 3072-dim vectors)
-QDRANT_BATCH_SIZE = 256
+# Batch size for Qdrant upserts.
+# Each point has 6 named vectors × 3072 dims. JSON-serialized floats use
+# ~8-10 bytes each, so per point ≈ 6×3072×10 ≈ 184 KB.
+# Qdrant default payload limit is 32 MB → 32000/184 ≈ 170 points max.
+QDRANT_BATCH_SIZE = 64
 
 # Number of parallel workers (CPU cores)
 QDRANT_PARALLEL_WORKERS = 6
 
+# Threshold: only disable/re-enable HNSW for bulk loads above this size
+HNSW_TOGGLE_THRESHOLD = 500
+
 
 def get_controls_collection_config() -> Dict[str, Any]:
-    """Get the vector configuration for controls collection.
-
-    Returns:
-        Dict with 'vectors_config' for collection creation.
-    """
+    """Get the vector configuration for controls collection."""
     from qdrant_client.models import Distance, VectorParams
 
     return {
@@ -56,7 +52,7 @@ def get_controls_collection_config() -> Dict[str, Any]:
             name: VectorParams(
                 size=EMBEDDING_DIM,
                 distance=Distance.COSINE,
-                on_disk=True,  # Essential for datasets >100k vectors
+                on_disk=True,
             )
             for name in NAMED_VECTORS
         }
@@ -72,10 +68,7 @@ def coerce_embedding_vector_or_zero(
     vector: Any,
     dim: int = EMBEDDING_DIM,
 ) -> List[float]:
-    """Coerce an embedding vector to a list of floats, or return a zero vector.
-
-    Handles numpy arrays, lists, and malformed data gracefully.
-    """
+    """Coerce an embedding vector to a list of floats, or return a zero vector."""
     if vector is None:
         return [0.0] * dim
 
@@ -100,124 +93,246 @@ def coerce_embedding_vector_or_zero(
         return [0.0] * dim
 
 
-async def upsert_embeddings(
-    control_ids: List[str],
-    embedding_data: Dict[str, Dict[str, Any]],
-    progress_callback: Optional[Callable] = None,
-) -> int:
-    """Upsert embeddings for a list of control IDs into Qdrant.
+# ── Hash-based delta detection ──────────────────────────────────────
 
-    Uses the optimal Strategy C approach from benchmarks: upload_points with
-    multiprocessing for 4x faster ingestion compared to sequential upsert.
 
-    Each control creates ONE Qdrant point with 6 named vectors:
-    - control_title
-    - control_description
-    - evidence_description
-    - local_functional_information
-    - control_as_event
-    - control_as_issues
-
-    When searching, specify the named vector to search against.
-
-    Args:
-        control_ids: List of control IDs to upsert.
-        embedding_data: Dict mapping control_id -> {feature_name: vector}.
-            Each vector is a numpy array or list of floats.
-        progress_callback: Optional async callback(step, upserted, total) for
-            reporting progress during the upsert.
+async def read_current_hashes() -> Dict[str, Dict[str, Optional[str]]]:
+    """Read current per-feature hashes from all Qdrant point payloads.
 
     Returns:
-        Number of points upserted.
+        Dict mapping control_id → {hash_control_title: ..., hash_control_description: ..., ...}
     """
     settings = get_settings()
-    # Get collection name for controls (e.g., "nfr_connect_controls")
     collection = settings.qdrant_collection
 
-    # Build all points first
-    logger.info("Building {} points for Qdrant upload...", len(control_ids))
+    result: Dict[str, Dict[str, Optional[str]]] = {}
+
+    def _scroll_all():
+        sync_client = QdrantClient(url=settings.qdrant_url, timeout=120)
+        try:
+            offset = None
+            while True:
+                points, next_offset = sync_client.scroll(
+                    collection_name=collection,
+                    limit=1000,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for point in points:
+                    payload = point.payload or {}
+                    cid = payload.get("control_id")
+                    if not isinstance(cid, str):
+                        continue
+                    hashes = {}
+                    for hash_col in HASH_COLUMN_NAMES:
+                        hashes[hash_col] = payload.get(hash_col)
+                    for mask_col in MASK_COLUMN_NAMES:
+                        hashes[mask_col] = payload.get(mask_col, True)
+                    result[cid] = hashes
+
+                if next_offset is None:
+                    break
+                offset = next_offset
+        finally:
+            sync_client.close()
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _scroll_all)
+
+    logger.info("Read current hashes from Qdrant: {} controls", len(result))
+    return result
+
+
+def compute_embedding_delta(
+    incoming_hashes: Dict[str, Dict[str, Optional[str]]],
+    current_hashes: Dict[str, Dict[str, Optional[str]]],
+) -> Tuple[
+    Set[str],                           # new_control_ids: full upsert
+    Dict[str, List[str]],               # changed_features: {cid → [feature_names]}
+    Set[str],                           # unchanged_control_ids
+]:
+    """Compare incoming vs current per-feature hashes to determine what needs updating.
+
+    Returns:
+        - new_control_ids: Controls not in Qdrant → need full 6-vector upsert
+        - changed_features: Controls with some features changed → need per-feature update
+        - unchanged_control_ids: No changes needed
+    """
+    new_controls: Set[str] = set()
+    changed_features: Dict[str, List[str]] = {}
+    unchanged: Set[str] = set()
+
+    for cid, incoming in incoming_hashes.items():
+        current = current_hashes.get(cid)
+
+        if current is None:
+            # Control not in Qdrant → full upsert
+            new_controls.add(cid)
+            continue
+
+        # Compare each feature hash
+        features_changed: List[str] = []
+        for feat_name, hash_col in zip(FEATURE_NAMES, HASH_COLUMN_NAMES):
+            incoming_hash = incoming.get(hash_col)
+            current_hash = current.get(hash_col)
+            if incoming_hash != current_hash:
+                features_changed.append(feat_name)
+
+        if features_changed:
+            changed_features[cid] = features_changed
+        else:
+            unchanged.add(cid)
+
+    logger.info(
+        "Embedding delta: {} new, {} changed, {} unchanged",
+        len(new_controls), len(changed_features), len(unchanged),
+    )
+    return new_controls, changed_features, unchanged
+
+
+# ── Upsert functions ────────────────────────────────────────────────
+
+
+async def upsert_new_controls(
+    control_ids: List[str],
+    embedding_data: Dict[str, Dict[str, Any]],
+    hashes: Dict[str, Dict[str, Optional[str]]],
+    progress_callback: Optional[Callable] = None,
+) -> int:
+    """Upsert full points for new controls (all 6 vectors + payload with hashes).
+
+    Returns number of points upserted.
+    """
+    if not control_ids:
+        return 0
+
+    settings = get_settings()
+    collection = settings.qdrant_collection
+
     points = []
     for cid in control_ids:
         point_id = control_id_to_uuid(cid)
         vectors = {}
-
         cid_data = embedding_data.get(cid, {})
         for feature_name in NAMED_VECTORS:
             raw_vec = cid_data.get(feature_name)
             vectors[feature_name] = coerce_embedding_vector_or_zero(raw_vec)
 
-        points.append(
-            PointStruct(
-                id=point_id,
-                vector=vectors,
-                payload={"control_id": cid},
-            )
-        )
+        # Payload: control_id + 6 per-feature hashes + 6 feature masks
+        payload: Dict[str, Any] = {"control_id": cid}
+        cid_hashes = hashes.get(cid, {})
+        for hash_col in HASH_COLUMN_NAMES:
+            payload[hash_col] = cid_hashes.get(hash_col)
+        for mask_col in MASK_COLUMN_NAMES:
+            payload[mask_col] = cid_hashes.get(mask_col, True)
+
+        points.append(PointStruct(id=point_id, vector=vectors, payload=payload))
 
     total_points = len(points)
+    use_hnsw_toggle = total_points > HNSW_TOGGLE_THRESHOLD
+
+    if use_hnsw_toggle:
+        await optimize_collection_for_ingestion()
 
     if progress_callback:
-        await progress_callback(
-            f"Uploading {total_points} points to Qdrant",
-            0,
-            total_points,
-        )
+        await progress_callback(f"Uploading {total_points} new points", 0, total_points)
 
-    # Use synchronous client for upload_points (required for multiprocessing)
-    logger.info(
-        "Starting Qdrant upload_points: batch_size={}, parallel={}, wait=False",
-        QDRANT_BATCH_SIZE,
-        QDRANT_PARALLEL_WORKERS,
-    )
-
-    # Run synchronous upload_points in executor to avoid blocking event loop
     def _sync_upload():
-        """Synchronous upload using QdrantClient with multiprocessing."""
         sync_client = QdrantClient(url=settings.qdrant_url, timeout=600)
-
-        # upload_points with wait=True to ensure completion
-        # This is slower but gives us certainty that points are uploaded
         sync_client.upload_points(
             collection_name=collection,
             points=points,
             batch_size=QDRANT_BATCH_SIZE,
             parallel=QDRANT_PARALLEL_WORKERS,
-            wait=True,  # Wait for confirmation to track progress properly
+            wait=True,
             max_retries=3,
         )
-
-        # Close the sync client
         sync_client.close()
         return total_points
 
-    # Execute in thread pool to avoid blocking async event loop
     loop = asyncio.get_event_loop()
+    uploaded = await loop.run_in_executor(None, _sync_upload)
 
-    # Start the upload
-    logger.info("Uploading {} points to Qdrant (this may take a while)...", total_points)
-    points_uploaded = await loop.run_in_executor(None, _sync_upload)
+    if use_hnsw_toggle:
+        await restore_collection_after_ingestion()
 
-    # Report completion
     if progress_callback:
-        await progress_callback(
-            f"Upload complete, waiting for indexing...",
-            points_uploaded,
-            total_points,
-        )
+        await progress_callback(f"Uploaded {uploaded} new points", uploaded, total_points)
 
-    logger.info("Qdrant upload complete: {} points uploaded", points_uploaded)
-    return points_uploaded
+    logger.info("Upserted {} new control points to Qdrant", uploaded)
+    return uploaded
+
+
+async def update_changed_features(
+    changed_features: Dict[str, List[str]],
+    embedding_data: Dict[str, Dict[str, Any]],
+    hashes: Dict[str, Dict[str, Optional[str]]],
+    progress_callback: Optional[Callable] = None,
+) -> int:
+    """Update only the changed named vectors + payload hashes for existing controls.
+
+    Returns number of controls updated.
+    """
+    if not changed_features:
+        return 0
+
+    settings = get_settings()
+    collection = settings.qdrant_collection
+
+    # For controls with changed features, we upsert full points (simpler and
+    # Qdrant handles it efficiently — the unchanged vectors remain the same
+    # because we pass them through from the NPZ)
+    points = []
+    for cid, features in changed_features.items():
+        point_id = control_id_to_uuid(cid)
+        vectors = {}
+        cid_data = embedding_data.get(cid, {})
+        for feature_name in NAMED_VECTORS:
+            raw_vec = cid_data.get(feature_name)
+            vectors[feature_name] = coerce_embedding_vector_or_zero(raw_vec)
+
+        payload: Dict[str, Any] = {"control_id": cid}
+        cid_hashes = hashes.get(cid, {})
+        for hash_col in HASH_COLUMN_NAMES:
+            payload[hash_col] = cid_hashes.get(hash_col)
+        for mask_col in MASK_COLUMN_NAMES:
+            payload[mask_col] = cid_hashes.get(mask_col, True)
+
+        points.append(PointStruct(id=point_id, vector=vectors, payload=payload))
+
+    total = len(points)
+
+    if progress_callback:
+        await progress_callback(f"Updating {total} changed controls", 0, total)
+
+    def _sync_upsert():
+        sync_client = QdrantClient(url=settings.qdrant_url, timeout=600)
+        sync_client.upload_points(
+            collection_name=collection,
+            points=points,
+            batch_size=QDRANT_BATCH_SIZE,
+            parallel=min(QDRANT_PARALLEL_WORKERS, 2),  # fewer workers for small batches
+            wait=True,
+            max_retries=3,
+        )
+        sync_client.close()
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _sync_upsert)
+
+    if progress_callback:
+        await progress_callback(f"Updated {total} changed controls", total, total)
+
+    logger.info("Updated {} controls with changed features in Qdrant", total)
+    return total
+
+
+# ── Collection management ───────────────────────────────────────────
 
 
 async def optimize_collection_for_ingestion(collection_name: str = None) -> None:
-    """Optimize Qdrant collection settings for bulk ingestion.
-
-    Based on benchmarks: Disables HNSW indexing during bulk load for faster ingestion.
-    Should be called before bulk ingestion, paired with restore_collection_after_ingestion().
-
-    Args:
-        collection_name: Collection to optimize. Uses default from settings if not provided.
-    """
+    """Disable HNSW indexing for bulk load. Only used for large uploads (>500 points)."""
     settings = get_settings()
     collection = collection_name or settings.qdrant_collection
 
@@ -226,43 +341,28 @@ async def optimize_collection_for_ingestion(collection_name: str = None) -> None
 
         logger.info("Optimizing collection '{}' for bulk ingestion...", collection)
 
-        # Use sync client for collection updates
         def _sync_optimize():
             sync_client = QdrantClient(url=settings.qdrant_url, timeout=60)
-
-            # Disable HNSW indexing and optimize for bulk loading
             sync_client.update_collection(
                 collection_name=collection,
-                hnsw_config=HnswConfigDiff(
-                    m=0,  # Disable HNSW during ingestion
-                    ef_construct=128,
-                ),
+                hnsw_config=HnswConfigDiff(m=0, ef_construct=128),
                 optimizers_config=OptimizersConfigDiff(
-                    indexing_threshold=0,  # Defer all indexing
+                    indexing_threshold=0,
                     max_segment_size=500_000,
-                    memmap_threshold=10_000,  # Aggressive memmap
+                    memmap_threshold=10_000,
                 ),
             )
             sync_client.close()
 
-        # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _sync_optimize)
-
         logger.info("Collection optimized for bulk ingestion (HNSW disabled)")
     except Exception as e:
         logger.warning("Could not optimize collection for ingestion: {}", e)
 
 
 async def restore_collection_after_ingestion(collection_name: str = None) -> None:
-    """Restore optimal Qdrant collection settings after bulk ingestion.
-
-    Re-enables HNSW indexing for fast searches and waits for indexing to complete.
-    Should be called after bulk ingestion completes.
-
-    Args:
-        collection_name: Collection to restore. Uses default from settings if not provided.
-    """
+    """Re-enable HNSW indexing after bulk load."""
     settings = get_settings()
     collection = collection_name or settings.qdrant_collection
 
@@ -271,17 +371,11 @@ async def restore_collection_after_ingestion(collection_name: str = None) -> Non
 
         logger.info("Restoring collection '{}' after bulk ingestion...", collection)
 
-        # Use sync client for collection updates
         def _sync_restore():
             sync_client = QdrantClient(url=settings.qdrant_url, timeout=60)
-
-            # Re-enable HNSW for fast searches
             sync_client.update_collection(
                 collection_name=collection,
-                hnsw_config=HnswConfigDiff(
-                    m=16,  # Re-enable HNSW with optimal settings
-                    ef_construct=128,
-                ),
+                hnsw_config=HnswConfigDiff(m=16, ef_construct=128),
                 optimizers_config=OptimizersConfigDiff(
                     indexing_threshold=20_000,
                     max_segment_size=500_000,
@@ -289,11 +383,9 @@ async def restore_collection_after_ingestion(collection_name: str = None) -> Non
             )
             sync_client.close()
 
-        # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _sync_restore)
-
-        logger.info("Collection restored (HNSW re-enabled for fast searches)")
+        logger.info("Collection restored (HNSW re-enabled)")
     except Exception as e:
         logger.warning("Could not restore collection settings: {}", e)
 
@@ -304,80 +396,37 @@ async def wait_for_collection_green(
     poll_interval: int = 5,
     progress_callback: Optional[Callable] = None,
 ) -> bool:
-    """Wait for Qdrant collection status to turn green (indexing complete).
-
-    Args:
-        collection_name: Collection to check. Uses default from settings if not provided.
-        max_wait_seconds: Maximum time to wait for indexing (default: 10 minutes).
-        poll_interval: Seconds between status checks (default: 5).
-        progress_callback: Optional callback for progress updates.
-
-    Returns:
-        True if collection turned green, False if timeout.
-    """
+    """Wait for Qdrant collection status to turn green (indexing complete)."""
     settings = get_settings()
     collection = collection_name or settings.qdrant_collection
 
     logger.info("Waiting for Qdrant collection '{}' to finish indexing...", collection)
 
     start_time = asyncio.get_event_loop().time()
-    checks = 0
     last_status = None
 
     def _check_status():
-        """Check collection status synchronously."""
         sync_client = QdrantClient(url=settings.qdrant_url, timeout=60)
         try:
             info = sync_client.get_collection(collection)
-
-            # Get status
             if hasattr(info, 'status'):
-                if hasattr(info.status, 'value'):
-                    status = info.status.value
-                else:
-                    status = str(info.status).lower()
+                status = info.status.value if hasattr(info.status, 'value') else str(info.status).lower()
             else:
                 status = "unknown"
-
-            # Get counts
             points_count = getattr(info, 'points_count', 0)
-
-            # Try to get indexed count (may not be available)
             indexed_vectors_count = getattr(info, 'indexed_vectors_count', None)
 
-            # Convert indexed_vectors_count to indexed_points_count
-            # Since we have 6 named vectors per point, we need to handle this carefully
             indexed_points_count = None
             if indexed_vectors_count is not None and indexed_vectors_count > 0:
-                # Each point has 6 named vectors
-                num_named_vectors = len(NAMED_VECTORS)  # Should be 6
-
-                # Log raw values for debugging
-                logger.debug(
-                    "Qdrant raw counts - vectors: {}, points: {}, named_vectors: {}",
-                    indexed_vectors_count, points_count, num_named_vectors
-                )
-
-                # Try to determine if indexed_vectors_count is counting vectors or something else
+                num_named_vectors = len(NAMED_VECTORS)
                 if indexed_vectors_count <= points_count:
-                    # Likely counting points already
                     indexed_points_count = indexed_vectors_count
                 elif indexed_vectors_count <= (points_count * num_named_vectors):
-                    # Likely counting individual vectors across all named vectors
                     indexed_points_count = indexed_vectors_count // num_named_vectors
                 else:
-                    # Something unexpected - cap at points_count
-                    logger.warning(
-                        "Unexpected indexed_vectors_count: {} for {} points with {} named vectors",
-                        indexed_vectors_count, points_count, num_named_vectors
-                    )
                     indexed_points_count = points_count if status == "green" else points_count // 2
-
-                # Final sanity check - indexed points should never exceed total points
                 indexed_points_count = min(indexed_points_count, points_count)
-
             elif status == "green":
-                # If green and no indexed count, assume all indexed
                 indexed_points_count = points_count
 
             return status, points_count, indexed_points_count
@@ -385,15 +434,12 @@ async def wait_for_collection_green(
             sync_client.close()
 
     while True:
-        # Check status
         loop = asyncio.get_event_loop()
         status, points_count, indexed_points_count = await loop.run_in_executor(None, _check_status)
-        checks += 1
 
-        # Log status changes
         if status != last_status:
             logger.info(
-                "Qdrant status changed: {} -> {} (points: {}, indexed: {})",
+                "Qdrant status: {} -> {} (points: {}, indexed: {})",
                 last_status, status, points_count, indexed_points_count
             )
             last_status = status
@@ -401,57 +447,29 @@ async def wait_for_collection_green(
         if status == "green":
             logger.info("Qdrant collection is GREEN - indexing complete!")
             if progress_callback:
-                await progress_callback(
-                    "Qdrant indexing complete",
-                    points_count,
-                    points_count,
-                )
+                await progress_callback("Qdrant indexing complete", points_count, points_count)
             return True
 
         elapsed = asyncio.get_event_loop().time() - start_time
         if elapsed > max_wait_seconds:
-            logger.warning(
-                "Timeout waiting for Qdrant indexing after {}s (status: {})",
-                max_wait_seconds, status
-            )
+            logger.warning("Timeout waiting for Qdrant indexing after {}s", max_wait_seconds)
             return False
 
-        # Report progress
         if progress_callback:
             if status == "yellow" and indexed_points_count is not None:
-                # We have actual indexing progress
                 pct = min(100.0, (indexed_points_count / points_count) * 100) if points_count > 0 else 0
                 await progress_callback(
-                    f"Qdrant indexing: {indexed_points_count}/{points_count} points ({pct:.1f}%)",
-                    indexed_points_count,
-                    points_count,
-                )
-            elif status == "yellow":
-                # Indexing in progress, but we don't know exact progress
-                await progress_callback(
-                    f"Qdrant indexing in progress (status: {status})",
-                    0,
-                    points_count,
+                    f"Qdrant indexing: {indexed_points_count}/{points_count} ({pct:.1f}%)",
+                    indexed_points_count, points_count,
                 )
             else:
-                await progress_callback(
-                    f"Waiting for Qdrant (status: {status})",
-                    0,
-                    points_count,
-                )
+                await progress_callback(f"Waiting for Qdrant (status: {status})", 0, points_count)
 
-        # Wait before next check
         await asyncio.sleep(poll_interval)
 
 
 async def delete_points(control_ids: List[str]) -> int:
-    """Delete Qdrant points for the given control IDs.
-
-    NOTE: Currently unused — reserved for future re-ingest / delete workflows.
-
-    Returns:
-        Number of points requested for deletion.
-    """
+    """Delete Qdrant points for the given control IDs."""
     if not control_ids:
         return 0
 
@@ -471,11 +489,7 @@ async def delete_points(control_ids: List[str]) -> int:
 
 
 async def get_collection_info() -> Optional[Dict[str, Any]]:
-    """Get Qdrant collection stats for the DevData UI.
-
-    Returns:
-        Dict with collection info including indexing progress, or None if collection doesn't exist.
-    """
+    """Get Qdrant collection stats for the DevData UI."""
     try:
         settings = get_settings()
 
@@ -483,30 +497,13 @@ async def get_collection_info() -> Optional[Dict[str, Any]]:
             sync_client = QdrantClient(url=settings.qdrant_url, timeout=60)
             try:
                 info = sync_client.get_collection(settings.qdrant_collection)
-
-                # Get status (handle different Qdrant client versions)
                 if hasattr(info, 'status'):
-                    if hasattr(info.status, 'value'):
-                        status = info.status.value
-                    else:
-                        status = str(info.status)
+                    status = info.status.value if hasattr(info.status, 'value') else str(info.status)
                 else:
                     status = "unknown"
-
-                # Get points count
                 points_count = getattr(info, 'points_count', 0)
-
-                # Calculate total vectors (points × named vectors)
-                # Each point has 6 named vectors
                 vectors_count = points_count * len(NAMED_VECTORS)
-
-                # Try to get indexed vectors count (may not be available)
                 indexed_vectors_count = getattr(info, 'indexed_vectors_count', None)
-
-                # Calculate indexing progress if available
-                indexing_progress = None
-                if indexed_vectors_count is not None and points_count > 0:
-                    indexing_progress = round((indexed_vectors_count / points_count) * 100, 1)
 
                 result = {
                     "collection_name": settings.qdrant_collection,
@@ -516,8 +513,8 @@ async def get_collection_info() -> Optional[Dict[str, Any]]:
                     "named_vectors": NAMED_VECTORS,
                 }
 
-                # Add indexing info if status is yellow and we have the data
-                if status == "yellow" and indexing_progress is not None:
+                if status == "yellow" and indexed_vectors_count is not None:
+                    indexing_progress = round((indexed_vectors_count / points_count) * 100, 1) if points_count > 0 else 0
                     result["indexing_progress"] = indexing_progress
                     result["indexed_vectors_count"] = indexed_vectors_count
 

@@ -20,17 +20,15 @@
 │  ─────────────────────────── │
 │  Cascade mode: [toggle]      │  ← Cascade toggle (see §5)
 │  ─────────────────────────── │
-│  📅 As of Date               │  ← Section 1
+│  🏢 Functions                │  ← Section 1 (collapsible)
 │  ─────────────────────────── │
-│  🏢 Functions                │  ← Section 2 (collapsible)
+│  📍 Locations                │  ← Section 2 (collapsible)
 │  ─────────────────────────── │
-│  📍 Locations                │  ← Section 3 (collapsible)
+│  🏛 Consolidated Entity      │  ← Section 3 (collapsible)
 │  ─────────────────────────── │
-│  🏛 Consolidated Entity      │  ← Section 4 (collapsible)
+│  📋 Assessment Units         │  ← Section 4 (collapsible)
 │  ─────────────────────────── │
-│  📋 Assessment Units         │  ← Section 5 (collapsible)
-│  ─────────────────────────── │
-│  ⚠ Risk Themes              │  ← Section 6 (collapsible)
+│  ⚠ Risk Themes              │  ← Section 5 (collapsible)
 │  ─────────────────────────── │
 │                              │
 │        [ Apply Filters ]     │  ← Sticky bottom button
@@ -48,31 +46,7 @@
 
 ## 2. Filter Sections
 
-### 2.1 As of Date
-
-**Purpose**: Sets the temporal query point. All versioned data (functions, locations, assessment units, risk themes) is resolved as of this timestamp using the `tx_from / tx_to` temporal range.
-
-**Component**: Single date picker.
-
-**Behavior**:
-- Default value: **Today** (current date).
-- Date format: `DD MMM YYYY` (e.g., `13 Feb 2026`).
-- Calendar dropdown opens on click; also allows manual text input.
-- Selecting a date immediately updates the date value in the sidebar (live).
-- A "Today" shortcut button inside the calendar resets to current date.
-- No future dates allowed — max date is today.
-
-**Display**:
-```
-As of Date
-┌─────────────────────────────┐
-│  📅  13 Feb 2026        [▾] │
-└─────────────────────────────┘
-```
-
----
-
-### 2.2 Functions (Hierarchical Tree)
+### 2.1 Functions (Hierarchical Tree)
 
 **Purpose**: Filter by organizational function hierarchy.
 
@@ -137,7 +111,7 @@ Functions                              ✕
 
 ---
 
-### 2.3 Locations (Hierarchical Tree)
+### 2.2 Locations (Hierarchical Tree)
 
 **Purpose**: Filter by location hierarchy.
 
@@ -146,7 +120,7 @@ Functions                              ✕
 Location → Region → Sub Region → Country → Company
 ```
 
-**Component**: Identical interaction pattern to Functions (§2.2) — searchable tree dropdown with multi-select, auto-fill of parents, breadcrumb paths, and chips.
+**Component**: Identical interaction pattern to Functions (§2.1) — searchable tree dropdown with multi-select, auto-fill of parents, breadcrumb paths, and chips.
 
 **Only difference**: Level labels and hierarchy depth (5 levels vs 7).
 
@@ -156,7 +130,7 @@ Location → Region → Sub Region → Country → Company
 
 ---
 
-### 2.4 Consolidated Entity
+### 2.3 Consolidated Entity
 
 **Purpose**: Filter by consolidated legal entity.
 
@@ -189,7 +163,7 @@ Consolidated Entity                    ✕
 
 ---
 
-### 2.5 Assessment Units
+### 2.4 Assessment Units
 
 **Purpose**: Filter by assessment unit.
 
@@ -236,7 +210,7 @@ Assessment Units                       ✕
 
 ---
 
-### 2.6 Risk Themes
+### 2.5 Risk Themes
 
 **Purpose**: Filter by risk taxonomy and/or individual risk themes.
 

@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from server.pipelines.controls.model_runners.common import (
+    FEATURE_NAMES,
+    HASH_COLUMN_NAMES,
+    MASK_COLUMN_NAMES,
     controls_jsonl_path,
     default_run_date,
     load_controls,
@@ -164,25 +167,81 @@ def clean_nullable_text(value: Any, *, keep_newlines: bool = True) -> Optional[s
     return cleaned if cleaned else None
 
 
-def clean_text_hash(
+def feature_hash(text: Optional[str]) -> Optional[str]:
+    """Compute a per-feature hash from cleaned text.
+
+    Returns None if text is empty/None (no vector should be produced).
+    """
+    if not text or not text.strip():
+        return None
+    normalized = text.strip().lower()
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"CT{digest[:12]}"
+
+
+def compute_per_feature_hashes(
     control_row: Dict[str, Any],
     enrichment_row: Optional[Dict[str, Any]],
-) -> str:
+) -> Dict[str, Optional[str]]:
+    """Compute 6 independent per-feature hashes from source fields.
+
+    Returns dict with keys: hash_control_title, hash_control_description, etc.
+    Value is None if the feature text is empty (no embedding needed).
+    """
     enrichment_row = enrichment_row or {}
-    parts = [
-        clean_business_text(control_row.get("control_title"), keep_newlines=False),
-        clean_business_text(control_row.get("control_description"), keep_newlines=False),
-        clean_business_text(control_row.get("evidence_description"), keep_newlines=False),
-        clean_business_text(control_row.get("local_functional_information"), keep_newlines=False),
-        clean_business_text(enrichment_row.get("control_as_event"), keep_newlines=False),
-        clean_business_text(enrichment_row.get("control_as_issues"), keep_newlines=False),
-    ]
-    payload = "|".join(parts)
-    if not payload:
-        payload = str(control_row.get("control_id") or "")
-    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    bucket = int(digest[:16], 16) % 10000
-    return "CL{:04d}".format(bucket)
+
+    raw_texts = {
+        "control_title": control_row.get("control_title"),
+        "control_description": control_row.get("control_description"),
+        "evidence_description": control_row.get("evidence_description"),
+        "local_functional_information": control_row.get("local_functional_information"),
+        "control_as_event": enrichment_row.get("control_as_event"),
+        "control_as_issues": enrichment_row.get("control_as_issues"),
+    }
+
+    hashes: Dict[str, Optional[str]] = {}
+    for feat_name in FEATURE_NAMES:
+        cleaned = clean_business_text(raw_texts.get(feat_name), keep_newlines=False)
+        hashes[f"hash_{feat_name}"] = feature_hash(cleaned)
+
+    return hashes
+
+
+def compute_feature_mask(
+    control_id: str,
+    feature_hashes: Dict[str, Optional[str]],
+    parent_hashes: Optional[Dict[str, Optional[str]]],
+) -> Dict[str, bool]:
+    """Compute per-feature mask: True = distinguishing, False = inherited/empty.
+
+    A feature is marked as inherited (False) when:
+    - It has no text (hash is None), OR
+    - Its hash matches the parent's hash for the same feature (text copied from parent)
+
+    A feature is distinguishing (True) when:
+    - It has text AND no parent (L1 control), OR
+    - It has text AND its hash differs from parent's hash
+    """
+    mask: Dict[str, bool] = {}
+
+    for feat_name, hash_col, mask_col in zip(FEATURE_NAMES, HASH_COLUMN_NAMES, MASK_COLUMN_NAMES):
+        feat_hash = feature_hashes.get(hash_col)
+
+        if feat_hash is None:
+            # No text for this feature → not distinguishing
+            mask[mask_col] = False
+            continue
+
+        if parent_hashes is None:
+            # No parent (L1 or orphan) → feature is distinguishing by definition
+            mask[mask_col] = True
+            continue
+
+        parent_hash = parent_hashes.get(hash_col)
+        # Distinguishing only if hash differs from parent
+        mask[mask_col] = feat_hash != parent_hash
+
+    return mask
 
 
 def build_record(
@@ -191,14 +250,15 @@ def build_record(
     enrichment_row: Optional[Dict[str, Any]],
     previous_row: Optional[Dict[str, Any]],
     can_reuse_previous: bool,
+    feature_hashes: Dict[str, Optional[str]],
+    feature_mask: Dict[str, bool],
 ) -> Dict[str, Any]:
     control_id = str(control_row["control_id"])
     last_modified_on = control_row.get("last_modified_on")
 
     if previous_row and can_reuse_previous:
-        return {
+        record = {
             "control_id": control_id,
-            "hash": None,
             "last_modified_on": last_modified_on,
             "control_title": previous_row.get("control_title"),
             "control_description": previous_row.get("control_description"),
@@ -207,10 +267,12 @@ def build_record(
             "control_as_event": previous_row.get("control_as_event"),
             "control_as_issues": previous_row.get("control_as_issues"),
         }
+        record.update(feature_hashes)
+        record.update(feature_mask)
+        return record
 
-    return {
+    record = {
         "control_id": control_id,
-        "hash": None,
         "last_modified_on": last_modified_on,
         "control_title": clean_nullable_text(control_row.get("control_title")),
         "control_description": clean_nullable_text(control_row.get("control_description")),
@@ -219,6 +281,9 @@ def build_record(
         "control_as_event": clean_nullable_text((enrichment_row or {}).get("control_as_event")),
         "control_as_issues": clean_nullable_text((enrichment_row or {}).get("control_as_issues")),
     }
+    record.update(feature_hashes)
+    record.update(feature_mask)
+    return record
 
 
 def parse_args() -> argparse.Namespace:
@@ -259,29 +324,72 @@ def main() -> int:
         return 1
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_records = []
-    hash_by_control_id = {}
+    # Pass 1: compute per-feature hashes for ALL controls
+    all_hashes: Dict[str, Dict[str, Optional[str]]] = {}
+    parent_map: Dict[str, Optional[str]] = {}  # control_id → parent_control_id
 
     for control_row in controls_rows:
         control_id = str(control_row["control_id"])
         enrichment_row = enrichment_rows.get(control_id)
-        hash_value = clean_text_hash(control_row, enrichment_row)
-        hash_by_control_id[control_id] = hash_value
-        output_records.append(build_record(
+        feature_hashes = compute_per_feature_hashes(control_row, enrichment_row)
+        all_hashes[control_id] = feature_hashes
+        parent_map[control_id] = control_row.get("parent_control_id")
+
+    # Pass 2: compute feature masks (needs parent hashes from pass 1)
+    output_records = []
+    hashes_by_control_id: Dict[str, Dict[str, Optional[str]]] = {}
+    masks_inherited = 0
+    masks_distinguishing = 0
+
+    for control_row in controls_rows:
+        control_id = str(control_row["control_id"])
+        enrichment_row = enrichment_rows.get(control_id)
+        feature_hashes = all_hashes[control_id]
+
+        # Look up parent's hashes for mask computation
+        parent_cid = parent_map.get(control_id)
+        parent_hashes = all_hashes.get(parent_cid) if parent_cid else None
+
+        feature_mask = compute_feature_mask(control_id, feature_hashes, parent_hashes)
+
+        # Merge hashes + mask for index (mask stored alongside hashes)
+        combined = dict(feature_hashes)
+        combined.update(feature_mask)
+        hashes_by_control_id[control_id] = combined
+
+        # Count mask stats
+        for mask_col in MASK_COLUMN_NAMES:
+            if feature_mask.get(mask_col):
+                masks_distinguishing += 1
+            else:
+                masks_inherited += 1
+
+        record = build_record(
             control_row=control_row, enrichment_row=enrichment_row,
             previous_row=None, can_reuse_previous=False,
-        ))
+            feature_hashes=feature_hashes, feature_mask=feature_mask,
+        )
+        output_records.append(record)
 
     index_path = write_jsonl_with_index(
         records=output_records, output_path=output_path,
         model_name=MODEL_NAME, run_date=run_date,
-        hash_by_control_id=hash_by_control_id,
+        hashes_by_control_id=hashes_by_control_id,
     )
+
+    # Count features with actual text (non-None hashes)
+    features_with_text = sum(
+        1 for cid, h in all_hashes.items()
+        for v in h.values() if v is not None
+    )
+    total_features = len(all_hashes) * len(FEATURE_NAMES)
 
     print(f"enrichment_input={enrichment_path if enrichment_rows else 'none'}")
     print(f"output={output_path}")
     print(f"index={index_path}")
     print(f"rows={len(output_records)}")
+    print(f"features_with_text={features_with_text}/{total_features}")
+    print(f"feature_mask: {masks_distinguishing} distinguishing, {masks_inherited} inherited/empty")
     return 0
 
 

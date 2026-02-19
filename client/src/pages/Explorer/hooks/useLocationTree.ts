@@ -36,7 +36,7 @@ function insertChildren(nodes: TreeNode[], parentId: string, children: ApiTreeNo
     });
 }
 
-export function useLocationTree(asOfDate: string) {
+export function useLocationTree() {
     const { getApiAccessToken } = useAuth();
     const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
     const [searchResults, setSearchResults] = useState<TreeNode[] | null>(null);
@@ -44,7 +44,6 @@ export function useLocationTree(asOfDate: string) {
     const [searchLoading, setSearchLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null);
-    const [dateWarning, setDateWarning] = useState<string | null>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Initial tree load
@@ -56,10 +55,9 @@ export function useLocationTree(asOfDate: string) {
             try {
                 const token = await getApiAccessToken();
                 if (!token || cancelled) return;
-                const data = await fetchLocations(token, asOfDate);
+                const data = await fetchLocations(token);
                 if (!cancelled) {
                     setTreeNodes(data.nodes.map((n) => apiToTreeNode(n, 0)));
-                    setDateWarning(data.date_warning || null);
                 }
             } catch (err: any) {
                 if (!cancelled) setError(err.message || 'Failed to load locations');
@@ -69,7 +67,7 @@ export function useLocationTree(asOfDate: string) {
         };
         load();
         return () => { cancelled = true; };
-    }, [asOfDate]);
+    }, [getApiAccessToken]);
 
     // Server-side search (called from HierarchyFilter via onSearchChange)
     const handleSearch = useCallback((query: string) => {
@@ -85,7 +83,7 @@ export function useLocationTree(asOfDate: string) {
             try {
                 const token = await getApiAccessToken();
                 if (!token) return;
-                const data = await fetchLocations(token, asOfDate, undefined, query);
+                const data = await fetchLocations(token, undefined, query);
                 setSearchResults(data.nodes.map((n) => apiToTreeNode(n, 0)));
             } catch (err: any) {
                 console.error('Location search failed:', err);
@@ -95,21 +93,21 @@ export function useLocationTree(asOfDate: string) {
                 setSearchLoading(false);
             }
         }, 300);
-    }, [asOfDate, getApiAccessToken]);
+    }, [getApiAccessToken]);
 
     const loadChildren = useCallback(async (parentId: string, parentLevel: number) => {
         setLoadingNodeId(parentId);
         try {
             const token = await getApiAccessToken();
             if (!token) return;
-            const data = await fetchLocations(token, asOfDate, parentId);
+            const data = await fetchLocations(token, parentId);
             setTreeNodes((prev) => insertChildren(prev, parentId, data.nodes, parentLevel));
         } catch (err: any) {
             setError(err.message || 'Failed to load children');
         } finally {
             setLoadingNodeId(null);
         }
-    }, [asOfDate, getApiAccessToken]);
+    }, [getApiAccessToken]);
 
     return {
         nodes: searchResults ?? treeNodes,
@@ -118,7 +116,6 @@ export function useLocationTree(asOfDate: string) {
         error,
         loadChildren,
         loadingNodeId,
-        dateWarning,
         onSearchChange: handleSearch,
     };
 }
