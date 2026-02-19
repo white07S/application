@@ -19,32 +19,34 @@ flowchart TB
 
     subgraph Validation["2. Validation Layer"]
         SCHEMA[Schema Validation]
-        SPLIT[Table Splitting]
-        PARQUET[Parquet Generation]
+        JSONL[JSONL Generation]
     end
 
-    subgraph Ingestion["3. Ingestion Layer"]
-        DELTA[Delta Detection]
-        VERSION[Versioning]
-        DL[Data Layer Tables]
-    end
-
-    subgraph Models["4. Model Execution"]
-        NFR[NFR Taxonomy Classification]
+    subgraph Models["3. Model Execution"]
+        TAX[Taxonomy Classification]
         ENRICH[Enrichment]
-        EMBED[Embeddings]
+        CLEAN[Clean Text + Per-Feature Hashing]
+        EMBED[Embeddings 6x3072-dim]
+    end
+
+    subgraph Ingestion["4. Ingestion Layer"]
+        DELTA[Multi-Level Delta Detection]
+        PG[PostgreSQL Temporal Tables]
+        QDRANT[Qdrant Vector Index]
+        SIM[Similar Controls Scoring]
     end
 
     TUS --> BATCH
     BATCH --> SCHEMA
-    SCHEMA --> SPLIT
-    SPLIT --> PARQUET
-    PARQUET --> DELTA
-    DELTA --> VERSION
-    VERSION --> DL
-    DL --> NFR
-    NFR --> ENRICH
-    ENRICH --> EMBED
+    SCHEMA --> JSONL
+    JSONL --> TAX
+    TAX --> ENRICH
+    ENRICH --> CLEAN
+    CLEAN --> EMBED
+    EMBED --> DELTA
+    DELTA --> PG
+    DELTA --> QDRANT
+    QDRANT --> SIM
 ```
 
 ## Supported Data Sources
@@ -72,28 +74,35 @@ Files are uploaded using the **TUS (resumable upload) protocol**, ensuring relia
 
 Uploaded files undergo comprehensive validation:
 
-1. **Format Parsing** - Column headers and data parsing
-2. **Schema Validation** - Column types, patterns, required fields, allowed values
-3. **Table Splitting** - Single CSV file split into multiple normalized parquet tables
-4. **Multi-Value Parsing** - Comma-separated fields expanded into junction tables
+1. **Format Parsing** — Column headers and data parsing
+2. **Schema Validation** — Column types, patterns, required fields, allowed values
+3. **JSONL Generation** — Validated records written to `{upload_id}.jsonl`
 
-### Stage 3: Ingestion
+### Stage 3: Model Execution
 
-Validated data is loaded into the data layer with intelligent change detection:
-
-1. **Delta Detection** - Compare `last_modified_on` timestamps with existing records
-2. **Versioning** - Create new versions for changed records, preserve audit trail
-3. **Relationship Linking** - Connect child tables to main records via foreign keys
-
-### Stage 4: Model Execution
-
-Three sequential ML stages enrich the ingested data:
+Four sequential ML stages process the validated data before ingestion:
 
 | Stage | Purpose | Output |
-|-------|---------|--------|
-| **NFR Taxonomy** | Classify records against risk taxonomy | Risk theme options with reasoning |
-| **Enrichment** | Generate summaries and complexity scores | Structured analysis |
-| **Embeddings** | Create vector representations | Semantic search capability |
+|---|---|---|
+| **Taxonomy** | Classify records against NFR risk taxonomy | Risk theme options with reasoning |
+| **Enrichment** | Generate summaries, complexity scores, W-criteria | Structured analysis |
+| **Clean Text** | Normalize text, compute per-feature SHA-256 hashes and feature masks | 6 hashes + 6 masks per control |
+| **Embeddings** | Generate vector representations (6 named vectors × 3072 dim) | NPZ file + index with hashes/masks |
+
+### Stage 4: Ingestion
+
+Model outputs and source data are loaded into PostgreSQL and Qdrant with multi-level delta detection:
+
+1. **Source delta** — Compare `last_modified_on` timestamps with existing records
+2. **Model delta** — Compare per-feature hashes to detect changed model outputs
+3. **Embedding delta** — Compare hashes in Qdrant payload for selective vector updates
+4. **Temporal versioning** — Close old versions (`tx_to = now`), insert new versions
+5. **Qdrant upsert** — Insert new points or update changed vectors
+6. **Similar controls** — Incremental rescoring for affected controls
+
+:::info Upload Ordering
+Uploads are sequentially numbered (`UPL-YYYY-XXXX`). The system enforces ordering: upload N cannot be ingested until upload N-1 succeeds. See the [Controls Pipeline](/pipelines/controls-pipeline#upload-ordering) for details.
+:::
 
 ---
 
@@ -734,22 +743,27 @@ Get the ordered list of parquet files and their target tables for a batch.
 The pipeline uses a structured directory layout:
 
 ```
-DATA_INGESTION_PATH/
-├── uploads/                          # Original uploaded CSV files
-│   └── UPL-2026-0001_controls/
-│       └── KPCI_Controls_Export.csv
+DATA_INGESTED_PATH/
+├── controls/                         # Source JSONL files (per upload)
+│   ├── UPL-2026-0001.jsonl
+│   └── UPL-2026-0002.jsonl
 │
-├── preprocessed/                     # Validated parquet files
-│   └── UPL-2026-0001_controls/
-│       ├── controls_main.parquet
-│       ├── controls_hierarchy.parquet
-│       └── ...
+├── model_runs/                       # Model outputs (per model, per upload)
+│   ├── taxonomy/
+│   │   └── UPL-2026-0001.jsonl
+│   ├── enrichment/
+│   │   └── UPL-2026-0001.jsonl
+│   ├── clean_text/
+│   │   └── UPL-2026-0001.jsonl
+│   └── embeddings/
+│       ├── UPL-2026-0001.npz        # Binary embedding arrays
+│       └── UPL-2026-0001.index.jsonl # Per-control hashes + masks
 │
-├── .state/                          # Internal state tracking
-│   ├── upload_id_sequence.json      # Sequential ID generator
-│   └── processing_lock.json         # Prevents concurrent runs
+├── .state/                           # Internal state tracking
+│   ├── upload_id_sequence.json       # Sequential ID generator
+│   └── processing_lock.json          # Prevents concurrent runs
 │
-└── .tus_uploads/                    # TUS temporary upload chunks
+└── .tus_uploads/                     # TUS temporary upload chunks
 ```
 
 ---
@@ -760,22 +774,25 @@ Each data source defines an execution graph that controls processing order:
 
 ```mermaid
 flowchart LR
-    subgraph Ingestion
-        M[insert_main] --> C[insert_children]
+    subgraph Models["Model Execution"]
+        T[taxonomy] --> E[enrichment]
+        E --> CT[clean_text]
+        CT --> EM[embeddings]
     end
 
-    subgraph Models
-        C --> N[nfr_taxonomy]
-        N --> E[enrichment]
-        E --> V[embeddings]
-        V --> NE[nested_embeddings]
+    subgraph Ingestion["Ingestion"]
+        EM --> D[delta_detection]
+        D --> PG[postgresql]
+        D --> QD[qdrant]
+        QD --> SIM[similar_controls]
     end
 ```
 
 **Stage Dependencies:**
-- `insert_main` must complete before `insert_children`
-- All ingestion stages must complete before model execution
-- Model stages run sequentially: NFR → Enrichment → Embeddings
+- Model stages run sequentially: Taxonomy → Enrichment → Clean Text → Embeddings
+- All model outputs must be available before ingestion starts (readiness check)
+- Ingestion writes to PostgreSQL and Qdrant in a single pass
+- Similar controls scoring runs after Qdrant upsert completes
 
 ---
 

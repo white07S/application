@@ -1,55 +1,66 @@
 ---
 sidebar_position: 2
 title: Controls Pipeline
-description: Detailed documentation for the Controls data ingestion pipeline
+description: Detailed documentation for the Controls data ingestion, model execution, vector indexing, and search pipeline
 ---
 
 # Controls Pipeline
 
-The Controls pipeline processes Key Performance Controls Inventory (KPCI) data. A single CSV file is validated, split into 8 normalized parquet tables, and loaded into the data layer with full versioning support.
+The Controls pipeline processes Key Performance Controls Inventory (KPCI) data through a multi-stage system: file upload, schema validation, model execution (taxonomy, enrichment, clean text, embeddings), temporal ingestion into PostgreSQL, vector indexing in Qdrant, and precomputed similar-controls scoring.
 
 ## Overview
 
 ```mermaid
 flowchart TB
-    subgraph Input["Input: 1 CSV File"]
-        CSV[KPCI Controls Export<br/>~50 columns]
+    subgraph Upload["1. Upload"]
+        CSV[KPCI CSV Export]
+        TUS[TUS Resumable Upload]
+        BATCH[Batch Tracking]
     end
 
-    subgraph Validation["Validation & Splitting"]
+    subgraph Validation["2. Validation"]
         PARSE[Parse CSV]
         VALIDATE[Schema Validation]
-        SPLIT[Table Splitting]
+        JSONL[JSONL Generation]
     end
 
-    subgraph Output["Output: 8 Parquet Tables"]
-        MAIN[controls_main]
-        HIER[controls_hierarchy]
-        META[controls_metadata]
-        RISK[controls_risk_theme]
-        CAT[controls_category_flags]
-        SOX[controls_sox_assertions]
-        FUNC[controls_related_functions]
-        LOC[controls_related_locations]
+    subgraph Models["3. Model Execution"]
+        TAX[Taxonomy]
+        ENRICH[Enrichment]
+        CLEAN[Clean Text + Hashing]
+        EMBED[Embeddings]
     end
 
-    CSV --> PARSE
-    PARSE --> VALIDATE
-    VALIDATE --> SPLIT
-    SPLIT --> MAIN
-    SPLIT --> HIER
-    SPLIT --> META
-    SPLIT --> RISK
-    SPLIT --> CAT
-    SPLIT --> SOX
-    SPLIT --> FUNC
-    SPLIT --> LOC
+    subgraph Ingestion["4. Ingestion"]
+        DELTA[Delta Detection]
+        PG[PostgreSQL Versioned Tables]
+        QDRANT[Qdrant Vector Index]
+        SIM[Similar Controls]
+    end
+
+    subgraph Explorer["5. Explorer Search"]
+        KW[Keyword FTS]
+        SEM[Semantic Search]
+        HYB[Hybrid RRF]
+    end
+
+    CSV --> TUS --> BATCH
+    BATCH --> PARSE --> VALIDATE --> JSONL
+    JSONL --> TAX --> ENRICH --> CLEAN --> EMBED
+    EMBED --> DELTA
+    DELTA --> PG
+    DELTA --> QDRANT
+    QDRANT --> SIM
+    PG --> KW
+    QDRANT --> SEM
+    KW --> HYB
+    SEM --> HYB
 ```
 
 ## File Requirements
 
 | Requirement | Value |
-|-------------|-------|
+|---|---|
 | **File Count** | 1 |
 | **Format** | CSV (.csv) |
 | **Minimum Size** | 5 KB |
@@ -61,417 +72,93 @@ flowchart TB
 
 ## Data Model
 
+### L1/L2 Control Hierarchy
+
+Controls follow a two-level hierarchy that is central to the pipeline's data-sharing and indexing strategy.
+
+| Property | Level 1 | Level 2 |
+|---|---|---|
+| **Role** | Standard control definition | Localized instance of a Level 1 control |
+| **`parent_control_id`** | `NULL` | Points to an L1 control |
+| **`control_title`** | Own text | Inherited from parent (~99.9%) |
+| **`control_description`** | Own text | Inherited from parent (~99.9%) |
+| **`evidence_description`** | Typically empty | Own text (L2-specific) |
+| **`local_functional_information`** | Typically empty | Own text (L2-specific) |
+| **`control_as_event`** | Own text (if active) | Often inherited from parent |
+| **`control_as_issues`** | Own text (if active) | Often inherited from parent |
+
+:::info Data Sharing Pattern
+In production data, ~99.9% of Level 2 controls share their `control_title` and `control_description` verbatim with their Level 1 parent. The pipeline's feature mask system detects this inheritance and avoids redundant embedding computation and similarity scoring for inherited fields. See [Feature Masks](#feature-masks) below.
+:::
+
 ### Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    controls_main ||--|| controls_hierarchy : "1:1"
-    controls_main ||--|| controls_metadata : "1:1"
-    controls_main ||--o{ controls_risk_theme : "1:N"
-    controls_main ||--o{ controls_category_flags : "1:N"
-    controls_main ||--o{ controls_sox_assertions : "1:N"
-    controls_main ||--o{ controls_related_functions : "1:N"
-    controls_main ||--o{ controls_related_locations : "1:N"
+    src_controls_ref_control ||--o{ src_controls_ver_control : "versions"
+    src_controls_ref_control ||--o{ src_controls_rel_parent : "parent edge"
+    src_controls_ref_control ||--o{ src_controls_rel_owns_function : "owns"
+    src_controls_ref_control ||--o{ src_controls_rel_owns_location : "owns"
+    src_controls_ref_control ||--o{ src_controls_rel_related_function : "related"
+    src_controls_ref_control ||--o{ src_controls_rel_related_location : "related"
+    src_controls_ref_control ||--o{ src_controls_rel_risk_theme : "risk theme"
+    src_controls_ref_control ||--o{ ai_controls_model_taxonomy : "taxonomy"
+    src_controls_ref_control ||--o{ ai_controls_model_enrichment : "enrichment"
+    src_controls_ref_control ||--o{ ai_controls_model_clean_text : "clean text + FTS"
+    src_controls_ref_control ||--o{ ai_controls_similar_controls : "similar"
 
-    controls_main {
+    src_controls_ref_control {
         string control_id PK
+        datetime created_at
+    }
+
+    src_controls_ver_control {
+        bigint ver_id PK
+        string ref_control_id FK
         string control_title
         string control_description
-        boolean key_control
         string hierarchy_level
-        string parent_control_id FK
-        string preventative_detective
-        string manual_automated
-        string execution_frequency
-        boolean four_eyes_check
-        string evidence_description
-        datetime evidence_available_from
-        boolean performance_measures_required
-        datetime performance_measures_available_from
         string control_status
-        datetime valid_from
-        datetime valid_until
-        string reason_for_deactivation
-        string status_updates
         datetime last_modified_on
+        datetime tx_from
+        datetime tx_to
     }
 
-    controls_hierarchy {
-        string control_id FK
-        string group_id
-        string group_name
-        string division_id
-        string division_name
-        string unit_id
-        string unit_name
-        string area_id
-        string area_name
-        string sector_id
-        string sector_name
-        string segment_id
-        string segment_name
-        string function_id
-        string function_name
-        string l0_location_id
-        string l0_location_name
-        string region_id
-        string region_name
-        string sub_region_id
-        string sub_region_name
-        string country_id
-        string country_name
-        string company_id
-        string company_short_name
+    src_controls_rel_parent {
+        bigint edge_id PK
+        string parent_control_id FK
+        string child_control_id FK
+        datetime tx_from
+        datetime tx_to
     }
 
-    controls_metadata {
-        string control_id FK
-        string control_owner
-        string control_owner_gpn
-        string control_instance_owner_role
-        string control_administrator
-        string control_administrator_gpn
-        string control_delegate
-        string control_delegate_gpn
-        string control_assessor
-        string control_assessor_gpn
-        boolean is_assessor_control_owner
-        boolean sox_relevant
-        boolean ccar_relevant
-        boolean bcbs239_relevant
-        boolean ey_reliant
-        string sox_rationale
-        string local_functional_information
-        string kpci_governance_forum
-        string financial_statement_line_item
-        string it_application_system_supporting
-        string additional_information_on_deactivation
-        string control_created_by
-        string control_created_by_gpn
-        datetime control_created_on
-        string last_control_modification_requested_by
-        string last_control_modification_requested_by_gpn
-        datetime last_modification_on
-        datetime control_status_date_change
-    }
-
-    controls_risk_theme {
-        string control_id FK
-        string risk_theme
-        string taxonomy_number
-        string risk_theme_number
-    }
-
-    controls_category_flags {
-        string control_id FK
-        string category_flag
-    }
-
-    controls_sox_assertions {
-        string control_id FK
-        string sox_assertion
-    }
-
-    controls_related_functions {
-        string control_id FK
-        string related_functions_locations_comments
-        string related_function_id
-        string related_function_name
-    }
-
-    controls_related_locations {
-        string control_id FK
-        string related_functions_locations_comments
-        string related_location_id
-        string related_location_name
+    ai_controls_model_clean_text {
+        bigint ver_id PK
+        string ref_control_id FK
+        string control_title
+        string control_description
+        string hash_control_title
+        string hash_control_description
+        tsvector ts_control_title
+        tsvector ts_control_description
+        datetime tx_from
+        datetime tx_to
     }
 ```
 
----
+### Temporal Versioning
 
-## Table Schemas
+All tables use transaction-time versioning via `tx_from` / `tx_to` columns instead of boolean `is_current` flags.
 
-### controls_main
+| Column | Meaning |
+|---|---|
+| `tx_from` | Timestamp when this version became active |
+| `tx_to` | Timestamp when this version was superseded (`NULL` = current) |
 
-The primary controls table containing core control information.
+**Current version:** `WHERE tx_to IS NULL`
+**Historical version:** `WHERE tx_to IS NOT NULL`
 
-**Primary Key:** `control_id`
-
-| Column | Type | Required | Nullable | Description |
-|--------|------|----------|----------|-------------|
-| `control_id` | string | Yes | No | Unique control identifier. Pattern: `CTRL-XXXXXXXXXX` (10 digits) |
-| `control_title` | string | Yes | No | Short descriptive title of the control |
-| `control_description` | string | Yes | No | Detailed description of what the control does |
-| `key_control` | boolean | Yes | No | Indicates if this is a key control |
-| `hierarchy_level` | string | Yes | No | Control level in hierarchy. Allowed: `Level 1`, `Level 2` |
-| `parent_control_id` | string | No | Yes | Reference to parent control (for Level 2 controls) |
-| `preventative_detective` | string | Yes | No | Control type classification |
-| `manual_automated` | string | Yes | No | Execution method classification |
-| `execution_frequency` | string | Yes | No | How often the control is executed |
-| `four_eyes_check` | boolean | Yes | No | Whether dual approval is required |
-| `evidence_description` | string | Yes | No | Description of evidence collected |
-| `evidence_available_from` | datetime | Yes | No | Date from which evidence is available |
-| `performance_measures_required` | boolean | Yes | No | Whether KPIs are required |
-| `performance_measures_available_from` | datetime | No | Yes | Date from which KPIs are available |
-| `control_status` | string | Yes | No | Current status of the control |
-| `valid_from` | datetime | Yes | No | Control validity start date |
-| `valid_until` | datetime | No | Yes | Control validity end date (if deactivated) |
-| `reason_for_deactivation` | string | No | Yes | Reason if control was deactivated |
-| `status_updates` | string | No | Yes | Latest status update notes |
-| `last_modified_on` | datetime | Yes | No | Last modification timestamp (used for delta detection) |
-
-**Allowed Values:**
-
-| Column | Allowed Values |
-|--------|----------------|
-| `hierarchy_level` | `Level 1`, `Level 2` |
-| `preventative_detective` | `Preventative`, `Detective`, `1st Line Detective`, `2nd Line Detective` |
-| `manual_automated` | `Manual`, `Automated`, `IT Dependent Manual` |
-| `execution_frequency` | `Daily`, `Weekly`, `Monthly`, `Quarterly`, `Semi-Annually`, `Annually`, `Event Triggered`, `Intraday`, `Others` |
-| `control_status` | `Active`, `Inactive` |
-
----
-
-### controls_hierarchy
-
-Organizational hierarchy information for each control. One-to-one relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-#### Function Hierarchy
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `control_id` | string | Yes | Reference to controls_main |
-| `group_id` | string | Yes | Top-level group identifier |
-| `group_name` | string | Yes | Group name |
-| `division_id` | string | Yes | Division identifier |
-| `division_name` | string | Yes | Division name |
-| `unit_id` | string | Yes | Business unit identifier |
-| `unit_name` | string | Yes | Business unit name |
-| `area_id` | string | Yes | Area identifier |
-| `area_name` | string | Yes | Area name |
-| `sector_id` | string | Yes | Sector identifier |
-| `sector_name` | string | Yes | Sector name |
-| `segment_id` | string | Yes | Segment identifier |
-| `segment_name` | string | Yes | Segment name |
-| `function_id` | string | Yes | Function identifier |
-| `function_name` | string | Yes | Function name |
-
-#### Location Hierarchy
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `l0_location_id` | string | Yes | Top-level location identifier |
-| `l0_location_name` | string | Yes | Top-level location name |
-| `region_id` | string | Yes | Region identifier |
-| `region_name` | string | Yes | Region name |
-| `sub_region_id` | string | Yes | Sub-region identifier |
-| `sub_region_name` | string | Yes | Sub-region name |
-| `country_id` | string | Yes | Country identifier |
-| `country_name` | string | Yes | Country name |
-| `company_id` | string | Yes | Legal entity identifier |
-| `company_short_name` | string | Yes | Legal entity short name |
-
----
-
-### controls_metadata
-
-Ownership, compliance, and audit trail information. One-to-one relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-#### Ownership Fields
-
-| Column | Type | Required | Nullable | Description |
-|--------|------|----------|----------|-------------|
-| `control_id` | string | Yes | No | Reference to controls_main |
-| `control_owner` | string | Yes | No | Name of the control owner |
-| `control_owner_gpn` | string | Yes | No | 8-digit Global Personnel Number |
-| `control_instance_owner_role` | string | Yes | No | Role of the instance owner |
-| `control_administrator` | string | Yes | No | Name of the administrator |
-| `control_administrator_gpn` | string | Yes | No | Administrator's GPN |
-| `control_delegate` | string | No | Yes | Delegate name (if assigned) |
-| `control_delegate_gpn` | string | No | Yes | Delegate's GPN |
-| `control_assessor` | string | No | Yes | Assessor name (if assigned) |
-| `control_assessor_gpn` | string | No | Yes | Assessor's GPN |
-| `is_assessor_control_owner` | boolean | Yes | No | Whether assessor is also owner |
-
-#### Compliance Flags
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `sox_relevant` | boolean | Yes | SOX compliance relevance |
-| `ccar_relevant` | boolean | Yes | CCAR compliance relevance |
-| `bcbs239_relevant` | boolean | Yes | BCBS239 compliance relevance |
-| `ey_reliant` | boolean | Yes | EY reliance flag |
-| `sox_rationale` | string | No | Rationale for SOX relevance |
-
-#### Additional Information
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `local_functional_information` | string | No | Local functional context |
-| `kpci_governance_forum` | string | Yes | Governance forum assignment |
-| `financial_statement_line_item` | string | No | Related financial statement item |
-| `it_application_system_supporting` | string | No | Supporting IT systems |
-| `additional_information_on_deactivation` | string | No | Deactivation details |
-
-#### Audit Trail
-
-| Column | Type | Required | Nullable | Description |
-|--------|------|----------|----------|-------------|
-| `control_created_by` | string | Yes | No | Creator name |
-| `control_created_by_gpn` | string | Yes | No | Creator GPN |
-| `control_created_on` | datetime | Yes | No | Creation timestamp |
-| `last_control_modification_requested_by` | string | No | Yes | Last modifier name |
-| `last_control_modification_requested_by_gpn` | string | No | Yes | Last modifier GPN |
-| `last_modification_on` | datetime | No | Yes | Last modification timestamp |
-| `control_status_date_change` | datetime | No | Yes | Status change timestamp |
-
----
-
-### controls_risk_theme
-
-Risk theme assignments for each control. One-to-many relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `control_id` | string | Yes | Reference to controls_main |
-| `risk_theme` | string | Yes | Risk theme name |
-| `taxonomy_number` | string | Yes | Top-level NFR taxonomy number (e.g., "1", "2", "3") |
-| `risk_theme_number` | string | Yes | Risk theme taxonomy number (e.g., "1.1", "1.2", "3.1") |
-
-<Info title="Multi-Value Splitting">
-Risk themes are extracted from a pipe-separated column in the source CSV file. Each theme is looked up against the NFR Taxonomy to populate taxonomy numbers.
-
-**Example Source Value:** `"Technology Production Stability, Cyber and Information Security"`
-
-**Generated Records:**
-| control_id | risk_theme | taxonomy_number | risk_theme_number |
-|------------|-----------|-----------------|-------------------|
-| CTRL-0000000001 | Technology Production Stability | 1 | 1.1 |
-| CTRL-0000000001 | Cyber and Information Security | 1 | 1.2 |
-</Info>
-
----
-
-### controls_category_flags
-
-Category flag assignments for each control. One-to-many relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `control_id` | string | Yes | Reference to controls_main |
-| `category_flag` | string | Yes | Category flag value |
-
-<Info title="Multi-Value Splitting">
-Category flags are extracted from a comma-separated column. Each flag becomes a separate row.
-
-**Example Source Value:** `"Critical, High-Risk, Regulatory"`
-
-**Generated Records:**
-| control_id | category_flag |
-|------------|---------------|
-| CTRL-0000000001 | Critical |
-| CTRL-0000000001 | High-Risk |
-| CTRL-0000000001 | Regulatory |
-</Info>
-
----
-
-### controls_sox_assertions
-
-SOX assertion mappings for each control. One-to-many relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-| Column | Type | Required | Description |
-|--------|------|----------|-------------|
-| `control_id` | string | Yes | Reference to controls_main |
-| `sox_assertion` | string | Yes | SOX assertion type |
-
-**Common SOX Assertions:**
-- Existence/Occurrence
-- Completeness
-- Valuation/Allocation
-- Rights and Obligations
-- Presentation and Disclosure
-
----
-
-### controls_related_functions
-
-Related functions for cross-functional controls. One-to-many relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-| Column | Type | Required | Nullable | Description |
-|--------|------|----------|----------|-------------|
-| `control_id` | string | Yes | No | Reference to controls_main |
-| `related_functions_locations_comments` | string | No | Yes | Comments about the relationship |
-| `related_function_id` | string | Yes | No | Related function identifier |
-| `related_function_name` | string | Yes | No | Related function name |
-
-<Info title="Paired List Splitting">
-Related functions and locations are stored as paired pipe-separated lists in the source CSV:
-- `related_function_ids`: "F001|F002|F003"
-- `related_function_names`: "Finance|Operations|Risk"
-
-The pipeline pairs these by position index to create individual records.
-</Info>
-
----
-
-### controls_related_locations
-
-Related locations for multi-location controls. One-to-many relationship with `controls_main`.
-
-**Foreign Key:** `control_id` references `controls_main.control_id`
-
-| Column | Type | Required | Nullable | Description |
-|--------|------|----------|----------|-------------|
-| `control_id` | string | Yes | No | Reference to controls_main |
-| `related_functions_locations_comments` | string | No | Yes | Comments about the relationship |
-| `related_location_id` | string | Yes | No | Related location identifier |
-| `related_location_name` | string | Yes | No | Related location name |
-
----
-
-## Validation Rules
-
-### Column Pattern Validation
-
-| Column | Pattern | Example Valid | Example Invalid |
-|--------|---------|---------------|-----------------|
-| `control_id` | `^CTRL-\d{10}$` | `CTRL-0000000001` | `CTRL-123`, `CTR-0000000001` |
-| `control_owner_gpn` | `^\d{8}$` | `12345678` | `1234567`, `A2345678` |
-| `control_administrator_gpn` | `^\d{8}$` | `87654321` | `876543210` |
-
-### Required Field Validation
-
-The following fields must not be null or empty:
-
-- `control_id`
-- `control_title`
-- `control_description`
-- `key_control`
-- `hierarchy_level`
-- `preventative_detective`
-- `manual_automated`
-- `execution_frequency`
-- `control_status`
-- `control_owner`
-- `control_owner_gpn`
-- `last_modified_on`
-
-### Enum Validation
-
-Fields with restricted values are validated against their allowed value lists. Invalid values result in validation errors with the row indices and sample values reported.
+When a control changes, the existing row is closed (`tx_to = now()`) and a new row is inserted (`tx_from = now(), tx_to = NULL`).
 
 ---
 
@@ -481,146 +168,409 @@ Fields with restricted values are validated against their allowed value lists. I
 
 ```mermaid
 sequenceDiagram
-    participant Upload as Upload API
+    participant Upload as TUS Upload
     participant Parser as CSV Parser
     participant Validator as Schema Validator
-    participant Splitter as Table Splitter
-    participant Storage as Parquet Storage
+    participant Storage as JSONL Storage
 
-    Upload->>Parser: CSV file
-    Parser->>Parser: Parse headers from row 1
-    Parser->>Parser: Parse data from row 2
-    Parser->>Validator: DataFrame
+    Upload->>Parser: CSV file (all chunks received)
+    Parser->>Parser: Parse headers + data rows
+    Parser->>Validator: Raw records
     Validator->>Validator: Check column types
-    Validator->>Validator: Validate patterns
+    Validator->>Validator: Validate patterns (CTRL-XXXXXXXXXX)
     Validator->>Validator: Check allowed values
     Validator->>Validator: Verify nullability
     alt Validation Failed
-        Validator-->>Upload: Error details
+        Validator-->>Upload: Error details (per-column)
     else Validation Passed
-        Validator->>Splitter: Validated DataFrame
-        Splitter->>Splitter: Split into 8 tables
-        Splitter->>Splitter: Parse multi-value columns
-        Splitter->>Splitter: Lookup taxonomy numbers
-        Splitter->>Storage: 8 Parquet files
-        Storage-->>Upload: Success + file list
+        Validator->>Storage: Write {upload_id}.jsonl
+        Storage-->>Upload: Batch status = validated
     end
 ```
 
-### Stage 2: Ingestion
+### Stage 2: Model Execution
 
-```mermaid
-sequenceDiagram
-    participant API as Processing API
-    participant Loader as Data Loader
-    participant Delta as Delta Detector
-    participant DB as Database
-
-    API->>Loader: Start ingestion job
-
-    loop For each parquet file
-        Loader->>Loader: Read parquet
-        Loader->>Delta: Check records
-        Delta->>DB: Query existing by control_id
-        Delta->>Delta: Compare last_modified_on
-
-        alt New Record
-            Delta->>DB: INSERT new record
-        else Modified Record
-            Delta->>DB: UPDATE old.is_current = false
-            Delta->>DB: INSERT new version
-        else Unchanged
-            Delta->>Delta: Skip record
-        end
-    end
-
-    Loader-->>API: Job complete
-```
-
-### Stage 3: Model Execution
+Four sequential model stages process the validated controls. Each model reads the source JSONL (and possibly prior model outputs) and writes a separate output file.
 
 ```mermaid
 flowchart LR
-    subgraph NFR["NFR Taxonomy"]
-        N1[Load control text]
-        N2[Classify risk themes]
-        N3[Generate reasoning]
-        N4[Store output]
+    subgraph Tax["Taxonomy"]
+        T1[Load control text]
+        T2[Classify NFR risk themes]
+        T3[Store taxonomy.jsonl]
     end
 
     subgraph Enrich["Enrichment"]
-        E1[Load control + NFR output]
-        E2[Generate summary]
-        E3[Calculate complexity]
-        E4[Update output]
+        E1[Load control + taxonomy]
+        E2[Generate summary + W-criteria]
+        E3[Store enrichment.jsonl]
+    end
+
+    subgraph Clean["Clean Text"]
+        C1[Load control text]
+        C2[Normalize + clean 6 features]
+        C3[Compute per-feature SHA256 hashes]
+        C4[Compute feature masks vs parent]
+        C5[Store clean_text.jsonl]
     end
 
     subgraph Embed["Embeddings"]
-        V1[Load all outputs]
-        V2[Generate vector]
-        V3[Store embedding]
+        V1[Load clean text + masks]
+        V2[Generate 6 embeddings per control]
+        V3[Zero vectors for inherited features]
+        V4[Store embeddings.npz + index]
     end
 
-    N1 --> N2 --> N3 --> N4
-    N4 --> E1 --> E2 --> E3 --> E4
-    E4 --> V1 --> V2 --> V3
+    T1 --> T2 --> T3
+    T3 --> E1 --> E2 --> E3
+    E3 --> C1 --> C2 --> C3 --> C4 --> C5
+    C5 --> V1 --> V2 --> V3 --> V4
 ```
+
+| Model | Input | Output | Key Fields |
+|---|---|---|---|
+| **Taxonomy** | Source JSONL | `taxonomy.jsonl` | NFR risk theme classifications, reasoning |
+| **Enrichment** | Source + taxonomy | `enrichment.jsonl` | Summary, complexity score, W-criteria yes/no flags |
+| **Clean Text** | Source JSONL | `clean_text.jsonl` | 6 cleaned text fields, 6 per-feature hashes, 6 feature masks |
+| **Embeddings** | Clean text output | `embeddings.npz` + index | 6 named embedding vectors (3072-dim each) |
+
+---
+
+## Per-Feature Hashing
+
+The clean text model computes an independent SHA-256 hash for each of the 6 text features, truncated to a 12-character hex prefix with a `CT` marker.
+
+**Hash Format:** `CT-{sha256[:12]}` (e.g., `CT-a3f8b2c1d4e5`)
+
+**Features hashed:**
+
+| Feature | Hash Column | Typical Source |
+|---|---|---|
+| `control_title` | `hash_control_title` | L1 own, L2 inherited |
+| `control_description` | `hash_control_description` | L1 own, L2 inherited |
+| `evidence_description` | `hash_evidence_description` | L2 own, L1 typically empty |
+| `local_functional_information` | `hash_local_functional_information` | L2 own, L1 typically empty |
+| `control_as_event` | `hash_control_as_event` | Active controls only |
+| `control_as_issues` | `hash_control_as_issues` | Active controls only |
+
+Per-feature hashes are used at two points:
+1. **Ingestion delta detection** — compare incoming vs. existing hashes in PostgreSQL to detect changed model outputs
+2. **Embedding delta detection** — compare incoming vs. existing hashes in Qdrant to selectively update only changed vectors
+
+---
+
+## Feature Masks
+
+Feature masks are boolean flags that indicate whether a feature is **distinguishing** (the control's own text) or **inherited** (copied from its parent).
+
+**Mask Columns:** `mask_control_title`, `mask_control_description`, `mask_evidence_description`, `mask_local_functional_information`, `mask_control_as_event`, `mask_control_as_issues`
+
+### Computation (2-Pass Algorithm)
+
+The clean text model computes masks in two passes:
+
+1. **Pass 1:** Compute per-feature hashes for all controls and build a parent-child map
+2. **Pass 2:** For each control, compare its feature hashes against its parent's hashes
+
+```
+mask(feature) =
+    hash is None           → False  (no text, nothing to distinguish)
+    no parent              → True   (L1 controls are always distinguishing)
+    hash ≠ parent hash     → True   (child diverges from parent)
+    hash = parent hash     → False  (inherited from parent)
+```
+
+### How Masks Are Used
+
+| Component | How Masks Are Applied |
+|---|---|
+| **Embeddings** | `mask=False` → zero vector (no embedding generated for inherited features) |
+| **Qdrant Payload** | Masks stored alongside hashes for downstream consumers |
+| **Similar Controls** | Inherited features excluded from similarity scoring (`feature_valid` check) |
+| **Keyword Search (FTS)** | Masks NOT applied — FTS indexes all text including inherited (correct for findability) |
+| **Semantic Search** | Implicitly applied — zero vectors produce zero cosine similarity |
+
+:::info Why FTS Ignores Masks
+Keyword search intentionally indexes inherited text. A user searching for "reconciliation" should find both the L1 parent and its L2 children — even though the L2 inherited that title. Semantic search handles deduplication implicitly via zero vectors, while similarity scoring explicitly excludes inherited features.
+:::
+
+---
+
+## Delta Detection
+
+The ingestion service detects changes at multiple levels to minimize unnecessary writes.
+
+### Source-Level Delta
+
+Compares `last_modified_on` timestamps between incoming and existing records in PostgreSQL. If the timestamp is unchanged, the control is skipped entirely.
+
+### Per-Model Delta
+
+Each AI model output has its own hash (or set of per-feature hashes). The ingestion compares incoming model hashes against existing rows in PostgreSQL and only creates new versions for controls whose model output changed.
+
+### Embedding Delta (Qdrant)
+
+Per-feature hashes from the embeddings index are compared against hashes stored in Qdrant point payloads. This produces three categories:
+
+```mermaid
+flowchart LR
+    INCOMING[Incoming Embeddings Index] --> COMPARE{Compare per-feature hashes}
+    QDRANT[Qdrant Point Payloads] --> COMPARE
+
+    COMPARE -->|control_id not in Qdrant| NEW[New: Full point insert]
+    COMPARE -->|any feature hash changed| CHANGED[Changed: Selective vector update]
+    COMPARE -->|all hashes identical| SKIP[Unchanged: Skip]
+```
+
+| Category | Action | Qdrant Operation |
+|---|---|---|
+| **New** | Insert point with all 6 named vectors | `upsert` (full point) |
+| **Changed** | Update only the vectors whose hash changed | `upsert` (changed vectors + updated payload) |
+| **Unchanged** | No Qdrant write | Skip |
+
+---
+
+## Vector Indexing (Qdrant)
+
+Each control is stored as a single Qdrant point with 6 **named vectors** — one per searchable feature.
+
+### Collection Configuration
+
+| Setting | Value |
+|---|---|
+| **Collection** | `nfr_connect_controls` |
+| **Named Vectors** | 6 (one per feature) |
+| **Embedding Dimension** | 3072 |
+| **Distance Metric** | Cosine |
+| **Storage** | On-disk |
+| **Point ID** | UUID5 derived deterministically from `control_id` |
+
+### Point Payload
+
+Each point carries metadata in its payload for delta detection and downstream consumers:
+
+```json
+{
+  "control_id": "CTRL-0000012345",
+  "hash_control_title": "CT-a3f8b2c1d4e5",
+  "hash_control_description": "CT-b7e2f4a9c1d3",
+  "hash_evidence_description": "CT-d1c4a8e3f2b7",
+  "hash_local_functional_information": null,
+  "hash_control_as_event": null,
+  "hash_control_as_issues": null,
+  "mask_control_title": false,
+  "mask_control_description": false,
+  "mask_evidence_description": true,
+  "mask_local_functional_information": true,
+  "mask_control_as_event": true,
+  "mask_control_as_issues": true
+}
+```
+
+In this example, `control_title` and `control_description` are inherited (`mask=false`), so their embedding vectors are zero. The control is only searchable semantically via its own `evidence_description` and other distinguishing features.
+
+---
+
+## Search Algorithm
+
+The Explorer provides three search modes for controls, all operating on the 6-feature architecture.
+
+### Search Modes
+
+```mermaid
+flowchart TB
+    QUERY[User Search Query] --> MODE{Search Mode}
+
+    MODE -->|keyword| KW[PostgreSQL FTS]
+    MODE -->|semantic| SEM[Qdrant Named Vectors]
+    MODE -->|hybrid| HYB[Both in Parallel]
+
+    KW --> RANK_KW[Sum of ts_rank across features]
+    SEM --> RANK_SEM[RRF merge across 6 vectors]
+    HYB --> MERGE[RRF merge keyword + semantic]
+
+    RANK_KW --> RESULTS[Ranked Control IDs]
+    RANK_SEM --> RESULTS
+    MERGE --> RESULTS
+```
+
+### Keyword Search (PostgreSQL FTS)
+
+Searches `tsvector` columns in `ai_controls_model_clean_text` using `plainto_tsquery`.
+
+- Each of the 6 features has a dedicated `ts_{feature}` tsvector column
+- A PostgreSQL trigger auto-generates tsvectors on insert/update
+- Partial GIN indexes on `tx_to IS NULL` ensure only current versions are searched
+- Ranking: sum of `ts_rank()` across selected fields
+- Limit: 2000 results
+
+:::info Inherited Text in FTS
+FTS indexes **all** clean text including inherited fields. An L2 control with an inherited title containing "reconciliation" is findable via keyword search. This is intentional — users expect to find all controls containing a term regardless of data sharing.
+:::
+
+### Semantic Search (Qdrant Named Vectors)
+
+Embeds the user's query via OpenAI `text-embedding-3-large` (3072-dim), then searches each named vector in parallel.
+
+- Searches each feature vector independently (up to 200 results per feature)
+- Results merged via Reciprocal Rank Fusion (RRF) across features
+- Controls with zero vectors for a feature naturally produce zero cosine similarity for that feature
+- Sidebar filter candidates are passed as a Qdrant `FieldCondition` on `control_id`
+
+### Hybrid Search (RRF Merge)
+
+Runs keyword and semantic in parallel, then merges via RRF.
+
+**RRF Formula:**
+
+```
+Score(control_id) = Σ 1 / (k + rank_i)
+```
+
+Where `k = 60` (standard RRF constant) and `rank_i` is the 0-indexed position in each result list.
+
+Falls back to keyword-only if no OpenAI API key is configured.
+
+### Search Mode Behavior for L1/L2
+
+| Search Mode | L1 Controls | L2 Controls |
+|---|---|---|
+| **Keyword** | Found via own title/desc | Found via inherited title/desc AND own evidence/local_func |
+| **Semantic** | Found via own title/desc vectors | Found via own evidence/local_func vectors only (inherited = zero) |
+| **Hybrid** | Both channels contribute | Keyword channel finds inherited text; semantic finds own features |
+
+---
+
+## Similar Controls
+
+Precomputed similar controls use a hybrid multi-feature scoring algorithm with two modes.
+
+### Scoring Algorithm
+
+For each pair of controls `(i, j)`, the scorer computes a per-feature hybrid score:
+
+```
+hybrid_f = 0.6 × cosine(embedding_i, embedding_j) + 0.4 × jaccard(tokens_i, tokens_j)
+```
+
+With adjustments:
+- **Duplicate cap:** If `cosine > 0.99`, the feature score is capped at `0.3` (prevents inherited/copied text from dominating)
+- **Feature validity:** Features with zero-norm vectors (`< 0.01`) are skipped (inherited/empty features excluded)
+- **Diversity bonus:** `1.0 + 0.05 × n_diverse` multiplier rewards controls that are similar across multiple independent features
+- **Parent-child exclusion:** Direct parent-child pairs are always excluded from results
+
+Each control retains its top 4 most similar controls.
+
+### Full Rebuild vs. Incremental (Option D+)
+
+| Mode | Complexity | When Used |
+|---|---|---|
+| **Full Rebuild** | O(n²) | Initial load, monthly safety net |
+| **Incremental** | O(delta × n) | Daily delta uploads |
+
+**Incremental mode** (Option D+) operates in two phases:
+
+1. **DELETE phase:** Find controls that previously pointed to now-changed controls → rescan and re-rank their neighbors
+2. **INSERT phase:** Score new/changed controls against all controls, with reverse kth-score check to update existing top-4 lists that the new control beats
+
+A hub guardrail falls back to full rebuild if the affected set exceeds 20,000 controls (prevents cascading rescans from hub nodes).
+
+Results are stored in `ai_controls_similar_controls` with temporal versioning, including per-feature breakdown scores.
+
+---
+
+## Upload Ordering
+
+Uploads are sequentially numbered within each year (`UPL-YYYY-XXXX`). The pipeline enforces strict ordering: upload N cannot be ingested until upload N-1 has been successfully ingested.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Upload received
+    pending --> validating: Validation starts
+    validating --> validated: Validation passed
+    validating --> failed: Validation failed
+    validated --> processing: Ingestion starts
+    failed --> processing: Re-run (fix & retry)
+    processing --> success: Ingestion completed
+    processing --> failed: Ingestion failed
+    success --> [*]
+```
+
+**Predecessor check:** Before starting ingestion, the system queries `upload_batches` for the most recent upload of the same `data_type` with an upload_id less than the current one. If that predecessor exists and has any status other than `success`, ingestion is rejected with HTTP 409.
+
+**Edge cases:**
+- First upload (`UPL-YYYY-0001` with no predecessor) is always allowed
+- Cross-year boundaries are handled naturally by string comparison of zero-padded IDs
+- Failed uploads can be re-ingested — the predecessor check looks at the upload before, not itself
 
 ---
 
 ## Database Tables
 
-After ingestion, data is stored in SurrealDB using the naming convention: `{layer}_{domain}_{kind}_{name}`.
-
 ### Source Tables
 
-| Table Name | Description |
-|------------|-------------|
-| `src_controls_main` | Primary controls table with core control information |
-| `src_controls_versions` | Version history for controls |
-
-### Reference Tables
-
-| Table Name | Description |
-|------------|-------------|
-| `src_controls_ref_risk_theme` | Risk theme reference data |
-| `src_controls_ref_org_function` | Organizational function reference data |
-| `src_controls_ref_org_location` | Organizational location reference data |
+| Table | Description | Key Columns |
+|---|---|---|
+| `src_controls_ref_control` | Reference table — one row per unique `control_id` | `control_id`, `created_at` |
+| `src_controls_ver_control` | Versioned control attributes (temporal) | `ver_id`, `ref_control_id`, `control_title`, `hierarchy_level`, `tx_from`, `tx_to` |
 
 ### Relationship Tables
 
-| Table Name | Description |
-|------------|-------------|
-| `src_controls_rel_has_risk_theme` | Control to risk theme relationships |
-| `src_controls_rel_has_related_function` | Control to related function relationships |
+| Table | Description | Key Columns |
+|---|---|---|
+| `src_controls_rel_parent` | Parent → child edges (L1 → L2) | `parent_control_id`, `child_control_id`, `tx_from`, `tx_to` |
+| `src_controls_rel_owns_function` | Control → owning function | `ref_control_id`, `node_id`, `tx_from`, `tx_to` |
+| `src_controls_rel_owns_location` | Control → owning location | `ref_control_id`, `node_id`, `tx_from`, `tx_to` |
+| `src_controls_rel_related_function` | Control → related functions | `ref_control_id`, `node_id`, `tx_from`, `tx_to` |
+| `src_controls_rel_related_location` | Control → related locations | `ref_control_id`, `node_id`, `tx_from`, `tx_to` |
+| `src_controls_rel_risk_theme` | Control → risk theme | `ref_control_id`, `theme_id`, `tx_from`, `tx_to` |
 
 ### AI Model Output Tables
 
-| Table Name | Description |
-|------------|-------------|
-| `ai_controls_model_taxonomy_current` | Current NFR taxonomy classification results |
-| `ai_controls_model_enrichment_current` | Current enrichment model outputs (summaries, complexity scores) |
-| `ai_controls_model_cleaned_text_current` | Current cleaned/normalized text outputs |
-| `ai_controls_model_embeddings_current` | Current embedding vectors for controls |
+| Table | Description | Key Columns |
+|---|---|---|
+| `ai_controls_model_taxonomy` | NFR risk theme classifications | `ref_control_id`, `hash`, `nfr_*` fields, `tx_from`, `tx_to` |
+| `ai_controls_model_enrichment` | Summaries, complexity, W-criteria | `ref_control_id`, `hash`, `summary`, `complexity_*`, `tx_from`, `tx_to` |
+| `ai_controls_model_clean_text` | Cleaned text + FTS tsvectors + per-feature hashes | `ref_control_id`, `{feature}`, `hash_{feature}`, `ts_{feature}`, `tx_from`, `tx_to` |
+| `ai_controls_similar_controls` | Precomputed top-4 similar controls | `ref_control_id`, `similar_control_id`, `score`, `tx_from`, `tx_to` |
+
+:::warning Embeddings Are Not in PostgreSQL
+Embedding vectors are stored exclusively in Qdrant (6 named vectors × 3072 dimensions per control). PostgreSQL only stores the per-feature hashes for delta detection and the tsvectors for keyword search.
+:::
+
+### Vector Store (Qdrant)
+
+| Collection | Points | Named Vectors | Dimension | Payload |
+|---|---|---|---|---|
+| `nfr_connect_controls` | 1 per control | 6 (one per feature) | 3072 | `control_id`, 6 hashes, 6 masks |
 
 ---
 
-## Model Output
+## Storage Structure
 
-After model execution, results are stored in `dl_controls_model_output`:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `control_id` | string | Reference to control |
-| `nfr_taxonomy_options` | JSON | Array of risk theme classifications |
-| `nfr_taxonomy_reasoning` | string | Explanation of classification |
-| `summary` | string | AI-generated control summary |
-| `complexity_score` | integer | Complexity rating (1-5) |
-| `recommended_actions` | string | Suggested improvements |
-| `embedding` | vector | 1536-dimension embedding vector |
-| `model_version` | string | Version of models used |
-| `input_hash` | string | Hash of input for cache detection |
-| `processed_at` | datetime | Processing timestamp |
+```
+DATA_INGESTED_PATH/
+├── controls/                        # Source JSONL files
+│   ├── UPL-2026-0001.jsonl
+│   └── UPL-2026-0002.jsonl
+│
+├── model_runs/                      # Model output files
+│   ├── taxonomy/
+│   │   ├── UPL-2026-0001.jsonl
+│   │   └── UPL-2026-0002.jsonl
+│   ├── enrichment/
+│   │   └── ...
+│   ├── clean_text/
+│   │   └── ...
+│   └── embeddings/
+│       ├── UPL-2026-0001.npz        # Binary embeddings
+│       ├── UPL-2026-0001.index.jsonl # Per-control hashes + masks
+│       └── ...
+│
+└── .state/
+    ├── upload_id_sequence.json
+    └── processing_lock.json
+```
 
 ---
 
@@ -629,10 +579,11 @@ After model execution, results are stored in `dl_controls_model_output`:
 ### 1. Upload Control File
 
 ```bash
-curl -X POST /api/v2/pipelines/upload \
+# Create TUS upload session
+curl -X POST /api/v2/pipelines/tus/ \
   -H "X-MS-TOKEN-AAD: <token>" \
-  -F "data_type=controls" \
-  -F "files=@KPCI_Controls_Export.csv"
+  -H "Upload-Length: 5242880" \
+  -H 'Upload-Metadata: data_type Y29udHJvbHM=,filename S1BDSV9Db250cm9scy5jc3Y=,batch_session_id <uuid>,expected_files MQ=='
 ```
 
 ### 2. Check Validation Status
@@ -645,11 +596,15 @@ curl /api/v2/pipelines/upload/{batch_id} \
 ### 3. Start Ingestion
 
 ```bash
-curl -X POST /api/v2/processing/ingest \
+curl -X POST /api/v2/ingestion/insert \
   -H "X-MS-TOKEN-AAD: <token>" \
   -H "Content-Type: application/json" \
-  -d '{"batch_id": "{batch_id}"}'
+  -d '{"batch_id": 1}'
 ```
+
+:::warning Upload Ordering
+If this is `UPL-2026-0002`, the system verifies that `UPL-2026-0001` was successfully ingested before proceeding. A 409 error is returned if the predecessor has not succeeded.
+:::
 
 ### 4. Monitor Progress
 
@@ -663,5 +618,5 @@ curl /api/v2/processing/job/{job_id} \
 ## Related Documentation
 
 - [Pipeline Overview](/pipelines/overview) - Architecture and API reference
-- Issues Pipeline - *In Development*
-- Actions Pipeline - *In Development*
+- [Issues Pipeline](/pipelines/issues-pipeline) - Issues data source schema and processing
+- [Actions Pipeline](/pipelines/actions-pipeline) - Actions data source schema and processing
