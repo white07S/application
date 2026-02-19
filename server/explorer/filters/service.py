@@ -568,7 +568,10 @@ async def get_assessment_units() -> dict:
 
 @cached(namespace="explorer", ttl=3600)
 async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
-    """Return all risk taxonomies with their active themes.
+    """Return all risk taxonomies with their themes.
+
+    Both active and expired themes are returned. Expired themes are nested
+    as children of their active parent theme.
     """
     engine = get_engine()
 
@@ -589,11 +592,14 @@ async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
         )
         tax_rows = (await conn.execute(tax_q)).mappings().all()
 
+        # Fetch ALL themes (active + expired) with parent_theme_id
         theme_q = (
             select(
                 src_risks_rel_taxonomy_theme.c.taxonomy_id,
                 src_risks_ref_theme.c.theme_id.label("id"),
+                src_risks_ref_theme.c.parent_theme_id,
                 src_risks_ver_theme.c.name,
+                src_risks_ver_theme.c.status,
             )
             .select_from(
                 src_risks_rel_taxonomy_theme
@@ -601,16 +607,33 @@ async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
                 .join(src_risks_ver_theme, src_risks_ver_theme.c.ref_theme_id == src_risks_ref_theme.c.theme_id)
             )
             .where(tc_theme)
-            .where(src_risks_ver_theme.c.status == "active")
             .order_by(src_risks_ver_theme.c.name)
         )
         theme_rows = (await conn.execute(theme_q)).mappings().all()
 
-        themes_by_tax: dict[str, list[RiskThemeResponse]] = defaultdict(list)
+        # Group: active themes at top level, expired under parent
+        active_themes_by_tax: dict[str, dict[str, RiskThemeResponse]] = defaultdict(dict)
+        expired_by_parent: dict[str, list[RiskThemeResponse]] = defaultdict(list)
+
         for tr in theme_rows:
-            themes_by_tax[tr["taxonomy_id"]].append(
-                RiskThemeResponse(id=tr["id"], name=tr["name"])
-            )
+            status = tr["status"] or "active"
+            if status == "active":
+                active_themes_by_tax[tr["taxonomy_id"]][tr["id"]] = RiskThemeResponse(
+                    id=tr["id"], name=tr["name"], status="active",
+                )
+            elif tr["parent_theme_id"]:
+                expired_by_parent[tr["parent_theme_id"]].append(
+                    RiskThemeResponse(
+                        id=tr["id"], name=tr["name"], status="expired",
+                    )
+                )
+
+        # Nest expired children under active parents
+        themes_by_tax: dict[str, list[RiskThemeResponse]] = {}
+        for tax_id, active_map in active_themes_by_tax.items():
+            for theme_id, theme in active_map.items():
+                theme.children = expired_by_parent.get(theme_id, [])
+            themes_by_tax[tax_id] = list(active_map.values())
 
         taxonomies = [
             RiskTaxonomyResponse(

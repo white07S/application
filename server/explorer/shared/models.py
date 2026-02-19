@@ -43,6 +43,8 @@ class FlatItemsResponse(BaseModel):
 class RiskThemeResponse(BaseModel):
     id: str
     name: str
+    status: str = "active"
+    children: list[RiskThemeResponse] = []
 
 
 class RiskTaxonomyResponse(BaseModel):

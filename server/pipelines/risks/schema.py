@@ -69,11 +69,22 @@ src_risks_ref_theme = Table(
     "src_risks_ref_theme",
     metadata,
     Column("theme_id", Text, primary_key=True),
-    Column("source_id", Text, nullable=False, unique=True),
+    Column("source_id", Text, nullable=False),
+    Column(
+        "parent_theme_id",
+        Text,
+        ForeignKey("src_risks_ref_theme.theme_id"),
+        nullable=True,
+    ),
     Column(
         "created_at",
         DateTime(timezone=True),
         server_default=text("now()"),
+    ),
+    Index(
+        "ix_ref_theme_parent",
+        "parent_theme_id",
+        postgresql_where=text("parent_theme_id IS NOT NULL"),
     ),
 )
 

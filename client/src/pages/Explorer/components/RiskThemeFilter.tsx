@@ -20,7 +20,18 @@ export const RiskThemeFilter: React.FC<RiskThemeFilterProps> = ({
         return taxonomies
             .map((tax) => ({
                 ...tax,
-                themes: tax.themes.filter((t) => t.name.toLowerCase().includes(lower)),
+                themes: tax.themes
+                    .map((t) => ({
+                        ...t,
+                        children: t.children?.filter((c) =>
+                            c.name.toLowerCase().includes(lower)
+                        ) ?? [],
+                    }))
+                    .filter(
+                        (t) =>
+                            t.name.toLowerCase().includes(lower) ||
+                            t.children.length > 0
+                    ),
             }))
             .filter((tax) => tax.themes.length > 0 || tax.name.toLowerCase().includes(lower));
     }, [taxonomies, search]);
@@ -49,20 +60,40 @@ export const RiskThemeFilter: React.FC<RiskThemeFilterProps> = ({
                             {taxonomy.name}
                         </div>
                         {taxonomy.themes.map((theme) => (
-                            <label
-                                key={theme.id}
-                                className="flex items-center gap-1.5 py-0.5 px-1 pl-3 hover:bg-surface-light cursor-pointer"
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={selected.has(theme.id)}
-                                    onChange={() => onToggle(theme.id)}
-                                    className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
-                                />
-                                <span className="text-xs text-text-main">
-                                    {theme.name}
-                                </span>
-                            </label>
+                            <div key={theme.id}>
+                                <label
+                                    className="flex items-center gap-1.5 py-0.5 px-1 pl-3 hover:bg-surface-light cursor-pointer"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selected.has(theme.id)}
+                                        onChange={() => onToggle(theme.id)}
+                                        className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
+                                    />
+                                    <span className="text-xs text-text-main">
+                                        {theme.name}
+                                    </span>
+                                </label>
+                                {theme.children?.map((child) => (
+                                    <label
+                                        key={child.id}
+                                        className="flex items-center gap-1.5 py-0.5 px-1 pl-6 hover:bg-surface-light cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.has(child.id)}
+                                            onChange={() => onToggle(child.id)}
+                                            className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
+                                        />
+                                        <span className="text-xs text-text-sub italic">
+                                            {child.name}
+                                        </span>
+                                        <span className="text-[9px] text-text-sub/60">
+                                            (expired)
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
                         ))}
                     </div>
                 ))}

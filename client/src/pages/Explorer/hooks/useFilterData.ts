@@ -38,7 +38,17 @@ export function useFilterData() {
                     setTaxonomies(riskData.taxonomies.map((t) => ({
                         id: t.id,
                         name: t.name,
-                        themes: t.themes.map((th) => ({ id: th.id, name: th.name })),
+                        themes: t.themes.map((th) => ({
+                            id: th.id,
+                            name: th.name,
+                            status: th.status ?? 'active',
+                            children: (th.children ?? []).map((c) => ({
+                                id: c.id,
+                                name: c.name,
+                                status: c.status ?? 'expired',
+                                children: [],
+                            })),
+                        })),
                     })));
                 }
             } catch (err: any) {

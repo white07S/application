@@ -14,7 +14,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import orjson
@@ -265,10 +265,33 @@ async def _load_valid_org_node_ids(conn) -> Set[str]:
     return {row.node_id for row in result}
 
 
-async def _load_valid_theme_ids(conn) -> Set[str]:
-    """Load all theme_id values from src_risks_ref_theme."""
-    result = await conn.execute(select(src_risks_ref_theme.c.theme_id))
-    return {row.theme_id for row in result}
+async def _load_theme_lookup(conn) -> Tuple[Set[str], Dict[Tuple[str, str], str]]:
+    """Load theme lookup: (source_id, name) → internal theme_id.
+
+    Returns:
+        (valid_theme_ids, lookup) where:
+        - valid_theme_ids: Set of all internal theme_id strings
+        - lookup: Dict mapping (source_id, theme_name) → internal theme_id
+    """
+    result = await conn.execute(
+        select(
+            src_risks_ref_theme.c.theme_id,
+            src_risks_ref_theme.c.source_id,
+            src_risks_ver_theme.c.name,
+        )
+        .join(
+            src_risks_ver_theme,
+            src_risks_ver_theme.c.ref_theme_id == src_risks_ref_theme.c.theme_id,
+        )
+        .where(src_risks_ver_theme.c.tx_to.is_(None))
+    )
+    valid_ids: Set[str] = set()
+    lookup: Dict[Tuple[str, str], str] = {}
+    for row in result:
+        valid_ids.add(row.theme_id)
+        if row.source_id and row.name:
+            lookup[(row.source_id, row.name)] = row.theme_id
+    return valid_ids, lookup
 
 
 # ── Batch execution helpers ──────────────────────────────────────────
@@ -400,6 +423,7 @@ def _build_relation_rows(
     control: Dict[str, Any],
     cid: str,
     tx_from: datetime,
+    theme_lookup: Optional[Dict[Tuple[str, str], str]] = None,
 ) -> Dict[str, List[dict]]:
     """Build all relation table rows for a single control.
 
@@ -486,27 +510,44 @@ def _build_relation_rows(
                 "tx_to": None,
             })
 
-    # Risk theme edges
+    # Risk theme edges — resolve source_id to internal hash-based theme_id
     seen_rt: Set[str] = set()
     for rt in control.get("risk_theme", []) or []:
-        theme_id = rt.get("risk_theme_number")
-        if theme_id:
-            theme_key = str(theme_id)
-            if theme_key in seen_rt:
-                logger.warning(
-                    "Duplicate risk_theme_number '{}' for control '{}'; skipping",
-                    theme_key, cid,
-                )
-                continue
-            seen_rt.add(theme_key)
-            rows["risk_theme"].append({
-                "control_id": cid,
-                "theme_id": str(theme_id),
-                "risk_theme_label": rt.get("risk_theme"),
-                "taxonomy_ref": str(rt["taxonomy_number"]) if rt.get("taxonomy_number") is not None else None,
-                "tx_from": tx_from,
-                "tx_to": None,
-            })
+        source_id = str(rt.get("risk_theme_number", "")).strip()
+        if not source_id:
+            continue
+        theme_name = (rt.get("risk_theme") or "").strip()
+
+        # Resolve to internal theme_id via lookup
+        internal_id: Optional[str] = None
+        if theme_lookup:
+            internal_id = theme_lookup.get((source_id, theme_name))
+            if not internal_id:
+                # Fallback: try source_id-only match if only one theme has that source_id
+                candidates = [tid for (sid, _), tid in theme_lookup.items() if sid == source_id]
+                internal_id = candidates[0] if len(candidates) == 1 else None
+        else:
+            # Legacy fallback: use source_id directly
+            internal_id = source_id
+
+        if not internal_id:
+            continue
+
+        if internal_id in seen_rt:
+            logger.warning(
+                "Duplicate resolved theme_id '{}' for control '{}'; skipping",
+                internal_id, cid,
+            )
+            continue
+        seen_rt.add(internal_id)
+        rows["risk_theme"].append({
+            "control_id": cid,
+            "theme_id": internal_id,
+            "risk_theme_label": rt.get("risk_theme"),
+            "taxonomy_ref": str(rt["taxonomy_number"]) if rt.get("taxonomy_number") is not None else None,
+            "tx_from": tx_from,
+            "tx_to": None,
+        })
 
     return rows
 
@@ -608,7 +649,7 @@ async def run_controls_ingestion(
             existing_enrichment_hashes,
             existing_clean_text_hashes,
             valid_node_ids,
-            valid_theme_ids,
+            theme_lookup_result,
             current_qdrant_hashes,
         ) = await asyncio.gather(
             _pq(_get_existing_control_ids),
@@ -616,9 +657,10 @@ async def run_controls_ingestion(
             _pq(_get_existing_model_hashes, ai_controls_model_enrichment),
             _pq(_get_existing_clean_text_hashes),
             _pq(_load_valid_org_node_ids),
-            _pq(_load_valid_theme_ids),
+            _pq(_load_theme_lookup),
             qdrant_hashes_task,
         )
+        valid_theme_ids, theme_lookup = theme_lookup_result
         existing_ids = set(existing.keys())
         logger.info(
             "Parallel load complete: {} existing controls, {} org nodes, {} risk themes",
@@ -691,7 +733,7 @@ async def run_controls_ingestion(
                     ver_rows.append(_build_ver_control_row(control, tx_from))
 
                     # New relation rows
-                    rels = _build_relation_rows(control, cid, tx_from)
+                    rels = _build_relation_rows(control, cid, tx_from, theme_lookup=theme_lookup)
                     rel_parent_rows.extend(rels["parent"])
                     rel_owns_func_rows.extend(rels["owns_function"])
                     rel_owns_loc_rows.extend(rels["owns_location"])

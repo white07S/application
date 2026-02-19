@@ -31,11 +31,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import orjson
 from sqlalchemy import insert, update, select, and_
@@ -370,12 +371,15 @@ async def _get_current_taxonomies(engine: AsyncEngine) -> Dict[str, Dict[str, An
 
 
 async def _get_current_themes(engine: AsyncEngine) -> Dict[str, Dict[str, Any]]:
-    """Return {theme_source_id: {name, description, mapping_considerations, status}}."""
+    """Return {internal_theme_id: {name, description, mapping_considerations, status}}.
+
+    Keyed by the hash-based theme_id (PK), not source_id, because source_id
+    is non-unique (active + expired themes can share the same source_id).
+    """
     async with engine.connect() as conn:
-        # Join ref_theme to ver_theme to get source_id
         result = await conn.execute(
             select(
-                src_risks_ref_theme.c.source_id,
+                src_risks_ref_theme.c.theme_id,
                 src_risks_ver_theme.c.name,
                 src_risks_ver_theme.c.description,
                 src_risks_ver_theme.c.mapping_considerations,
@@ -391,9 +395,9 @@ async def _get_current_themes(engine: AsyncEngine) -> Dict[str, Dict[str, Any]]:
 
     result_map: Dict[str, Dict[str, Any]] = {}
     for row in rows:
-        source_id = row.source_id
-        if source_id:
-            result_map[source_id] = {
+        theme_id = row.theme_id
+        if theme_id:
+            result_map[theme_id] = {
                 "name": _normalise_str(row.name),
                 "description": _normalise_str(row.description),
                 "mapping_considerations": _normalise_str(row.mapping_considerations),
@@ -796,6 +800,17 @@ async def ingest_org_tree(
 # Risk theme ingestion
 # ---------------------------------------------------------------------------
 
+def _compute_theme_id(source_id: str, name: str) -> str:
+    """Compute a deterministic internal theme_id from source_id and name.
+
+    Returns ``RTH-{sha256(source_id|name)[:12]}``.  This produces a unique,
+    stable identifier even when multiple themes share the same source_id
+    (e.g. an active and expired theme with different names).
+    """
+    raw = f"{source_id}|{name}"
+    return "RTH-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+
+
 async def ingest_risk_themes(
     engine: AsyncEngine,
     date_dir: Path,
@@ -803,7 +818,15 @@ async def ingest_risk_themes(
     theme_stats: IngestionStats,
     dry_run: bool,
 ) -> None:
-    """Ingest risk_theme.jsonl (denormalized: taxonomy + theme per row)."""
+    """Ingest risk_theme.jsonl (denormalized: taxonomy + theme per row).
+
+    Supports duplicate source risk_theme_ids (e.g. an active and expired theme
+    sharing the same ID but different names). Internal uniqueness uses a
+    hash-based theme_id: RTH-{sha256(source_id|name)[:12]}.
+
+    Expired themes have a parent_id pointing to an active theme's source_id.
+    Parent resolution is done in a second pass after all themes are inserted.
+    """
     file_path = date_dir / "risk_theme.jsonl"
     if not file_path.exists():
         logger.warning("risk_theme.jsonl not found: {}", file_path)
@@ -819,6 +842,7 @@ async def ingest_risk_themes(
 
     # De-duplicate taxonomies and themes from the denormalized file
     file_taxonomies: Dict[str, Dict[str, Any]] = {}
+    # Keyed by internal hash-based theme_id (not raw source_id)
     file_themes: Dict[str, Dict[str, Any]] = {}
 
     for row in rows:
@@ -828,15 +852,40 @@ async def ingest_risk_themes(
                 "name": _normalise_str(row.get("taxonomy")),
                 "description": _normalise_str(row.get("taxonomy_description")),
             }
-        theme_id = str(row.get("risk_theme_id", "")).strip()
-        if theme_id:
-            file_themes[theme_id] = {
+        source_id = str(row.get("risk_theme_id", "")).strip()
+        theme_name = _normalise_str(row.get("risk_theme"))
+        if source_id and theme_name:
+            internal_id = _compute_theme_id(source_id, theme_name)
+            file_themes[internal_id] = {
+                "source_id": source_id,
                 "taxonomy_id": tid,
-                "name": _normalise_str(row.get("risk_theme")),
+                "name": theme_name,
                 "description": _normalise_str(row.get("risk_theme_description")),
                 "mapping_considerations": _normalise_str(row.get("risk_theme_mapping_considerations")),
-                "status": _normalise_str(row.get("status")),
+                "status": _normalise_str(row.get("status")) or "active",
+                "parent_source_id": str(row.get("parent_id", "")).strip() or None,
             }
+
+    # ── Resolve parent_source_id → internal parent_theme_id ──
+    # Build lookup: source_id → internal_id for active themes
+    active_by_source: Dict[str, str] = {}
+    for iid, data in file_themes.items():
+        if data["status"] == "active":
+            active_by_source[data["source_id"]] = iid
+
+    for iid, data in file_themes.items():
+        if data["parent_source_id"]:
+            data["parent_theme_id"] = active_by_source.get(data["parent_source_id"])
+        else:
+            data["parent_theme_id"] = None
+
+    logger.info(
+        "Parsed {} unique themes ({} active, {} expired) from {} file rows",
+        len(file_themes),
+        sum(1 for d in file_themes.values() if d["status"] == "active"),
+        sum(1 for d in file_themes.values() if d["status"] != "active"),
+        len(rows),
+    )
 
     # Load DB current state
     db_taxonomies = await _get_current_taxonomies(engine)
@@ -923,7 +972,7 @@ async def ingest_risk_themes(
     ver_close_stmts.clear()
 
     # ------------------------------------------------------------------
-    # Themes
+    # Themes (keyed by hash-based internal_id)
     # ------------------------------------------------------------------
     file_theme_ids = set(file_themes.keys())
     db_theme_ids = set(db_themes.keys())
@@ -936,14 +985,15 @@ async def ingest_risk_themes(
     theme_ver_close_stmts: List[Any] = []
 
     # New themes
-    for theme_id in new_theme_ids:
-        theme = file_themes[theme_id]
+    for internal_id in new_theme_ids:
+        theme = file_themes[internal_id]
         theme_ref_inserts.append({
-            "theme_id": theme_id,
-            "source_id": theme_id,
+            "theme_id": internal_id,
+            "source_id": theme["source_id"],
+            "parent_theme_id": theme["parent_theme_id"],
         })
         theme_ver_inserts.append({
-            "ref_theme_id": theme_id,
+            "ref_theme_id": internal_id,
             "name": theme["name"],
             "description": theme["description"],
             "mapping_considerations": theme["mapping_considerations"],
@@ -955,14 +1005,14 @@ async def ingest_risk_themes(
         if theme.get("taxonomy_id"):
             theme_rel_inserts.append({
                 "taxonomy_id": theme["taxonomy_id"],
-                "theme_id": theme_id,
+                "theme_id": internal_id,
             })
         theme_stats.new += 1
 
     # Existing themes – compare
-    for theme_id in common_theme_ids:
-        file_theme = file_themes[theme_id]
-        db_theme = db_themes[theme_id]
+    for internal_id in common_theme_ids:
+        file_theme = file_themes[internal_id]
+        db_theme = db_themes[internal_id]
 
         changed = (
             file_theme["name"] != db_theme.get("name")
@@ -977,13 +1027,13 @@ async def ingest_risk_themes(
         theme_ver_close_stmts.append(
             update(src_risks_ver_theme)
             .where(and_(
-                src_risks_ver_theme.c.ref_theme_id == theme_id,
+                src_risks_ver_theme.c.ref_theme_id == internal_id,
                 src_risks_ver_theme.c.tx_to.is_(None),
             ))
             .values(tx_to=now_dt)
         )
         theme_ver_inserts.append({
-            "ref_theme_id": theme_id,
+            "ref_theme_id": internal_id,
             "name": file_theme["name"],
             "description": file_theme["description"],
             "mapping_considerations": file_theme["mapping_considerations"],

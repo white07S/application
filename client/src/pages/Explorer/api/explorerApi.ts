@@ -37,6 +37,8 @@ export interface FlatItemsResponse {
 export interface ApiRiskTheme {
     id: string;
     name: string;
+    status: 'active' | 'expired';
+    children: ApiRiskTheme[];
 }
 
 export interface ApiRiskTaxonomy {

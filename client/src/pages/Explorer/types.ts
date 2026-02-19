@@ -19,10 +19,17 @@ export interface FlatItem {
     location_type?: string;
 }
 
+export interface RiskTheme {
+    id: string;
+    name: string;
+    status: 'active' | 'expired';
+    children: RiskTheme[];
+}
+
 export interface RiskTaxonomy {
     id: string;
     name: string;
-    themes: { id: string; name: string }[];
+    themes: RiskTheme[];
 }
 
 export interface FilterState {

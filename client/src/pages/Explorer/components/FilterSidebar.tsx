@@ -61,12 +61,22 @@ function collectChips(
     });
 
     state.selectedRiskThemes.forEach((id) => {
+        let found = false;
         for (const tax of taxonomies) {
-            const theme = tax.themes.find((t) => t.id === id);
-            if (theme) {
-                chips.push({ id, label: theme.name, section: 'risk' });
-                break;
+            for (const theme of tax.themes) {
+                if (theme.id === id) {
+                    chips.push({ id, label: theme.name, section: 'risk' });
+                    found = true;
+                    break;
+                }
+                const child = theme.children?.find((c) => c.id === id);
+                if (child) {
+                    chips.push({ id, label: child.name, section: 'risk' });
+                    found = true;
+                    break;
+                }
             }
+            if (found) break;
         }
     });
 
