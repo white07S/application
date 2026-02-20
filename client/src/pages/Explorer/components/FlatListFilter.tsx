@@ -1,6 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { FlatItem } from '../types';
 
+/** Strip tree prefix (e.g. "consolidated:N1234" → "N1234", "au:123" → "123") */
+function stripPrefix(id: string): string {
+    const idx = id.indexOf(':');
+    return idx >= 0 ? id.slice(idx + 1) : id;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+    Active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    Inactive: 'bg-gray-50 text-gray-400 border-gray-200',
+    Deleted: 'bg-red-50 text-red-400 border-red-200',
+};
+
 interface FlatListFilterProps {
     items: FlatItem[];
     selected: Set<string>;
@@ -9,6 +21,9 @@ interface FlatListFilterProps {
     loading?: boolean;
     hasMore?: boolean;
     placeholder?: string;
+    showId?: boolean;
+    showStatus?: boolean;
+    hideDescription?: boolean;
 }
 
 export const FlatListFilter: React.FC<FlatListFilterProps> = ({
@@ -19,6 +34,9 @@ export const FlatListFilter: React.FC<FlatListFilterProps> = ({
     loading = false,
     hasMore = false,
     placeholder = 'Search...',
+    showId = false,
+    showStatus = false,
+    hideDescription = false,
 }) => {
     const [search, setSearch] = useState('');
 
@@ -31,6 +49,7 @@ export const FlatListFilter: React.FC<FlatListFilterProps> = ({
         return items.filter(
             (item) =>
                 item.label.toLowerCase().includes(lower) ||
+                item.id.toLowerCase().includes(lower) ||
                 item.description?.toLowerCase().includes(lower)
         );
     }, [items, search, onSearchChange]);
@@ -80,11 +99,25 @@ export const FlatListFilter: React.FC<FlatListFilterProps> = ({
                                     onChange={() => onToggle(item.id)}
                                     className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
                                 />
-                                <div className="flex-1 min-w-0">
-                                    <span className="text-xs text-text-main truncate block">
-                                        {item.label}
+                                {showStatus && item.status && (
+                                    <span
+                                        className={`text-[8px] font-semibold px-1 py-px rounded border flex-shrink-0 leading-tight ${STATUS_COLORS[item.status] || 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                                    >
+                                        {item.status === 'Active' ? 'ACT' : item.status === 'Inactive' ? 'INA' : item.status.slice(0, 3).toUpperCase()}
                                     </span>
-                                    {item.description && (
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                        {showId && (
+                                            <span className="text-[10px] font-mono text-text-sub/50 flex-shrink-0">
+                                                {stripPrefix(item.id)}
+                                            </span>
+                                        )}
+                                        <span className="text-xs text-text-main truncate" title={item.label}>
+                                            {item.label}
+                                        </span>
+                                    </div>
+                                    {!hideDescription && item.description && (
                                         <span className="text-[10px] text-text-sub truncate block">
                                             {item.description}
                                         </span>

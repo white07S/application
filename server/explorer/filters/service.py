@@ -479,10 +479,12 @@ async def get_consolidated_entities(
 
     async with engine.connect() as conn:
         tc_ver = _is_current(ver.c.tx_to)
+        names_joined = func.array_to_string(ver.c.names, " / ").label("label")
         base = (
             select(
                 ref.c.node_id.label("id"),
-                ver.c.names[1].label("label"),
+                names_joined,
+                ver.c.status,
             )
             .join(ver, ver.c.ref_node_id == ref.c.node_id)
             .where(ref.c.tree == "consolidated")
@@ -491,7 +493,7 @@ async def get_consolidated_entities(
         if search:
             search_pattern = f"%{search}%"
             base = base.where(or_(
-                ver.c.names[1].ilike(search_pattern),
+                func.array_to_string(ver.c.names, " / ").ilike(search_pattern),
                 ref.c.node_id.ilike(search_pattern),
             ))
 
@@ -503,7 +505,7 @@ async def get_consolidated_entities(
         rows = (await conn.execute(data_q)).mappings().all()
 
         items = [
-            FlatItemResponse(id=r["id"], label=r["label"] or r["id"])
+            FlatItemResponse(id=r["id"], label=r["label"] or r["id"], status=r["status"])
             for r in rows
         ]
         return {

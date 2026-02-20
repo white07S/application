@@ -152,7 +152,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
     };
 
     return (
-        <div className="w-72 shrink-0 pr-4 border-r border-border-light flex flex-col h-full">
+        <div className="w-80 shrink-0 pr-4 border-r border-border-light flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
                 <div className="flex items-center gap-1.5">
@@ -295,6 +295,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                         loading={ceSearch.loading}
                         hasMore={ceSearch.hasMore}
                         placeholder="Search entities..."
+                        showId
+                        showStatus
                     />
                 </FilterSection>
 
@@ -322,6 +324,8 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                         onToggle={(id) => dispatch({ type: 'TOGGLE_AU', payload: id })}
                         loading={aus.loading}
                         placeholder="Search units..."
+                        showId
+                        hideDescription
                     />
                 </FilterSection>
 

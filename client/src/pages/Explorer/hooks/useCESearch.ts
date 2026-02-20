@@ -22,7 +22,7 @@ export function useCESearch() {
                 if (!token || cancelled) return;
                 const data = await fetchCEs(token, search || undefined, 1);
                 if (!cancelled) {
-                    setItems(data.items.map((i) => ({ id: i.id, label: i.label, description: i.description })));
+                    setItems(data.items.map((i) => ({ id: i.id, label: i.label, description: i.description, status: i.status ?? undefined })));
                     setTotal(data.total);
                     setHasMore(data.has_more);
                 }

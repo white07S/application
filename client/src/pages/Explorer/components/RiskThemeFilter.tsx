@@ -1,11 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { RiskTaxonomy } from '../types';
+import { RiskTaxonomy, RiskTheme } from '../types';
 
 interface RiskThemeFilterProps {
     taxonomies: RiskTaxonomy[];
     selected: Set<string>;
     onToggle: (id: string) => void;
 }
+
+const STATUS_COLORS: Record<string, string> = {
+    Active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    Expired: 'bg-amber-50 text-amber-600 border-amber-200',
+};
 
 export const RiskThemeFilter: React.FC<RiskThemeFilterProps> = ({
     taxonomies,
@@ -14,27 +19,27 @@ export const RiskThemeFilter: React.FC<RiskThemeFilterProps> = ({
 }) => {
     const [search, setSearch] = useState('');
 
+    // Flatten all themes (active + expired children) into a single list
+    const allThemes = useMemo(() => {
+        const themes: RiskTheme[] = [];
+        for (const tax of taxonomies) {
+            for (const theme of tax.themes) {
+                themes.push(theme);
+                if (theme.children) {
+                    for (const child of theme.children) {
+                        themes.push(child);
+                    }
+                }
+            }
+        }
+        return themes;
+    }, [taxonomies]);
+
     const filtered = useMemo(() => {
-        if (!search) return taxonomies;
+        if (!search) return allThemes;
         const lower = search.toLowerCase();
-        return taxonomies
-            .map((tax) => ({
-                ...tax,
-                themes: tax.themes
-                    .map((t) => ({
-                        ...t,
-                        children: t.children?.filter((c) =>
-                            c.name.toLowerCase().includes(lower)
-                        ) ?? [],
-                    }))
-                    .filter(
-                        (t) =>
-                            t.name.toLowerCase().includes(lower) ||
-                            t.children.length > 0
-                    ),
-            }))
-            .filter((tax) => tax.themes.length > 0 || tax.name.toLowerCase().includes(lower));
-    }, [taxonomies, search]);
+        return allThemes.filter((t) => t.name.toLowerCase().includes(lower));
+    }, [allThemes, search]);
 
     return (
         <div className="px-1">
@@ -54,48 +59,26 @@ export const RiskThemeFilter: React.FC<RiskThemeFilterProps> = ({
                 {filtered.length === 0 && (
                     <p className="text-[10px] text-text-sub py-2 px-1">No results</p>
                 )}
-                {filtered.map((taxonomy) => (
-                    <div key={taxonomy.id} className="mb-2">
-                        <div className="text-[10px] font-bold text-text-sub uppercase tracking-wider px-1 py-0.5">
-                            {taxonomy.name}
-                        </div>
-                        {taxonomy.themes.map((theme) => (
-                            <div key={theme.id}>
-                                <label
-                                    className="flex items-center gap-1.5 py-0.5 px-1 pl-3 hover:bg-surface-light cursor-pointer"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(theme.id)}
-                                        onChange={() => onToggle(theme.id)}
-                                        className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
-                                    />
-                                    <span className="text-xs text-text-main">
-                                        {theme.name}
-                                    </span>
-                                </label>
-                                {theme.children?.map((child) => (
-                                    <label
-                                        key={child.id}
-                                        className="flex items-center gap-1.5 py-0.5 px-1 pl-6 hover:bg-surface-light cursor-pointer"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selected.has(child.id)}
-                                            onChange={() => onToggle(child.id)}
-                                            className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
-                                        />
-                                        <span className="text-xs text-text-sub italic">
-                                            {child.name}
-                                        </span>
-                                        <span className="text-[9px] text-text-sub/60">
-                                            (expired)
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                        ))}
-                    </div>
+                {filtered.map((theme) => (
+                    <label
+                        key={theme.id}
+                        className="flex items-center gap-1.5 py-0.5 px-1 hover:bg-surface-light cursor-pointer"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={selected.has(theme.id)}
+                            onChange={() => onToggle(theme.id)}
+                            className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
+                        />
+                        <span
+                            className={`text-[8px] font-semibold px-1 py-px rounded border flex-shrink-0 leading-tight ${STATUS_COLORS[theme.status] || 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                        >
+                            {theme.status === 'Expired' ? 'EXP' : 'ACT'}
+                        </span>
+                        <span className="text-xs text-text-main truncate" title={theme.name}>
+                            {theme.name}
+                        </span>
+                    </label>
                 ))}
             </div>
         </div>

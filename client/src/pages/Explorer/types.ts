@@ -14,6 +14,7 @@ export interface FlatItem {
     id: string;
     label: string;
     description?: string;
+    status?: string;
     function_node_id?: string;
     location_node_id?: string;
     location_type?: string;

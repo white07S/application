@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import orjson
-from sqlalchemy import insert, update, select, and_
+from sqlalchemy import func, insert, update, select, and_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -442,12 +442,22 @@ async def _execute_batch(
 
     try:
         async with engine.begin() as conn:
-            # 1. Insert ref nodes (ON CONFLICT DO NOTHING for idempotency)
+            # 1. Insert ref nodes (upsert: update node_type if previously NULL)
             if ref_inserts:
-                for batch_start in range(0, len(ref_inserts), BATCH_SIZE):
-                    batch = ref_inserts[batch_start:batch_start + BATCH_SIZE]
-                    stmt = pg_insert(ref_table).on_conflict_do_nothing(
-                        index_elements=[ref_table.c[ref_table.primary_key.columns.keys()[0]]]
+                # De-duplicate within batch: keep the row with non-null node_type
+                seen: Dict[str, Dict[str, Any]] = {}
+                for row in ref_inserts:
+                    nid = row["node_id"]
+                    if nid not in seen or (seen[nid]["node_type"] is None and row["node_type"] is not None):
+                        seen[nid] = row
+                deduped = list(seen.values())
+                pk_col = ref_table.c[ref_table.primary_key.columns.keys()[0]]
+                for batch_start in range(0, len(deduped), BATCH_SIZE):
+                    batch = deduped[batch_start:batch_start + BATCH_SIZE]
+                    stmt = pg_insert(ref_table)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[pk_col],
+                        set_={"node_type": func.coalesce(stmt.excluded.node_type, ref_table.c.node_type)},
                     )
                     await conn.execute(stmt, batch)
 
@@ -585,12 +595,13 @@ async def ingest_org_tree(
         # Child edges
         for child_sid in node["children"]:
             child_nid = _node_id(tree, child_sid)
-            # Ensure child ref node exists too
+            # Ensure child ref node exists too (use node_type from file if available)
+            child_node_type = file_nodes[child_sid]["node_type"] if child_sid in file_nodes else None
             ref_inserts.append({
                 "node_id": child_nid,
                 "tree": tree,
                 "source_id": child_sid,
-                "node_type": None,
+                "node_type": child_node_type,
             })
             edge_inserts.append({
                 "in_node_id": nid,
@@ -759,12 +770,13 @@ async def ingest_org_tree(
             # Re-create child edges from file
             for child_sid in file_children:
                 child_nid = _node_id(tree, child_sid)
-                # Ensure child ref node exists
+                # Ensure child ref node exists (use node_type from file if available)
+                child_node_type = file_nodes[child_sid]["node_type"] if child_sid in file_nodes else None
                 ref_inserts.append({
                     "node_id": child_nid,
                     "tree": tree,
                     "source_id": child_sid,
-                    "node_type": None,
+                    "node_type": child_node_type,
                 })
                 edge_inserts.append({
                     "in_node_id": nid,

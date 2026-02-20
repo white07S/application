@@ -27,6 +27,7 @@ class FlatItemResponse(BaseModel):
     id: str
     label: str
     description: str | None = None
+    status: str | None = None
     function_node_id: str | None = None
     location_node_id: str | None = None
     location_type: str | None = None

@@ -26,6 +26,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 const DEFAULT_STATUS_COLOR = 'bg-gray-50 text-gray-400 border-gray-200';
 
+/** Strip tree prefix (e.g. "function:N10043" → "N10043") */
+function stripTreePrefix(id: string): string {
+    const idx = id.indexOf(':');
+    return idx >= 0 ? id.slice(idx + 1) : id;
+}
+
 interface HierarchyFilterProps {
     nodes: TreeNode[];
     selected: Set<string>;
@@ -244,10 +250,20 @@ export const HierarchyFilter: React.FC<HierarchyFilterProps> = ({
                                                 {TYPE_ABBREV[node.node_type] || node.node_type.slice(0, 3).toUpperCase()}
                                             </span>
                                         )}
+                                        {node.status && (
+                                            <span
+                                                className={`text-[8px] font-semibold px-1 py-px rounded border flex-shrink-0 leading-tight ${STATUS_COLORS[node.status] || DEFAULT_STATUS_COLOR}`}
+                                            >
+                                                {node.status === 'Active' ? 'ACT' : node.status === 'Inactive' ? 'INA' : node.status.slice(0, 3).toUpperCase()}
+                                            </span>
+                                        )}
                                         <span className={`text-[10px] font-mono flex-shrink-0 ${isMatch ? 'text-primary font-semibold' : 'text-text-sub/50'}`}>
-                                            {node.id}
+                                            {stripTreePrefix(node.id)}
                                         </span>
-                                        <span className={`text-xs truncate flex-1 min-w-0 ${isMatch ? 'text-primary font-medium' : isAncestor ? 'text-text-sub' : 'text-text-main'}`}>
+                                        <span
+                                            className={`text-xs truncate flex-1 min-w-0 ${isMatch ? 'text-primary font-medium' : isAncestor ? 'text-text-sub' : 'text-text-main'}`}
+                                            title={node.label}
+                                        >
                                             {node.label}
                                         </span>
                                     </label>
