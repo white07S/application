@@ -266,7 +266,6 @@ def build_record(
     text_pool_entry: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     control_id = str(row["control_id"])
-    last_modified_on = row.get("last_modified_on")
 
     status_active = is_active_status(row.get("control_status"))
     key_ctrl = is_key_control_yes(row.get("key_control"))
@@ -288,7 +287,6 @@ def build_record(
     record = {
         "control_id": control_id,
         "hash": hash_value,
-        "last_modified_on": last_modified_on,
     }
     record.update(payload)
     return record

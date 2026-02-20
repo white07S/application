@@ -254,12 +254,10 @@ def build_record(
     feature_mask: Dict[str, bool],
 ) -> Dict[str, Any]:
     control_id = str(control_row["control_id"])
-    last_modified_on = control_row.get("last_modified_on")
 
     if previous_row and can_reuse_previous:
         record = {
             "control_id": control_id,
-            "last_modified_on": last_modified_on,
             "control_title": previous_row.get("control_title"),
             "control_description": previous_row.get("control_description"),
             "evidence_description": previous_row.get("evidence_description"),
@@ -273,7 +271,6 @@ def build_record(
 
     record = {
         "control_id": control_id,
-        "last_modified_on": last_modified_on,
         "control_title": clean_nullable_text(control_row.get("control_title")),
         "control_description": clean_nullable_text(control_row.get("control_description")),
         "evidence_description": clean_nullable_text(control_row.get("evidence_description")),

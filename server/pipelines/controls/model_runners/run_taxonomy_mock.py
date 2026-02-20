@@ -106,7 +106,6 @@ def build_record(
     previous_row: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     control_id = str(row["control_id"])
-    last_modified_on = row.get("last_modified_on")
 
     if not matches_taxonomy_filter(row):
         return {
@@ -118,7 +117,6 @@ def build_record(
             "parent_secondary_risk_theme_id": None,
             "secondary_risk_theme_id": None,
             "secondary_risk_theme_reasoning": None,
-            "last_modified_on": last_modified_on,
         }
 
     if previous_row and previous_row.get("hash") == hash_value:
@@ -131,7 +129,6 @@ def build_record(
             "parent_secondary_risk_theme_id": previous_row.get("parent_secondary_risk_theme_id"),
             "secondary_risk_theme_id": previous_row.get("secondary_risk_theme_id"),
             "secondary_risk_theme_reasoning": previous_row.get("secondary_risk_theme_reasoning"),
-            "last_modified_on": last_modified_on,
         }
 
     themes = choose_themes(control_id=control_id, hash_value=hash_value, catalog=catalog)
@@ -157,7 +154,6 @@ def build_record(
         "parent_secondary_risk_theme_id": secondary["taxonomy_id"],
         "secondary_risk_theme_id": secondary["risk_theme_id"],
         "secondary_risk_theme_reasoning": secondary_reasoning,
-        "last_modified_on": last_modified_on,
     }
 
 

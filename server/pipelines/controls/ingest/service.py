@@ -602,7 +602,6 @@ async def run_controls_ingestion(
         embedding_dim = int(embeddings_index.get("embedding_dim") or DEFAULT_EMBEDDING_DIM)
 
         embedding_arrays: Dict[str, Any] = {}
-        embedding_last_modified_col: Optional[Any] = None
         if embeddings_npz is not None:
             npz_keys = set(getattr(embeddings_npz, "files", []))
             for _, npz_field in EMBEDDING_FEATURES:
@@ -616,8 +615,6 @@ async def run_controls_ingestion(
                         "Embedding feature array '{}' is missing in NPZ; using zero vectors",
                         npz_field,
                     )
-            if "last_modified_on" in npz_keys:
-                embedding_last_modified_col = embeddings_npz["last_modified_on"]
 
         logger.info(
             "Loaded: {} controls, {} taxonomy, {} enrichment, {} clean_text, {} embeddings",
@@ -751,7 +748,7 @@ async def run_controls_ingestion(
                     if existing_hash != incoming_hash:
                         if existing_hash is not None:
                             cids_to_close_taxonomy.append(cid)
-                        model_run_ts = _parse_timestamp(tax_row.get("last_modified_on"), tx_from_iso)
+                        model_run_ts = tx_from
                         primary_reasoning = tax_row.get("primary_risk_theme_reasoning")
                         secondary_reasoning = tax_row.get("secondary_risk_theme_reasoning")
                         ai_taxonomy_rows.append({
@@ -779,7 +776,7 @@ async def run_controls_ingestion(
                     if existing_hash != incoming_hash:
                         if existing_hash is not None:
                             cids_to_close_enrichment.append(cid)
-                        model_run_ts = _parse_timestamp(enrich_row.get("last_modified_on"), tx_from_iso)
+                        model_run_ts = tx_from
                         row_dict = {
                             "ref_control_id": cid,
                             "hash": incoming_hash,
@@ -806,7 +803,7 @@ async def run_controls_ingestion(
                     if ct_changed:
                         if existing_ct_hashes:
                             cids_to_close_clean_text.append(cid)
-                        model_run_ts = _parse_timestamp(clean_row.get("last_modified_on"), tx_from_iso)
+                        model_run_ts = tx_from
                         row_dict = {
                             "ref_control_id": cid,
                             "model_run_timestamp": model_run_ts,
