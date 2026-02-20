@@ -23,6 +23,7 @@ from server.devdata.service import (
     get_data_consistency_stats,
 )
 from server.devdata.api.snapshot_router import router as snapshot_router
+from server.devdata.api.qdrant_snapshot_router import router as qdrant_snapshot_router
 
 logger = get_logger(name=__name__)
 
@@ -106,5 +107,6 @@ async def data_consistency(_=Depends(_require_dev_data_access)):
     return await get_data_consistency_stats()
 
 
-# Include snapshot subrouter
+# Include snapshot subrouters
 router.include_router(snapshot_router)
+router.include_router(qdrant_snapshot_router)

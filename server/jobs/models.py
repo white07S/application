@@ -108,7 +108,7 @@ class ProcessingJob(Base):
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'running', 'completed', 'failed')"),
-        CheckConstraint("job_type IN ('ingestion', 'snapshot_creation', 'snapshot_restore')"),
+        CheckConstraint("job_type IN ('ingestion', 'snapshot_creation', 'snapshot_restore', 'qdrant_snapshot_creation', 'qdrant_snapshot_restore')"),
         Index('idx_processing_jobs_batch', 'batch_id'),
         Index('idx_processing_jobs_status', 'status'),
     )

@@ -95,6 +95,13 @@ class Settings(BaseSettings):
         description="Qdrant collection name prefix (e.g., nfr_connect_controls, nfr_connect_issues)",
     )
 
+    # === Qdrant Backup Settings ===
+    qdrant_backup_retention_days: int = Field(
+        default=30,
+        description="Number of days to retain Qdrant backup snapshots",
+        ge=1,
+    )
+
     @property
     def qdrant_collection(self) -> str:
         """Get the controls collection name (backward compatibility)."""
@@ -129,6 +136,9 @@ class Settings(BaseSettings):
     # PostgreSQL backups
     postgres_backup_path: Path = Field(description="Base path for PostgreSQL backup snapshots")
 
+    # Qdrant backups
+    qdrant_backup_path: Path = Field(description="Base path for Qdrant backup snapshots")
+
     # Documentation
     docs_content_dir: Path = Field(description="Path to docs content directory")
 
@@ -142,6 +152,7 @@ class Settings(BaseSettings):
         'context_providers_path',
         'data_ingested_path',
         'postgres_backup_path',
+        'qdrant_backup_path',
         'docs_content_dir',
         mode='before'
     )
@@ -189,6 +200,10 @@ def get_settings() -> Settings:
     # PostgreSQL backup directory
     settings.postgres_backup_path.mkdir(parents=True, exist_ok=True)
     (settings.postgres_backup_path / ".locks").mkdir(parents=True, exist_ok=True)
+
+    # Qdrant backup directory
+    settings.qdrant_backup_path.mkdir(parents=True, exist_ok=True)
+    (settings.qdrant_backup_path / ".locks").mkdir(parents=True, exist_ok=True)
 
     # Docs directory - must exist, don't auto-create
     if not settings.docs_content_dir.exists():
