@@ -43,7 +43,7 @@ src_risks_ver_taxonomy = Table(
         nullable=False,
     ),
     Column("name", Text, nullable=False),
-    Column("description", Text, nullable=False),
+    Column("description", Text, nullable=True),
     Column("tx_from", DateTime(timezone=True), nullable=False),
     Column("tx_to", DateTime(timezone=True), nullable=True),
     CheckConstraint(
@@ -101,8 +101,8 @@ src_risks_ver_theme = Table(
         nullable=False,
     ),
     Column("name", Text, nullable=False),
-    Column("description", Text, nullable=False),
-    Column("mapping_considerations", Text, nullable=False),
+    Column("description", Text, nullable=True),
+    Column("mapping_considerations", Text, nullable=True),
     Column(
         "status",
         Text,
