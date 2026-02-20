@@ -53,6 +53,15 @@ def upgrade() -> None:
         postgresql_where=sa.text("parent_theme_id IS NOT NULL"),
     )
 
+    # Change status values from lowercase to capitalized
+    op.drop_constraint("ck_ver_theme_status", "src_risks_ver_theme", type_="check")
+    op.execute("UPDATE src_risks_ver_theme SET status = initcap(status)")
+    op.create_check_constraint(
+        "ck_ver_theme_status",
+        "src_risks_ver_theme",
+        "status IN ('Active', 'Expired')",
+    )
+
     # Make description columns nullable (expired themes have NULLs)
     op.alter_column(
         "src_risks_ver_taxonomy", "description",
@@ -69,6 +78,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Revert status values to lowercase
+    op.drop_constraint("ck_ver_theme_status", "src_risks_ver_theme", type_="check")
+    op.execute("UPDATE src_risks_ver_theme SET status = lower(status)")
+    op.create_check_constraint(
+        "ck_ver_theme_status",
+        "src_risks_ver_theme",
+        "status IN ('active', 'expired')",
+    )
+
     # Restore NOT NULL (set existing NULLs to empty string first)
     op.execute("UPDATE src_risks_ver_theme SET mapping_considerations = '' WHERE mapping_considerations IS NULL")
     op.execute("UPDATE src_risks_ver_theme SET description = '' WHERE description IS NULL")

@@ -616,15 +616,15 @@ async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
         expired_by_parent: dict[str, list[RiskThemeResponse]] = defaultdict(list)
 
         for tr in theme_rows:
-            status = tr["status"] or "active"
-            if status == "active":
+            status = tr["status"] or "Active"
+            if status == "Active":
                 active_themes_by_tax[tr["taxonomy_id"]][tr["id"]] = RiskThemeResponse(
-                    id=tr["id"], name=tr["name"], status="active",
+                    id=tr["id"], name=tr["name"], status="Active",
                 )
             elif tr["parent_theme_id"]:
                 expired_by_parent[tr["parent_theme_id"]].append(
                     RiskThemeResponse(
-                        id=tr["id"], name=tr["name"], status="expired",
+                        id=tr["id"], name=tr["name"], status="Expired",
                     )
                 )
 

@@ -43,7 +43,7 @@ class FlatItemsResponse(BaseModel):
 class RiskThemeResponse(BaseModel):
     id: str
     name: str
-    status: str = "active"
+    status: str = "Active"
     children: list[RiskThemeResponse] = []
 
 

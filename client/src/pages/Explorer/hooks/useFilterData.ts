@@ -41,11 +41,11 @@ export function useFilterData() {
                         themes: t.themes.map((th) => ({
                             id: th.id,
                             name: th.name,
-                            status: th.status ?? 'active',
+                            status: th.status ?? 'Active',
                             children: (th.children ?? []).map((c) => ({
                                 id: c.id,
                                 name: c.name,
-                                status: c.status ?? 'expired',
+                                status: c.status ?? 'Expired',
                                 children: [],
                             })),
                         })),

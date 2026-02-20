@@ -22,7 +22,7 @@ export interface FlatItem {
 export interface RiskTheme {
     id: string;
     name: string;
-    status: 'active' | 'expired';
+    status: 'Active' | 'Expired';
     children: RiskTheme[];
 }
 

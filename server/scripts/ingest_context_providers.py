@@ -862,7 +862,7 @@ async def ingest_risk_themes(
                 "name": theme_name,
                 "description": _normalise_str(row.get("risk_theme_description")),
                 "mapping_considerations": _normalise_str(row.get("risk_theme_mapping_considerations")),
-                "status": _normalise_str(row.get("status")) or "active",
+                "status": _normalise_str(row.get("status")) or "Active",
                 "parent_source_id": str(row.get("parent_id", "")).strip() or None,
             }
 
@@ -870,7 +870,7 @@ async def ingest_risk_themes(
     # Build lookup: source_id → internal_id for active themes
     active_by_source: Dict[str, str] = {}
     for iid, data in file_themes.items():
-        if data["status"] == "active":
+        if data["status"] == "Active":
             active_by_source[data["source_id"]] = iid
 
     for iid, data in file_themes.items():
@@ -882,8 +882,8 @@ async def ingest_risk_themes(
     logger.info(
         "Parsed {} unique themes ({} active, {} expired) from {} file rows",
         len(file_themes),
-        sum(1 for d in file_themes.values() if d["status"] == "active"),
-        sum(1 for d in file_themes.values() if d["status"] != "active"),
+        sum(1 for d in file_themes.values() if d["status"] == "Active"),
+        sum(1 for d in file_themes.values() if d["status"] != "Active"),
         len(rows),
     )
 

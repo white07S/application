@@ -161,30 +161,30 @@ export const mockRiskTaxonomies: RiskTaxonomy[] = [
         id: 'tax-1',
         name: 'Operational Risk',
         themes: [
-            { id: 'rt-1-1', name: 'Process Execution', status: 'active', children: [
-                { id: 'rt-1-1-exp', name: 'Process Execution & Delivery', status: 'expired', children: [] },
+            { id: 'rt-1-1', name: 'Process Execution', status: 'Active', children: [
+                { id: 'rt-1-1-exp', name: 'Process Execution & Delivery', status: 'Expired', children: [] },
             ] },
-            { id: 'rt-1-2', name: 'Technology Failure', status: 'active', children: [] },
-            { id: 'rt-1-3', name: 'Third-Party Risk', status: 'active', children: [] },
-            { id: 'rt-1-4', name: 'Data Management', status: 'active', children: [] },
+            { id: 'rt-1-2', name: 'Technology Failure', status: 'Active', children: [] },
+            { id: 'rt-1-3', name: 'Third-Party Risk', status: 'Active', children: [] },
+            { id: 'rt-1-4', name: 'Data Management', status: 'Active', children: [] },
         ],
     },
     {
         id: 'tax-2',
         name: 'Compliance Risk',
         themes: [
-            { id: 'rt-2-1', name: 'Regulatory Change', status: 'active', children: [] },
-            { id: 'rt-2-2', name: 'Financial Crime', status: 'active', children: [] },
-            { id: 'rt-2-3', name: 'Conduct Risk', status: 'active', children: [] },
+            { id: 'rt-2-1', name: 'Regulatory Change', status: 'Active', children: [] },
+            { id: 'rt-2-2', name: 'Financial Crime', status: 'Active', children: [] },
+            { id: 'rt-2-3', name: 'Conduct Risk', status: 'Active', children: [] },
         ],
     },
     {
         id: 'tax-3',
         name: 'Financial Risk',
         themes: [
-            { id: 'rt-3-1', name: 'Credit Risk', status: 'active', children: [] },
-            { id: 'rt-3-2', name: 'Market Risk', status: 'active', children: [] },
-            { id: 'rt-3-3', name: 'Liquidity Risk', status: 'active', children: [] },
+            { id: 'rt-3-1', name: 'Credit Risk', status: 'Active', children: [] },
+            { id: 'rt-3-2', name: 'Market Risk', status: 'Active', children: [] },
+            { id: 'rt-3-3', name: 'Liquidity Risk', status: 'Active', children: [] },
         ],
     },
 ];

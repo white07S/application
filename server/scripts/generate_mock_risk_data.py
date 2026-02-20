@@ -54,7 +54,7 @@ def generate_risk_theme_jsonl(out_path: Path, *, seed: int = SEED, rows: int = D
                 f"Map data points related to {risk_theme}. "
                 f"Notes: {rng.choice(['scope', 'controls', 'process', 'people', 'systems'])}."
             )
-            status = rng.choice(["active", "expired"])
+            status = rng.choice(["Active", "Expired"])
             row = {
                 "taxonomy_id": taxonomy_id,
                 "taxonomy": taxonomy,

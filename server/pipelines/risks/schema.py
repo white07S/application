@@ -107,7 +107,7 @@ src_risks_ver_theme = Table(
         "status",
         Text,
         CheckConstraint(
-            "status IN ('active', 'expired')",
+            "status IN ('Active', 'Expired')",
             name="ck_ver_theme_status",
         ),
         nullable=False,
