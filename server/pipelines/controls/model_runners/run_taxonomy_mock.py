@@ -102,6 +102,7 @@ def build_record(
     *,
     row: Dict[str, Any],
     hash_value: str,
+    run_date: str,
     catalog: List[Dict[str, str]],
     previous_row: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
@@ -111,6 +112,7 @@ def build_record(
         return {
             "control_id": control_id,
             "hash": hash_value,
+            "model_run_timestamp": run_date,
             "parent_primary_risk_theme_id": None,
             "primary_risk_theme_id": None,
             "primary_risk_theme_reasoning": None,
@@ -123,6 +125,7 @@ def build_record(
         return {
             "control_id": control_id,
             "hash": hash_value,
+            "model_run_timestamp": run_date,
             "parent_primary_risk_theme_id": previous_row.get("parent_primary_risk_theme_id"),
             "primary_risk_theme_id": previous_row.get("primary_risk_theme_id"),
             "primary_risk_theme_reasoning": previous_row.get("primary_risk_theme_reasoning"),
@@ -148,6 +151,7 @@ def build_record(
     return {
         "control_id": control_id,
         "hash": hash_value,
+        "model_run_timestamp": run_date,
         "parent_primary_risk_theme_id": primary["taxonomy_id"],
         "primary_risk_theme_id": primary["risk_theme_id"],
         "primary_risk_theme_reasoning": primary_reasoning,
@@ -202,7 +206,7 @@ def main() -> int:
         control_id = str(row["control_id"])
         hash_value = taxonomy_hash(row)
         hashes_by_control_id[control_id] = {"hash": hash_value}
-        record = build_record(row=row, hash_value=hash_value, catalog=catalog, previous_row=None)
+        record = build_record(row=row, hash_value=hash_value, run_date=run_date, catalog=catalog, previous_row=None)
         output_records.append(record)
         if matches_taxonomy_filter(row):
             matched_count += 1

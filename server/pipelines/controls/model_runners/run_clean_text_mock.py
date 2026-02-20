@@ -250,6 +250,7 @@ def build_record(
     enrichment_row: Optional[Dict[str, Any]],
     previous_row: Optional[Dict[str, Any]],
     can_reuse_previous: bool,
+    run_date: str,
     feature_hashes: Dict[str, Optional[str]],
     feature_mask: Dict[str, bool],
 ) -> Dict[str, Any]:
@@ -258,6 +259,7 @@ def build_record(
     if previous_row and can_reuse_previous:
         record = {
             "control_id": control_id,
+            "model_run_timestamp": run_date,
             "control_title": previous_row.get("control_title"),
             "control_description": previous_row.get("control_description"),
             "evidence_description": previous_row.get("evidence_description"),
@@ -271,6 +273,7 @@ def build_record(
 
     record = {
         "control_id": control_id,
+        "model_run_timestamp": run_date,
         "control_title": clean_nullable_text(control_row.get("control_title")),
         "control_description": clean_nullable_text(control_row.get("control_description")),
         "evidence_description": clean_nullable_text(control_row.get("evidence_description")),
@@ -363,7 +366,7 @@ def main() -> int:
 
         record = build_record(
             control_row=control_row, enrichment_row=enrichment_row,
-            previous_row=None, can_reuse_previous=False,
+            previous_row=None, can_reuse_previous=False, run_date=run_date,
             feature_hashes=feature_hashes, feature_mask=feature_mask,
         )
         output_records.append(record)

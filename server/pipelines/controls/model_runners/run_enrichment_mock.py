@@ -262,6 +262,7 @@ def build_record(
     *,
     row: Dict[str, Any],
     hash_value: str,
+    run_date: str,
     previous_row: Optional[Dict[str, Any]],
     text_pool_entry: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
@@ -287,6 +288,7 @@ def build_record(
     record = {
         "control_id": control_id,
         "hash": hash_value,
+        "model_run_timestamp": run_date,
     }
     record.update(payload)
     return record
@@ -356,8 +358,8 @@ def main() -> int:
             skipped += 1
 
         output_records.append(build_record(
-            row=row, hash_value=hash_value, previous_row=None,
-            text_pool_entry=pool_entry,
+            row=row, hash_value=hash_value, run_date=run_date,
+            previous_row=None, text_pool_entry=pool_entry,
         ))
 
     index_path = write_jsonl_with_index(
