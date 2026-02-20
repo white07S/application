@@ -44,7 +44,7 @@ OP_CRITERIA_DETAILS = [
 
 # Narrative fields (populated for all qualifying controls regardless of level)
 NARRATIVE_FIELDS = [
-    "summary", "people", "process", "product", "service", "regulations",
+    "summary", "roles", "process", "product", "service",
 ]
 
 # Derived text fields (populated for all qualifying controls)
@@ -61,7 +61,7 @@ ENRICHMENT_FIELDS = [
     "why_yes_no", "why_details",
     "what_why_yes_no", "what_why_details",
     "risk_theme_yes_no", "risk_theme_details",
-    "people", "process", "product", "service", "regulations",
+    "roles", "process", "product", "service",
     "frequency_yes_no", "frequency_details",
     "preventative_detective_yes_no", "preventative_detective_details",
     "automation_level_yes_no", "automation_level_details",
@@ -173,11 +173,10 @@ def _build_narrative_fields(row: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "summary": summary,
-        "people": normalize_text(row.get("control_owner")) or normalize_text(row.get("control_assessor")),
+        "roles": normalize_text(row.get("control_owner")) or normalize_text(row.get("control_assessor")),
         "process": title,
         "product": normalize_text(row.get("it_application_system_supporting_control_instance")),
         "service": normalize_text(row.get("kpci_governance_forum")),
-        "regulations": "SOX" if row.get("sox_relevant") else None,
     }
 
 
