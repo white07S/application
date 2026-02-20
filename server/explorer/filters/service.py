@@ -532,7 +532,7 @@ async def get_assessment_units() -> dict:
             select(
                 ref.c.unit_id.label("id"),
                 ver.c.name.label("label"),
-                ver.c.status.label("description"),
+                ver.c.description,
                 ver.c.function_node_id,
                 ver.c.location_node_id,
                 ver.c.location_type,

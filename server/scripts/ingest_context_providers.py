@@ -1084,7 +1084,7 @@ def _au_unit_id(source_id: str) -> str:
 
 
 async def _get_current_au_units(engine: AsyncEngine) -> Dict[str, Dict[str, Any]]:
-    """Return {source_id: {name, status, function_node_id, location_node_id, location_type}}
+    """Return {source_id: {name, description, function_node_id, location_node_id, location_type}}
     for all current assessment-unit versions (tx_to IS NULL).
     """
     async with engine.connect() as conn:
@@ -1092,7 +1092,7 @@ async def _get_current_au_units(engine: AsyncEngine) -> Dict[str, Dict[str, Any]
             select(
                 src_au_ref_unit.c.source_id,
                 src_au_ver_unit.c.name,
-                src_au_ver_unit.c.status,
+                src_au_ver_unit.c.description,
                 src_au_ver_unit.c.function_node_id,
                 src_au_ver_unit.c.location_node_id,
                 src_au_ver_unit.c.location_type,
@@ -1111,7 +1111,7 @@ async def _get_current_au_units(engine: AsyncEngine) -> Dict[str, Dict[str, Any]
         if sid:
             result_map[sid] = {
                 "name": _normalise_str(row.name),
-                "status": _normalise_str(row.status),
+                "description": _normalise_str(row.description),
                 "function_node_id": _normalise_str(row.function_node_id),
                 "location_node_id": _normalise_str(row.location_node_id),
                 "location_type": _normalise_str(row.location_type),
@@ -1153,7 +1153,7 @@ async def ingest_assessment_units(
             continue
         file_units[sid] = {
             "name": _normalise_str(row.get("name")),
-            "status": _normalise_str(row.get("status")),
+            "description": _normalise_str(row.get("description")),
             "function_node_id": f"function:{func_id}",
             "location_node_id": f"{loc_type}:{loc_id}",
             "location_type": loc_type,
@@ -1186,7 +1186,7 @@ async def ingest_assessment_units(
         ver_inserts.append({
             "ref_unit_id": uid,
             "name": unit["name"],
-            "status": unit["status"],
+            "description": unit["description"],
             "function_node_id": unit["function_node_id"],
             "location_node_id": unit["location_node_id"],
             "location_type": unit["location_type"],
@@ -1241,7 +1241,7 @@ async def ingest_assessment_units(
         ver_inserts_dis.append({
             "ref_unit_id": uid,
             "name": db_unit["name"],
-            "status": "Inactive",
+            "description": db_unit["description"],
             "function_node_id": db_unit["function_node_id"],
             "location_node_id": db_unit["location_node_id"],
             "location_type": db_unit["location_type"],
@@ -1280,7 +1280,7 @@ async def ingest_assessment_units(
 
         changed = (
             file_unit["name"] != db_unit.get("name")
-            or file_unit["status"] != db_unit.get("status")
+            or file_unit["description"] != db_unit.get("description")
             or file_unit["function_node_id"] != db_unit.get("function_node_id")
             or file_unit["location_node_id"] != db_unit.get("location_node_id")
             or file_unit["location_type"] != db_unit.get("location_type")
@@ -1301,7 +1301,7 @@ async def ingest_assessment_units(
         ver_inserts_chg.append({
             "ref_unit_id": uid,
             "name": file_unit["name"],
-            "status": file_unit["status"],
+            "description": file_unit["description"],
             "function_node_id": file_unit["function_node_id"],
             "location_node_id": file_unit["location_node_id"],
             "location_type": file_unit["location_type"],

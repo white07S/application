@@ -48,7 +48,7 @@ src_au_ver_unit = Table(
         nullable=False,
     ),
     Column("name", Text, nullable=False),
-    Column("status", Text, nullable=True),
+    Column("description", Text, nullable=True),
     Column(
         "function_node_id",
         Text,
@@ -64,10 +64,6 @@ src_au_ver_unit = Table(
     Column("location_type", Text, nullable=False),
     Column("tx_from", DateTime(timezone=True), nullable=False),
     Column("tx_to", DateTime(timezone=True), nullable=True),
-    CheckConstraint(
-        "status IN ('Active', 'Inactive')",
-        name="ck_ver_unit_status",
-    ),
     CheckConstraint(
         "location_type IN ('location', 'consolidated')",
         name="ck_ver_unit_location_type",
