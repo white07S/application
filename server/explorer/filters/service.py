@@ -255,7 +255,7 @@ async def _search_nodes(
     tc_ver = _is_current(ver_table.c.tx_to)
     tc_rel = _is_current(rel.c.tx_to)
     name_col = ver_table.c.names[1] if name_is_array else ver_table.c.name
-    search_pattern = f"%{search}%"
+    search_pattern = f"%{search.strip()}%"
 
     q = (
         select(
@@ -491,7 +491,7 @@ async def get_consolidated_entities(
             .where(tc_ver)
         )
         if search:
-            search_pattern = f"%{search}%"
+            search_pattern = f"%{search.strip()}%"
             base = base.where(or_(
                 func.array_to_string(ver.c.names, " / ").ilike(search_pattern),
                 ref.c.node_id.ilike(search_pattern),

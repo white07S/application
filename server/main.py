@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -71,6 +72,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Redis initialization failed: {}", e)
         raise
+
+    # Warm up explorer filter caches
+    try:
+        from server.explorer.filters.service import (
+            get_function_tree,
+            get_location_tree,
+            get_consolidated_entities,
+            get_assessment_units,
+            get_risk_taxonomies,
+        )
+        logger.info("Warming up explorer filter caches...")
+        await asyncio.gather(
+            get_function_tree(),
+            get_location_tree(),
+            get_consolidated_entities(),
+            get_assessment_units(),
+            get_risk_taxonomies(),
+        )
+        logger.info("Explorer filter caches warmed up")
+    except Exception as e:
+        logger.warning("Explorer cache warmup failed (non-fatal): {}", e)
 
     # Initialize storage directories
     from server.pipelines.storage import init_storage_directories

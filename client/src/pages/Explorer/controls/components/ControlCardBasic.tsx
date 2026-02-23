@@ -59,6 +59,17 @@ export const ControlCardBasic: React.FC<Props> = ({ control, relationships }) =>
                 <span className="text-xs text-text-main truncate">{control.control_owner}</span>
             </div>
 
+            {/* Created on */}
+            {control.control_created_on && (
+                <div className="flex items-center gap-1 min-w-0">
+                    <span className="material-symbols-outlined text-[12px] text-text-sub flex-shrink-0">calendar_today</span>
+                    <span className="text-[10px] text-text-sub">Created:</span>
+                    <span className="text-xs text-text-main">
+                        {new Date(control.control_created_on).toLocaleDateString()}
+                    </span>
+                </div>
+            )}
+
             {/* Risk themes */}
             {relationships.risk_themes.length > 0 && (
                 <div className="flex items-center gap-1 min-w-0">

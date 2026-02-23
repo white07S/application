@@ -12,6 +12,7 @@ export interface Control {
     control_status: string;
     control_owner: string;
     valid_from: string;
+    control_created_on: string;
     sox_relevant: boolean;
 }
 
@@ -191,6 +192,7 @@ export function mapApiControl(api: ApiControlWithDetails): ControlWithDetails {
             control_status: c.control_status || '',
             control_owner: c.control_owner || '',
             valid_from: c.last_modified_on || '',
+            control_created_on: c.control_created_on || '',
             sox_relevant: c.sox_relevant ?? false,
         },
         relationships: {

@@ -38,7 +38,7 @@ from server.pipelines.controls.schema import (
     ai_controls_model_clean_text,
 )
 from server.pipelines.orgs.schema import src_orgs_ref_node
-from server.pipelines.risks.schema import src_risks_ref_theme
+from server.pipelines.risks.schema import src_risks_ref_theme, src_risks_ver_theme
 from server.pipelines.controls import qdrant_service
 from server.pipelines.controls.model_runners.common import (
     FEATURE_NAMES,

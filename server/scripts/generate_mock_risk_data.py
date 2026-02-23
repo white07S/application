@@ -39,34 +39,60 @@ def generate_risk_theme_jsonl(out_path: Path, *, seed: int = SEED, rows: int = D
     rng = random.Random(seed)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # First pass: build all rows and track active themes per taxonomy
+    records: List[dict] = []
+    active_by_taxonomy: dict[str, List[str]] = {}  # taxonomy_id -> [risk_theme_id, ...]
+
+    for i in range(1, rows + 1):
+        taxonomy_idx = ((i - 1) % 6) + 1
+        rt_idx = ((i - 1) % 8) + 1
+        taxonomy_id = str(taxonomy_idx)
+        taxonomy = f"Mock Taxonomy {taxonomy_idx}"
+        taxonomy_description = (
+            f"Description for {taxonomy}." if rng.random() > 0.3 else None
+        )
+        risk_theme_id = f"{taxonomy_idx}.{rt_idx}"
+        risk_theme = f"Mock Risk Theme {taxonomy_idx}-{rt_idx}"
+        risk_theme_description = f"Description for {risk_theme}."
+        risk_theme_mapping_considerations = (
+            f"Map data points related to {risk_theme}. "
+            f"Notes: {rng.choice(['scope', 'controls', 'process', 'people', 'systems'])}."
+        )
+        # Ensure at least one active theme per taxonomy:
+        # first theme in each taxonomy is always Active
+        if rt_idx == 1:
+            status = "Active"
+        else:
+            status = rng.choice(["Active", "Expired"])
+
+        if status == "Active":
+            active_by_taxonomy.setdefault(taxonomy_id, []).append(risk_theme_id)
+
+        records.append({
+            "taxonomy_id": taxonomy_id,
+            "taxonomy": taxonomy,
+            "taxonomy_description": taxonomy_description,
+            "risk_theme_id": risk_theme_id,
+            "risk_theme": risk_theme,
+            "risk_theme_description": risk_theme_description,
+            "risk_theme_mapping_considerations": risk_theme_mapping_considerations,
+            "status": status,
+            "last_updated_on": _iso8601(rng),
+        })
+
+    # Second pass: assign parent_id for expired themes
+    for rec in records:
+        if rec["status"] == "Expired":
+            candidates = active_by_taxonomy.get(rec["taxonomy_id"], [])
+            rec["parent_id"] = rng.choice(candidates) if candidates else None
+        else:
+            rec["parent_id"] = None
+
+    # Write out
     count = 0
     with out_path.open("w", encoding="utf-8") as f:
-        for i in range(1, rows + 1):
-            taxonomy_idx = ((i - 1) % 6) + 1
-            rt_idx = ((i - 1) % 8) + 1
-            taxonomy_id = str(taxonomy_idx)
-            taxonomy = f"Mock Taxonomy {taxonomy_idx}"
-            taxonomy_description = f"Description for {taxonomy}."
-            risk_theme_id = f"{taxonomy_idx}.{rt_idx}"
-            risk_theme = f"Mock Risk Theme {taxonomy_idx}-{rt_idx}"
-            risk_theme_description = f"Description for {risk_theme}."
-            risk_theme_mapping_considerations = (
-                f"Map data points related to {risk_theme}. "
-                f"Notes: {rng.choice(['scope', 'controls', 'process', 'people', 'systems'])}."
-            )
-            status = rng.choice(["Active", "Expired"])
-            row = {
-                "taxonomy_id": taxonomy_id,
-                "taxonomy": taxonomy,
-                "taxonomy_description": taxonomy_description,
-                "risk_theme_id": risk_theme_id,
-                "risk_theme": risk_theme,
-                "risk_theme_description": risk_theme_description,
-                "risk_theme_mapping_considerations": risk_theme_mapping_considerations,
-                "status": status,
-                "last_updated_on": _iso8601(rng),
-            }
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             count += 1
 
     return count

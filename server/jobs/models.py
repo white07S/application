@@ -83,7 +83,7 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID
-    job_type: Mapped[str] = mapped_column(String(20), nullable=False)  # ingestion, snapshot_creation, snapshot_restore
+    job_type: Mapped[str] = mapped_column(String(30), nullable=False)  # ingestion, snapshot_creation, snapshot_restore, qdrant_snapshot_creation, qdrant_snapshot_restore
     batch_id: Mapped[int] = mapped_column(nullable=False)
     upload_id: Mapped[str] = mapped_column(String(20), nullable=False)  # UPL-YYYY-XXXX
     status: Mapped[str] = mapped_column(String(20), default="pending")
