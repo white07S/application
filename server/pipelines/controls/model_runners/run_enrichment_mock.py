@@ -282,6 +282,10 @@ def build_record(
             payload = build_l1_payload(row, hash_value, text_pool_entry)
         else:
             payload = build_l2_payload(row, hash_value, text_pool_entry)
+    elif level_one:
+        # L1 controls always get W-criteria even if not Active/Key,
+        # because Level 2 children inherit W-criteria from their parent.
+        payload = build_l1_payload(row, hash_value, text_pool_entry)
     else:
         payload = null_enrichment_payload()
 

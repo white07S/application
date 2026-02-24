@@ -20,7 +20,7 @@ const sidebarSections: SidebarSection[] = [
         items: [
             { id: 'upload', label: 'Data Upload', icon: 'cloud_upload', path: '/pipelines/upload' },
             { id: 'ingestion', label: 'Ingestion', icon: 'input', path: '/pipelines/ingestion' },
-            { id: 'exports', label: 'Exports', icon: 'output', disabled: true },
+            { id: 'exports', label: 'Exports', icon: 'output', path: '/pipelines/exports' },
             { id: 'archival', label: 'Archival', icon: 'archive', disabled: true },
         ],
     },

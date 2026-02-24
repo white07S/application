@@ -5,6 +5,7 @@ import Unauthorized from '../pages/Unauthorized';
 import DocsPage from '../pages/Docs/DocsPage';
 import Pipelines from '../pages/Pipelines/Pipelines';
 import Processing from '../pages/Pipelines/Processing';
+import Exports from '../pages/Pipelines/Exports';
 import DevDataLayout from '../pages/DevData/DevDataLayout';
 import ExplorerLayout from '../pages/Explorer/ExplorerLayout';
 
@@ -93,6 +94,13 @@ export const routes: RouteConfig[] = [
         path: "/pipelines/ingestion",
         component: Processing,
         name: "Ingestion",
+        protected: true,
+        accessRight: "hasPipelinesIngestionAccess",
+    },
+    {
+        path: "/pipelines/exports",
+        component: Exports,
+        name: "Exports",
         protected: true,
         accessRight: "hasPipelinesIngestionAccess",
     },
