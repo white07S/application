@@ -28,7 +28,7 @@ from typing import Optional
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from server.config.postgres import get_db_session_context
+from server.config.postgres import get_db_session_context, init_engine
 from server.devdata.snapshot_service import snapshot_service
 from server.settings import get_settings
 from server.logging_config import configure_logging, get_logger
@@ -601,6 +601,10 @@ def main():
             sys.exit(1)
         parser.print_help()
         sys.exit(1)
+
+    # Initialize Postgres engine (required before any get_db_session_context() call)
+    s = get_settings()
+    init_engine(s.postgres_url, s.postgres_pool_size, s.postgres_max_overflow)
 
     asyncio.run(handler(args))
 
