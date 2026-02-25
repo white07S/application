@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """
-Snapshot Management CLI — PostgreSQL & Qdrant
+Snapshot Management CLI — PostgreSQL & Qdrant (fully disk-based)
 
-On every invocation the CLI automatically syncs snapshot metadata from disk
-(metadata.json files written alongside each backup) into the PostgreSQL
-catalog tables.  This means snapshots are recoverable even after the database
-has been wiped and re-migrated — the first CLI command will re-register all
-snapshots it finds on disk.
+Snapshot metadata lives entirely on disk (metadata.json).  Most commands
+(list, restore, delete) need NO PostgreSQL connection.  Only `create` and
+`status` require a live PG because they write to the `processing_jobs` table.
 
 Usage:
     python snapshot_cli.py list                                          # List Postgres snapshots
@@ -14,20 +12,19 @@ Usage:
     python snapshot_cli.py restore --id SNAP-2024-0001                   # Restore Postgres snapshot (latest date)
     python snapshot_cli.py restore --id SNAP-2024-0001 --date 2024-03-15 # Restore from a specific date
     python snapshot_cli.py delete --id SNAP-2024-0001                    # Delete Postgres snapshot
-    python snapshot_cli.py status                                        # Check Postgres operation status
+    python snapshot_cli.py status                                        # Check operation status
 
     python snapshot_cli.py --type qdrant list                            # List Qdrant snapshots
     python snapshot_cli.py --type qdrant create --name "Backup" --collection nfr_connect_controls
-    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001                   # Restore Qdrant (latest date)
-    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001 --date 2026-02-20 # Restore from specific date
-    python snapshot_cli.py --type qdrant delete --id QSNAP-2026-0001     # Delete Qdrant snapshot
-    python snapshot_cli.py --type qdrant status                          # Check Qdrant operation status
-    python snapshot_cli.py --type qdrant collections                     # List Qdrant collections
+    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001                   # Latest date
+    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001 --date 2026-02-20 # Specific date
+    python snapshot_cli.py --type qdrant delete --id QSNAP-2026-0001
+    python snapshot_cli.py --type qdrant status
+    python snapshot_cli.py --type qdrant collections
 """
 
 import argparse
 import asyncio
-import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +33,12 @@ from typing import Optional
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from server.config.postgres import get_db_session_context, init_engine
+from server.devdata.disk_metadata import (
+    find_snapshot,
+    get_available_dates,
+    scan_pg_snapshots,
+    scan_qdrant_snapshots,
+)
 from server.devdata.snapshot_service import snapshot_service
 from server.settings import get_settings
 from server.logging_config import configure_logging, get_logger
@@ -46,36 +48,43 @@ configure_logging()
 logger = get_logger(name=__name__)
 
 
+def _lazy_init_engine():
+    """Initialize PG engine — only needed for create/status."""
+    from server.config.postgres import init_engine
+    s = get_settings()
+    init_engine(s.postgres_url, s.postgres_pool_size, s.postgres_max_overflow)
+
+
 # ======================================================================
 # PostgreSQL commands
 # ======================================================================
 
 async def pg_list_snapshots(args):
-    """List all available Postgres snapshots."""
-    async with get_db_session_context() as db:
-        response = await snapshot_service.list_snapshots(
-            db, page=1, page_size=100
-        )
+    """List all available Postgres snapshots (disk-only, no PG needed)."""
+    settings = get_settings()
+    response = snapshot_service.list_snapshots(page=1, page_size=100)
 
-        if not response.snapshots:
-            print("No PostgreSQL snapshots found.")
-            return
+    if not response.snapshots:
+        print("No PostgreSQL snapshots found.")
+        return
 
-        print(f"\nFound {response.total} PostgreSQL snapshot(s):\n")
-        print("-" * 100)
-        print(f"{'ID':<20} {'Name':<30} {'Size':<12} {'Created':<20} {'Status':<10} {'Restored'}")
-        print("-" * 100)
+    print(f"\nFound {response.total} PostgreSQL snapshot(s):\n")
+    print("-" * 100)
+    print(f"{'ID':<20} {'Name':<30} {'Size':<12} {'Created':<20} {'Status':<10} {'Restored'}")
+    print("-" * 100)
 
-        for snap in response.snapshots:
-            size_mb = snap.file_size / (1024 * 1024)
-            created = datetime.fromisoformat(snap.created_at.isoformat()).strftime('%Y-%m-%d %H:%M')
-            print(f"{snap.id:<20} {snap.name[:29]:<30} {size_mb:>10.2f}MB {created:<20} {snap.status:<10} {snap.restored_count}x")
+    for snap in response.snapshots:
+        size_mb = snap.file_size / (1024 * 1024)
+        created = snap.created_at.strftime('%Y-%m-%d %H:%M')
+        print(f"{snap.id:<20} {snap.name[:29]:<30} {size_mb:>10.2f}MB {created:<20} {snap.status:<10} {snap.restored_count}x")
 
-        print("-" * 100)
+    print("-" * 100)
 
 
 async def pg_create_snapshot(args):
-    """Create a new Postgres snapshot."""
+    """Create a new Postgres snapshot (needs PG for pg_dump + job tracking)."""
+    _lazy_init_engine()
+
     status = await snapshot_service.check_operation_status()
     if status:
         print(f"Cannot create snapshot: {status['operation']} operation already running")
@@ -89,8 +98,10 @@ async def pg_create_snapshot(args):
     import uuid
     job_id = str(uuid.uuid4())
 
+    from server.config.postgres import get_db_session_context
+    from server.jobs import ProcessingJob
+
     async with get_db_session_context() as db:
-        from server.jobs import ProcessingJob
         job = ProcessingJob(
             id=job_id,
             job_type="snapshot_creation",
@@ -114,7 +125,7 @@ async def pg_create_snapshot(args):
                 name=args.name,
                 description=args.description,
                 user=args.user or "cli_user",
-                is_scheduled=False
+                is_scheduled=False,
             )
         )
 
@@ -138,39 +149,39 @@ async def pg_create_snapshot(args):
 
 async def pg_restore_snapshot(args):
     """Restore database from a Postgres snapshot."""
-    status = await snapshot_service.check_operation_status()
-    if status:
-        print(f"Cannot restore snapshot: {status['operation']} operation already running")
-        print(f"   Started at: {status['started_at']}")
+    snapshot = snapshot_service.get_snapshot_detail(args.id, date_str=args.date)
+    if not snapshot:
+        print(f"Snapshot {args.id} not found")
+        dates = get_available_dates(
+            snapshot_service.backup_path, args.id, snapshot_service.BACKUP_FILENAME
+        )
+        if dates:
+            print(f"Available dates for {args.id}:")
+            for d in dates:
+                print(f"  - {d}")
         return
 
-    async with get_db_session_context() as db:
-        # If --date provided, resolve and point DB record at that specific copy
-        if args.date:
-            resolved = await _resolve_pg_snapshot_by_date(db, args.id, args.date)
-            if not resolved:
-                return
+    print(f"Restoring from snapshot: {snapshot.name}")
+    print(f"Created: {snapshot.created_at}")
+    print(f"File: {snapshot.file_path}")
+    print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
 
-        snapshot = await snapshot_service.get_snapshot_detail(db, args.id)
-        if not snapshot:
-            print(f"Snapshot {args.id} not found")
+    if not args.skip_confirm:
+        response = input("\nWARNING: This will replace the current database! Continue? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Restore cancelled.")
             return
 
-        print(f"Restoring from snapshot: {snapshot.name}")
-        print(f"Created: {snapshot.created_at}")
-        print(f"File: {snapshot.file_path}")
-        print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
+    # PG needed for job tracking and pg_restore
+    _lazy_init_engine()
 
-        if not args.skip_confirm:
-            response = input("\nWARNING: This will replace the current database! Continue? (yes/no): ")
-            if response.lower() != 'yes':
-                print("Restore cancelled.")
-                return
+    import uuid
+    job_id = str(uuid.uuid4())
 
-        import uuid
-        job_id = str(uuid.uuid4())
+    from server.config.postgres import get_db_session_context
+    from server.jobs import ProcessingJob
 
-        from server.jobs import ProcessingJob
+    async with get_db_session_context() as db:
         job = ProcessingJob(
             id=job_id,
             job_type="snapshot_restore",
@@ -187,19 +198,18 @@ async def pg_restore_snapshot(args):
 
         print("Starting restore (progress logged to server logs)...")
 
-        # pg_restore drops/recreates the DB, so we cannot poll
-        # processing_jobs during the restore.  Just await completion.
         result = await snapshot_service.restore_snapshot(
             db=db,
             job_id=job_id,
             snapshot_id=args.id,
             user=args.user or "cli_user",
+            date_str=args.date,
             create_pre_restore_backup=not args.skip_backup,
-            force=args.force
+            force=args.force,
         )
 
-        # Check final status after restore completes
-        await db.rollback()  # clear any stale transaction state
+        # Check final status
+        await db.rollback()
         job = await db.get(ProcessingJob, job_id)
         if job and job.status == "completed":
             print("Database restored successfully!")
@@ -215,31 +225,28 @@ async def pg_restore_snapshot(args):
 
 
 async def pg_delete_snapshot(args):
-    """Delete a Postgres snapshot."""
-    async with get_db_session_context() as db:
-        snapshot = await snapshot_service.get_snapshot_detail(db, args.id)
-        if not snapshot:
-            print(f"Snapshot {args.id} not found")
+    """Delete a Postgres snapshot (disk-only, no PG needed)."""
+    snapshot = snapshot_service.get_snapshot_detail(args.id)
+    if not snapshot:
+        print(f"Snapshot {args.id} not found")
+        return
+
+    print(f"Deleting snapshot: {snapshot.name}")
+
+    if not args.skip_confirm:
+        response = input("Are you sure? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Delete cancelled.")
             return
 
-        print(f"Deleting snapshot: {snapshot.name}")
+    result = snapshot_service.delete_snapshot(args.id, args.user or "cli_user")
 
-        if not args.skip_confirm:
-            response = input("Are you sure? (yes/no): ")
-            if response.lower() != 'yes':
-                print("Delete cancelled.")
-                return
-
-        result = await snapshot_service.delete_snapshot(
-            db, args.id, args.user or "cli_user"
-        )
-
-        if result.success:
-            print(f"{result.message}")
-            if result.deleted_file:
-                print("   Backup file deleted.")
-        else:
-            print(f"Error: {result.message}")
+    if result.success:
+        print(f"{result.message}")
+        if result.deleted_file:
+            print("   Backup file deleted.")
+    else:
+        print(f"Error: {result.message}")
 
 
 async def pg_check_status(args):
@@ -253,10 +260,14 @@ async def pg_check_status(args):
     else:
         print("No PostgreSQL snapshot operations are currently running.")
 
-    async with get_db_session_context() as db:
-        from sqlalchemy import select
-        from server.jobs import ProcessingJob
+    # Check job tracking (needs PG)
+    _lazy_init_engine()
 
+    from server.config.postgres import get_db_session_context
+    from sqlalchemy import select
+    from server.jobs import ProcessingJob
+
+    async with get_db_session_context() as db:
         result = await db.execute(
             select(ProcessingJob)
             .where(ProcessingJob.job_type.in_(["snapshot_creation", "snapshot_restore"]))
@@ -276,37 +287,38 @@ async def pg_check_status(args):
 # ======================================================================
 
 async def qdrant_list_snapshots(args):
-    """List all available Qdrant snapshots."""
+    """List all available Qdrant snapshots (disk-only, no PG needed)."""
     from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
 
-    async with get_db_session_context() as db:
-        response = await qdrant_snapshot_service.list_snapshots(
-            db, page=1, page_size=100,
-            collection_name=getattr(args, 'collection', None),
+    response = qdrant_snapshot_service.list_snapshots(
+        page=1, page_size=100,
+        collection_name=getattr(args, 'collection', None),
+    )
+
+    if not response.snapshots:
+        print("No Qdrant snapshots found.")
+        return
+
+    print(f"\nFound {response.total} Qdrant snapshot(s):\n")
+    print("-" * 120)
+    print(f"{'ID':<22} {'Name':<25} {'Collection':<25} {'Points':<10} {'Size':<12} {'Created':<20} {'Status':<10} {'Restored'}")
+    print("-" * 120)
+
+    for snap in response.snapshots:
+        size_mb = snap.file_size / (1024 * 1024)
+        created = snap.created_at.strftime('%Y-%m-%d %H:%M')
+        print(
+            f"{snap.id:<22} {snap.name[:24]:<25} {snap.collection_name[:24]:<25} "
+            f"{snap.points_count:<10} {size_mb:>10.2f}MB {created:<20} {snap.status:<10} {snap.restored_count}x"
         )
 
-        if not response.snapshots:
-            print("No Qdrant snapshots found.")
-            return
-
-        print(f"\nFound {response.total} Qdrant snapshot(s):\n")
-        print("-" * 120)
-        print(f"{'ID':<22} {'Name':<25} {'Collection':<25} {'Points':<10} {'Size':<12} {'Created':<20} {'Status':<10} {'Restored'}")
-        print("-" * 120)
-
-        for snap in response.snapshots:
-            size_mb = snap.file_size / (1024 * 1024)
-            created = datetime.fromisoformat(snap.created_at.isoformat()).strftime('%Y-%m-%d %H:%M')
-            print(
-                f"{snap.id:<22} {snap.name[:24]:<25} {snap.collection_name[:24]:<25} "
-                f"{snap.points_count:<10} {size_mb:>10.2f}MB {created:<20} {snap.status:<10} {snap.restored_count}x"
-            )
-
-        print("-" * 120)
+    print("-" * 120)
 
 
 async def qdrant_create_snapshot(args):
-    """Create a new Qdrant snapshot."""
+    """Create a new Qdrant snapshot (needs PG for job tracking)."""
+    _lazy_init_engine()
+
     from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
 
     status = await qdrant_snapshot_service.check_operation_status()
@@ -325,8 +337,10 @@ async def qdrant_create_snapshot(args):
     import uuid
     job_id = str(uuid.uuid4())
 
+    from server.config.postgres import get_db_session_context
+    from server.jobs import ProcessingJob
+
     async with get_db_session_context() as db:
-        from server.jobs import ProcessingJob
         job = ProcessingJob(
             id=job_id,
             job_type="qdrant_snapshot_creation",
@@ -376,40 +390,40 @@ async def qdrant_restore_snapshot(args):
     """Restore Qdrant collection from a snapshot."""
     from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
 
-    status = await qdrant_snapshot_service.check_operation_status()
-    if status:
-        print(f"Cannot restore snapshot: {status['operation']} operation already running")
-        print(f"   Started at: {status['started_at']}")
+    snapshot = qdrant_snapshot_service.get_snapshot_detail(args.id, date_str=args.date)
+    if not snapshot:
+        print(f"Snapshot {args.id} not found")
+        dates = get_available_dates(
+            qdrant_snapshot_service.backup_path, args.id, qdrant_snapshot_service.BACKUP_FILENAME
+        )
+        if dates:
+            print(f"Available dates for {args.id}:")
+            for d in dates:
+                print(f"  - {d}")
         return
 
-    async with get_db_session_context() as db:
-        # If --date provided, resolve and point DB record at that specific copy
-        if args.date:
-            resolved = await _resolve_qdrant_snapshot_by_date(db, args.id, args.date)
-            if not resolved:
-                return
+    print(f"Restoring from Qdrant snapshot: {snapshot.name}")
+    print(f"Collection: {snapshot.collection_name}")
+    print(f"Points: {snapshot.points_count}")
+    print(f"File: {snapshot.file_path}")
+    print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
 
-        snapshot = await qdrant_snapshot_service.get_snapshot_detail(db, args.id)
-        if not snapshot:
-            print(f"Snapshot {args.id} not found")
+    if not args.skip_confirm:
+        response = input("\nWARNING: This will replace the Qdrant collection data! Continue? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Restore cancelled.")
             return
 
-        print(f"Restoring from Qdrant snapshot: {snapshot.name}")
-        print(f"Collection: {snapshot.collection_name}")
-        print(f"Points: {snapshot.points_count}")
-        print(f"File: {snapshot.file_path}")
-        print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
+    # PG needed for job tracking
+    _lazy_init_engine()
 
-        if not args.skip_confirm:
-            response = input("\nWARNING: This will replace the Qdrant collection data! Continue? (yes/no): ")
-            if response.lower() != 'yes':
-                print("Restore cancelled.")
-                return
+    import uuid
+    job_id = str(uuid.uuid4())
 
-        import uuid
-        job_id = str(uuid.uuid4())
+    from server.config.postgres import get_db_session_context
+    from server.jobs import ProcessingJob
 
-        from server.jobs import ProcessingJob
+    async with get_db_session_context() as db:
         job = ProcessingJob(
             id=job_id,
             job_type="qdrant_snapshot_restore",
@@ -432,6 +446,7 @@ async def qdrant_restore_snapshot(args):
                 job_id=job_id,
                 snapshot_id=args.id,
                 user=args.user or "cli_user",
+                date_str=args.date,
                 force=args.force,
             )
         )
@@ -455,34 +470,31 @@ async def qdrant_restore_snapshot(args):
 
 
 async def qdrant_delete_snapshot(args):
-    """Delete a Qdrant snapshot."""
+    """Delete a Qdrant snapshot (disk-only, no PG needed)."""
     from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
 
-    async with get_db_session_context() as db:
-        snapshot = await qdrant_snapshot_service.get_snapshot_detail(db, args.id)
-        if not snapshot:
-            print(f"Snapshot {args.id} not found")
+    snapshot = qdrant_snapshot_service.get_snapshot_detail(args.id)
+    if not snapshot:
+        print(f"Snapshot {args.id} not found")
+        return
+
+    print(f"Deleting Qdrant snapshot: {snapshot.name}")
+    print(f"Collection: {snapshot.collection_name}")
+
+    if not args.skip_confirm:
+        response = input("Are you sure? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Delete cancelled.")
             return
 
-        print(f"Deleting Qdrant snapshot: {snapshot.name}")
-        print(f"Collection: {snapshot.collection_name}")
+    result = qdrant_snapshot_service.delete_snapshot(args.id, args.user or "cli_user")
 
-        if not args.skip_confirm:
-            response = input("Are you sure? (yes/no): ")
-            if response.lower() != 'yes':
-                print("Delete cancelled.")
-                return
-
-        result = await qdrant_snapshot_service.delete_snapshot(
-            db, args.id, args.user or "cli_user"
-        )
-
-        if result.success:
-            print(f"{result.message}")
-            if result.deleted_file:
-                print("   Backup file deleted.")
-        else:
-            print(f"Error: {result.message}")
+    if result.success:
+        print(f"{result.message}")
+        if result.deleted_file:
+            print("   Backup file deleted.")
+    else:
+        print(f"Error: {result.message}")
 
 
 async def qdrant_check_status(args):
@@ -498,10 +510,14 @@ async def qdrant_check_status(args):
     else:
         print("No Qdrant snapshot operations are currently running.")
 
-    async with get_db_session_context() as db:
-        from sqlalchemy import select
-        from server.jobs import ProcessingJob
+    # Check job tracking (needs PG)
+    _lazy_init_engine()
 
+    from server.config.postgres import get_db_session_context
+    from sqlalchemy import select
+    from server.jobs import ProcessingJob
+
+    async with get_db_session_context() as db:
         result = await db.execute(
             select(ProcessingJob)
             .where(ProcessingJob.job_type.in_(["qdrant_snapshot_creation", "qdrant_snapshot_restore"]))
@@ -535,149 +551,20 @@ async def qdrant_list_collections(args):
 
 
 # ======================================================================
-# Date resolution helpers
+# Main
 # ======================================================================
-
-async def _resolve_pg_snapshot_by_date(db, snap_id: str, date_str: str) -> bool:
-    """Point the DB record's file_path at a specific date folder, registering from disk if needed."""
-    from server.devdata.snapshot_models import PostgresSnapshot
-
-    backup_path = get_settings().postgres_backup_path
-    snapshot_dir = backup_path / date_str / snap_id
-    backup_file = snapshot_dir / "backup.dump"
-    metadata_file = snapshot_dir / "metadata.json"
-
-    if not backup_file.exists():
-        print(f"No backup found at {snapshot_dir}")
-        # List available dates for this ID
-        _print_available_dates(backup_path, snap_id, "backup.dump")
-        return False
-
-    # Ensure DB record exists (may need to register from disk)
-    snapshot = await db.get(PostgresSnapshot, snap_id)
-    if not snapshot and metadata_file.exists():
-        # Register from metadata.json
-        with open(metadata_file) as f:
-            meta = json.load(f)
-        snapshot = PostgresSnapshot(
-            id=snap_id,
-            name=meta.get("name", snap_id),
-            description=meta.get("description"),
-            file_path=str(backup_file),
-            file_size=meta.get("file_size", backup_file.stat().st_size),
-            checksum=meta.get("checksum"),
-            alembic_version=meta.get("alembic_version", "unknown"),
-            table_count=meta.get("table_count", 0),
-            total_records=meta.get("total_records", 0),
-            created_by=meta.get("created_by", "unknown"),
-            created_at=datetime.fromisoformat(meta["created_at"]),
-            restored_count=0,
-            is_scheduled=False,
-            status="completed",
-        )
-        db.add(snapshot)
-        await db.commit()
-        print(f"Registered snapshot {snap_id} from {date_str}")
-    elif snapshot:
-        # Update file_path to point at the date-specific copy
-        snapshot.file_path = str(backup_file)
-        await db.commit()
-    else:
-        print(f"No metadata.json found at {snapshot_dir}")
-        return False
-
-    return True
-
-
-async def _resolve_qdrant_snapshot_by_date(db, snap_id: str, date_str: str) -> bool:
-    """Point the DB record's file_path at a specific date folder, registering from disk if needed."""
-    from server.devdata.qdrant_snapshot_models import QdrantSnapshot
-
-    backup_path = get_settings().qdrant_backup_path
-    snapshot_dir = backup_path / date_str / snap_id
-    snapshot_file = snapshot_dir / "snapshot.snapshot"
-    metadata_file = snapshot_dir / "metadata.json"
-
-    if not snapshot_file.exists():
-        print(f"No snapshot found at {snapshot_dir}")
-        _print_available_dates(backup_path, snap_id, "snapshot.snapshot")
-        return False
-
-    snapshot = await db.get(QdrantSnapshot, snap_id)
-    if not snapshot and metadata_file.exists():
-        with open(metadata_file) as f:
-            meta = json.load(f)
-        snapshot = QdrantSnapshot(
-            id=snap_id,
-            name=meta.get("name", snap_id),
-            description=meta.get("description"),
-            collection_name=meta.get("collection_name", "unknown"),
-            qdrant_snapshot_name=meta.get("qdrant_snapshot_name"),
-            file_path=str(snapshot_file),
-            file_size=meta.get("file_size", snapshot_file.stat().st_size),
-            checksum=meta.get("checksum"),
-            points_count=meta.get("points_count", 0),
-            vectors_count=meta.get("vectors_count", 0),
-            created_by=meta.get("created_by", "unknown"),
-            created_at=datetime.fromisoformat(meta["created_at"]),
-            restored_count=0,
-            status="completed",
-        )
-        db.add(snapshot)
-        await db.commit()
-        print(f"Registered snapshot {snap_id} from {date_str}")
-    elif snapshot:
-        snapshot.file_path = str(snapshot_file)
-        await db.commit()
-    else:
-        print(f"No metadata.json found at {snapshot_dir}")
-        return False
-
-    return True
-
-
-def _print_available_dates(backup_path: Path, snap_id: str, expected_file: str):
-    """List date folders that contain a given snapshot ID."""
-    found = sorted(
-        (d.parent.name for d in backup_path.rglob(f"{snap_id}/{expected_file}")),
-        reverse=True,
-    )
-    if found:
-        print(f"Available dates for {snap_id}:")
-        for date in found:
-            print(f"  - {date}")
-    else:
-        print(f"No copies of {snap_id} found on disk.")
-
-
-# ======================================================================
-# Sync + Main
-# ======================================================================
-
-async def _run_with_sync(handler, args):
-    """Re-register any on-disk snapshots missing from the DB, then run the handler."""
-    from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
-
-    async with get_db_session_context() as db:
-        pg_count = await snapshot_service.sync_from_disk(db)
-        qdrant_count = await qdrant_snapshot_service.sync_from_disk(db)
-        if pg_count or qdrant_count:
-            print(f"Synced from disk: {pg_count} Postgres + {qdrant_count} Qdrant snapshot(s)")
-
-    await handler(args)
-
 
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Snapshot Management CLI (PostgreSQL & Qdrant)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
 
     parser.add_argument(
         '--type', choices=['postgres', 'qdrant'], default='postgres',
-        help='Snapshot type: postgres (default) or qdrant'
+        help='Snapshot type: postgres (default) or qdrant',
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Commands')
@@ -709,10 +596,10 @@ def main():
     delete_parser.add_argument('--user', default='cli_user', help='User deleting the snapshot')
 
     # Status command
-    status_parser = subparsers.add_parser('status', help='Check operation status')
+    subparsers.add_parser('status', help='Check operation status')
 
     # Collections command (Qdrant only)
-    collections_parser = subparsers.add_parser('collections', help='(Qdrant only) List available collections')
+    subparsers.add_parser('collections', help='(Qdrant only) List available collections')
 
     args = parser.parse_args()
 
@@ -720,7 +607,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Route to the correct handler based on --type
+    # Route to the correct handler
     if args.type == 'qdrant':
         dispatch = {
             'list': qdrant_list_snapshots,
@@ -747,11 +634,8 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Initialize Postgres engine (required before any get_db_session_context() call)
-    s = get_settings()
-    init_engine(s.postgres_url, s.postgres_pool_size, s.postgres_max_overflow)
-
-    asyncio.run(_run_with_sync(handler, args))
+    # No global PG init — each handler calls _lazy_init_engine() only if needed
+    asyncio.run(handler(args))
 
 
 if __name__ == '__main__':

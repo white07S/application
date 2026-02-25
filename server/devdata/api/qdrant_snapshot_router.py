@@ -1,4 +1,4 @@
-"""API endpoints for Qdrant snapshot management."""
+"""API endpoints for Qdrant snapshot management — disk-based."""
 
 import uuid
 from datetime import datetime, timezone
@@ -29,7 +29,6 @@ router = APIRouter(prefix="/qdrant-snapshots", tags=["Qdrant Snapshots"])
 
 
 async def _require_dev_data_access(token: str = Depends(get_token_from_header)):
-    """Dependency that verifies the user has dev data access."""
     access = await get_access_control(token)
     if not access.hasDevDataAccess:
         raise HTTPException(status_code=403, detail="Dev data access required")
@@ -37,7 +36,6 @@ async def _require_dev_data_access(token: str = Depends(get_token_from_header)):
 
 
 async def _require_dev_data_write_access(token: str = Depends(get_token_from_header)):
-    """Dependency that verifies the user has dev data write (admin) access."""
     access = await get_access_control(token)
     if not access.hasPipelinesAdminAccess:
         raise HTTPException(
@@ -71,7 +69,11 @@ async def create_snapshot(
         db.add(job)
         await db.commit()
 
-        snapshot_id = await qdrant_snapshot_service.generate_snapshot_id(db)
+        # Generate snapshot ID from disk
+        from server.devdata.disk_metadata import generate_snapshot_id
+        snapshot_id = generate_snapshot_id(
+            qdrant_snapshot_service.backup_path, qdrant_snapshot_service.ID_PREFIX
+        )
 
         background_tasks.add_task(
             _run_qdrant_snapshot_creation,
@@ -100,13 +102,8 @@ async def create_snapshot(
 
 
 async def _run_qdrant_snapshot_creation(
-    job_id: str,
-    name: str,
-    description: str,
-    user: str,
-    collection_name: str,
+    job_id: str, name: str, description: str, user: str, collection_name: str
 ):
-    """Background task to create a Qdrant snapshot."""
     async with get_db_session_context() as db:
         await qdrant_snapshot_service.create_snapshot(
             db=db,
@@ -124,11 +121,9 @@ async def list_snapshots(
     page_size: int = Query(20, ge=1, le=100),
     collection_name: str = Query(None),
     _=Depends(_require_dev_data_access),
-    db: AsyncSession = Depends(get_db_session),
 ):
-    """List Qdrant snapshots with pagination."""
-    return await qdrant_snapshot_service.list_snapshots(
-        db=db,
+    """List Qdrant snapshots (disk-based, no DB needed)."""
+    return qdrant_snapshot_service.list_snapshots(
         page=page,
         page_size=page_size,
         collection_name=collection_name,
@@ -168,10 +163,9 @@ async def get_job_status(
 async def get_snapshot(
     snapshot_id: str,
     _=Depends(_require_dev_data_access),
-    db: AsyncSession = Depends(get_db_session),
 ):
-    """Get detailed information about a Qdrant snapshot."""
-    snapshot = await qdrant_snapshot_service.get_snapshot_detail(db, snapshot_id)
+    """Get detailed information about a Qdrant snapshot (disk-based)."""
+    snapshot = qdrant_snapshot_service.get_snapshot_detail(snapshot_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail=f"Snapshot {snapshot_id} not found")
     return snapshot
@@ -190,7 +184,8 @@ async def restore_snapshot(
     WARNING: This will replace the Qdrant collection data!
     """
     try:
-        snapshot = await qdrant_snapshot_service.get_snapshot_detail(db, snapshot_id)
+        # Verify snapshot exists on disk
+        snapshot = qdrant_snapshot_service.get_snapshot_detail(snapshot_id)
         if not snapshot:
             raise HTTPException(status_code=404, detail=f"Snapshot {snapshot_id} not found")
 
@@ -242,12 +237,8 @@ async def restore_snapshot(
 
 
 async def _run_qdrant_snapshot_restore(
-    job_id: str,
-    snapshot_id: str,
-    user: str,
-    force: bool,
+    job_id: str, snapshot_id: str, user: str, force: bool
 ):
-    """Background task to restore a Qdrant snapshot."""
     async with get_db_session_context() as db:
         await qdrant_snapshot_service.restore_snapshot(
             db=db,
@@ -262,11 +253,9 @@ async def _run_qdrant_snapshot_restore(
 async def delete_snapshot(
     snapshot_id: str,
     access=Depends(_require_dev_data_write_access),
-    db: AsyncSession = Depends(get_db_session),
 ):
-    """Delete a Qdrant snapshot and its backup file."""
-    return await qdrant_snapshot_service.delete_snapshot(
-        db=db,
+    """Delete a Qdrant snapshot (disk-based, no DB needed)."""
+    return qdrant_snapshot_service.delete_snapshot(
         snapshot_id=snapshot_id,
         user=access.user,
     )

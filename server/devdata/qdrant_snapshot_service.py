@@ -1,31 +1,35 @@
-"""Qdrant snapshot service.
+"""Qdrant snapshot service — fully disk-based.
 
-Provides core snapshot operations: create, restore, list, delete.
-Uses Qdrant REST API for snapshot creation/download/upload, stores
-snapshots locally, and tracks metadata in PostgreSQL.
+All snapshot metadata is read from and written to metadata.json files on disk.
+No PostgreSQL tracking tables are used.  The only PG dependency is for job
+tracking (ProcessingJob) during create/restore operations.
 """
 
 import fcntl
 import hashlib
 import json
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.config.postgres import get_db_session_context
+from server.devdata.disk_metadata import (
+    DiskSnapshotMeta,
+    find_snapshot,
+    generate_snapshot_id,
+    get_available_dates,
+    scan_qdrant_snapshots,
+    update_restore_tracking,
+)
 from server.devdata.qdrant_snapshot_models import (
-    QdrantSnapshot,
-    CreateQdrantSnapshotResponse,
-    RestoreQdrantSnapshotResponse,
-    QdrantSnapshotInfo,
-    QdrantSnapshotDetail,
-    QdrantSnapshotListResponse,
     DeleteQdrantSnapshotResponse,
+    QdrantSnapshotDetail,
+    QdrantSnapshotInfo,
+    QdrantSnapshotListResponse,
 )
 from server.devdata.snapshot_models import JobStatusResponse
 from server.devdata.snapshot_service import SnapshotJobTracker
@@ -42,7 +46,10 @@ STREAM_CHUNK_SIZE = 1024 * 1024
 
 
 class QdrantSnapshotService:
-    """Service for managing Qdrant snapshots."""
+    """Service for managing Qdrant snapshots — disk-based metadata."""
+
+    BACKUP_FILENAME = "snapshot.snapshot"
+    ID_PREFIX = "QSNAP"
 
     def __init__(self):
         self.settings = get_settings()
@@ -53,12 +60,10 @@ class QdrantSnapshotService:
 
     # ------------------------------------------------------------------ lock
     async def acquire_operation_lock(self, operation: str) -> bool:
-        """Acquire exclusive lock for snapshot operations."""
         try:
             self.lock_file_path.parent.mkdir(parents=True, exist_ok=True)
             self.lock_file = open(self.lock_file_path, "w")
             fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-
             lock_info = {
                 "operation": operation,
                 "started_at": datetime.now(timezone.utc).isoformat(),
@@ -66,7 +71,6 @@ class QdrantSnapshotService:
             }
             json.dump(lock_info, self.lock_file)
             self.lock_file.flush()
-
             logger.info(f"Acquired Qdrant snapshot lock for {operation}")
             return True
         except BlockingIOError:
@@ -83,7 +87,6 @@ class QdrantSnapshotService:
             return False
 
     def release_operation_lock(self):
-        """Release the operation lock."""
         try:
             if self.lock_file:
                 fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
@@ -98,7 +101,6 @@ class QdrantSnapshotService:
             logger.error(f"Error releasing Qdrant snapshot lock: {e}")
 
     async def check_operation_status(self) -> Optional[Dict[str, Any]]:
-        """Check if a Qdrant snapshot operation is currently running."""
         try:
             if not self.lock_file_path.exists():
                 return None
@@ -114,26 +116,8 @@ class QdrantSnapshotService:
             logger.error(f"Error checking Qdrant operation status: {e}")
             return None
 
-    # ----------------------------------------------------------- ID gen
-    async def generate_snapshot_id(self, db: AsyncSession) -> str:
-        """Generate a unique snapshot ID in QSNAP-YYYY-XXXX format."""
-        current_year = datetime.now(timezone.utc).year
-        result = await db.execute(
-            select(func.max(QdrantSnapshot.id))
-            .where(QdrantSnapshot.id.like(f"QSNAP-{current_year}-%"))
-        )
-        max_id = result.scalar()
-
-        if max_id:
-            sequence = int(max_id.split("-")[-1]) + 1
-        else:
-            sequence = 1
-
-        return f"QSNAP-{current_year}-{sequence:04d}"
-
     # -------------------------------------------------------- Qdrant HTTP helpers
     async def _get_collection_stats(self, collection_name: str) -> Dict[str, Any]:
-        """Get collection info from Qdrant REST API."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{self.qdrant_url}/collections/{collection_name}")
             resp.raise_for_status()
@@ -145,23 +129,19 @@ class QdrantSnapshotService:
             }
 
     async def _qdrant_create_snapshot(self, collection_name: str) -> str:
-        """Tell Qdrant to create a snapshot. Returns the snapshot name."""
         async with httpx.AsyncClient(timeout=SNAPSHOT_TIMEOUT) as client:
             resp = await client.post(
                 f"{self.qdrant_url}/collections/{collection_name}/snapshots",
             )
             resp.raise_for_status()
             data = resp.json()
-            # Qdrant returns {"result": {"name": "...", ...}}
             return data["result"]["name"]
 
     async def _qdrant_download_snapshot(
         self, collection_name: str, snapshot_name: str, dest_path: Path
     ) -> int:
-        """Stream-download a Qdrant snapshot file. Returns file size in bytes."""
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         total_bytes = 0
-
         async with httpx.AsyncClient(timeout=SNAPSHOT_TIMEOUT) as client:
             url = f"{self.qdrant_url}/collections/{collection_name}/snapshots/{snapshot_name}"
             async with client.stream("GET", url) as resp:
@@ -170,22 +150,17 @@ class QdrantSnapshotService:
                     async for chunk in resp.aiter_bytes(STREAM_CHUNK_SIZE):
                         f.write(chunk)
                         total_bytes += len(chunk)
-
         return total_bytes
 
     async def _qdrant_upload_snapshot(
         self, collection_name: str, file_path: Path
     ) -> None:
-        """Upload a local snapshot file to Qdrant for restore."""
         file_size = file_path.stat().st_size
         logger.info(
             "Uploading snapshot {} ({:.1f} MB) to collection {}",
             file_path.name, file_size / (1024 * 1024), collection_name,
         )
-
-        # No read/write timeout for large file transfers
         timeout = httpx.Timeout(30.0, read=None, write=None)
-
         async with httpx.AsyncClient(timeout=timeout) as client:
             with open(file_path, "rb") as f:
                 resp = await client.post(
@@ -202,7 +177,6 @@ class QdrantSnapshotService:
     async def _qdrant_delete_snapshot(
         self, collection_name: str, snapshot_name: str
     ) -> None:
-        """Delete a snapshot from Qdrant's internal storage."""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.delete(
@@ -210,11 +184,9 @@ class QdrantSnapshotService:
                 )
                 resp.raise_for_status()
         except Exception as e:
-            # Non-fatal: the local copy is what matters
             logger.warning(f"Failed to delete Qdrant-side snapshot {snapshot_name}: {e}")
 
     async def list_collections(self) -> List[str]:
-        """List available Qdrant collections."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{self.qdrant_url}/collections")
             resp.raise_for_status()
@@ -225,7 +197,6 @@ class QdrantSnapshotService:
     # ---------------------------------------------------------- checksum
     @staticmethod
     def _calculate_sha256(file_path: Path) -> str:
-        """Calculate SHA256 checksum of a file."""
         h = hashlib.sha256()
         with open(file_path, "rb") as f:
             while True:
@@ -245,7 +216,6 @@ class QdrantSnapshotService:
         user: str,
         collection_name: str,
     ) -> None:
-        """Create a new Qdrant snapshot (runs in background)."""
         tracker = SnapshotJobTracker(db)
         snapshot_id = None
         lock_acquired = False
@@ -268,14 +238,13 @@ class QdrantSnapshotService:
                 current_step="Initializing Qdrant snapshot...",
             )
 
-            # Generate snapshot ID
-            snapshot_id = await self.generate_snapshot_id(db)
+            # Generate snapshot ID from disk scan
+            snapshot_id = generate_snapshot_id(self.backup_path, self.ID_PREFIX)
             logger.info(f"Creating Qdrant snapshot {snapshot_id} for collection {collection_name}")
 
             # Get collection stats
             await tracker.update_progress(
-                job_id=job_id,
-                progress_percent=10,
+                job_id=job_id, progress_percent=10,
                 current_step="Fetching collection statistics...",
             )
             stats = await self._get_collection_stats(collection_name)
@@ -284,38 +253,18 @@ class QdrantSnapshotService:
             snapshot_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             snapshot_dir = self.backup_path / snapshot_date / snapshot_id
             snapshot_dir.mkdir(parents=True, exist_ok=True)
-            local_file = snapshot_dir / "snapshot.snapshot"
-
-            # Create DB record with in_progress status
-            snapshot = QdrantSnapshot(
-                id=snapshot_id,
-                name=name,
-                description=description,
-                collection_name=collection_name,
-                file_path=str(local_file),
-                file_size=0,
-                points_count=stats["points_count"],
-                vectors_count=stats["vectors_count"],
-                created_by=user,
-                created_at=datetime.now(timezone.utc),
-                restored_count=0,
-                status="in_progress",
-            )
-            db.add(snapshot)
-            await db.commit()
+            local_file = snapshot_dir / self.BACKUP_FILENAME
 
             # Ask Qdrant to create snapshot
             await tracker.update_progress(
-                job_id=job_id,
-                progress_percent=20,
+                job_id=job_id, progress_percent=20,
                 current_step="Creating snapshot in Qdrant...",
             )
             qdrant_snapshot_name = await self._qdrant_create_snapshot(collection_name)
 
             # Download snapshot file
             await tracker.update_progress(
-                job_id=job_id,
-                progress_percent=40,
+                job_id=job_id, progress_percent=40,
                 current_step="Downloading snapshot file...",
             )
             file_size = await self._qdrant_download_snapshot(
@@ -324,13 +273,12 @@ class QdrantSnapshotService:
 
             # Calculate checksum
             await tracker.update_progress(
-                job_id=job_id,
-                progress_percent=85,
+                job_id=job_id, progress_percent=85,
                 current_step="Calculating checksum...",
             )
             checksum = self._calculate_sha256(local_file)
 
-            # Save metadata.json
+            # Write metadata.json — single source of truth
             metadata = {
                 "snapshot_id": snapshot_id,
                 "name": name,
@@ -343,16 +291,12 @@ class QdrantSnapshotService:
                 "vectors_count": stats["vectors_count"],
                 "file_size": file_size,
                 "checksum": checksum,
+                "status": "completed",
+                "restored_count": 0,
+                "qdrant_url": self.qdrant_url,
             }
             with open(snapshot_dir / "metadata.json", "w") as f:
                 json.dump(metadata, f, indent=2)
-
-            # Update DB record
-            snapshot.qdrant_snapshot_name = qdrant_snapshot_name
-            snapshot.file_size = file_size
-            snapshot.checksum = checksum
-            snapshot.status = "completed"
-            await db.commit()
 
             # Clean up Qdrant-side snapshot (we have the local copy)
             await self._qdrant_delete_snapshot(collection_name, qdrant_snapshot_name)
@@ -363,7 +307,6 @@ class QdrantSnapshotService:
                 progress_percent=100,
                 current_step="Snapshot created successfully",
             )
-
             logger.info(
                 f"Qdrant snapshot {snapshot_id} created ({file_size / 1024 / 1024:.2f} MB)"
             )
@@ -371,12 +314,29 @@ class QdrantSnapshotService:
         except Exception as e:
             logger.error(f"Error creating Qdrant snapshot: {e}")
 
+            # Write failed metadata if we got an ID
             if snapshot_id:
-                record = await db.get(QdrantSnapshot, snapshot_id)
-                if record:
-                    record.status = "failed"
-                    record.error_message = str(e)
-                    await db.commit()
+                snapshot_dir = (
+                    self.backup_path
+                    / datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    / snapshot_id
+                )
+                if snapshot_dir.exists():
+                    failed_meta = {
+                        "snapshot_id": snapshot_id,
+                        "name": name,
+                        "description": description,
+                        "collection_name": collection_name,
+                        "created_by": user,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "status": "failed",
+                        "error_message": str(e),
+                    }
+                    try:
+                        with open(snapshot_dir / "metadata.json", "w") as f:
+                            json.dump(failed_meta, f, indent=2)
+                    except Exception:
+                        pass
 
             await tracker.update_progress(
                 job_id=job_id,
@@ -395,9 +355,9 @@ class QdrantSnapshotService:
         job_id: str,
         snapshot_id: str,
         user: str,
+        date_str: Optional[str] = None,
         force: bool = False,
     ) -> None:
-        """Restore a Qdrant collection from a local snapshot (runs in background)."""
         tracker = SnapshotJobTracker(db)
         lock_acquired = False
 
@@ -419,17 +379,20 @@ class QdrantSnapshotService:
                 current_step="Loading snapshot information...",
             )
 
-            snapshot = await db.get(QdrantSnapshot, snapshot_id)
-            if not snapshot:
+            # Find snapshot on disk
+            snap = find_snapshot(
+                self.backup_path, snapshot_id, self.BACKUP_FILENAME, date_str=date_str
+            )
+            if not snap:
                 await tracker.update_progress(
                     job_id=job_id,
                     status="failed",
                     current_step="Snapshot not found",
-                    error_message=f"Snapshot {snapshot_id} not found",
+                    error_message=f"Snapshot {snapshot_id} not found on disk",
                 )
                 return
 
-            local_file = Path(snapshot.file_path)
+            local_file = Path(snap.file_path)
             if not local_file.exists():
                 await tracker.update_progress(
                     job_id=job_id,
@@ -445,13 +408,10 @@ class QdrantSnapshotService:
                 progress_percent=20,
                 current_step="Uploading snapshot to Qdrant...",
             )
-            await self._qdrant_upload_snapshot(snapshot.collection_name, local_file)
+            await self._qdrant_upload_snapshot(snap.collection_name, local_file)
 
-            # Update restore tracking
-            snapshot.restored_count += 1
-            snapshot.last_restored_at = datetime.now(timezone.utc)
-            snapshot.last_restored_by = user
-            await db.commit()
+            # Update restore tracking on disk
+            update_restore_tracking(snap.metadata_path, user)
 
             await tracker.update_progress(
                 job_id=job_id,
@@ -459,7 +419,6 @@ class QdrantSnapshotService:
                 progress_percent=100,
                 current_step="Restore completed successfully",
             )
-
             logger.info(f"Qdrant snapshot {snapshot_id} restored by {user}")
 
         except Exception as e:
@@ -476,127 +435,109 @@ class QdrantSnapshotService:
                 self.release_operation_lock()
 
     # ---------------------------------------------------------- list
-    async def list_snapshots(
+    def list_snapshots(
         self,
-        db: AsyncSession,
         page: int = 1,
         page_size: int = 20,
         collection_name: Optional[str] = None,
     ) -> QdrantSnapshotListResponse:
-        """List Qdrant snapshots with pagination."""
-        query = select(QdrantSnapshot).order_by(desc(QdrantSnapshot.created_at))
-
-        if collection_name:
-            query = query.where(QdrantSnapshot.collection_name == collection_name)
-
-        count_query = select(func.count()).select_from(QdrantSnapshot)
-        if collection_name:
-            count_query = count_query.where(QdrantSnapshot.collection_name == collection_name)
-
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
-
+        """List Qdrant snapshots from disk with pagination."""
+        all_snapshots = scan_qdrant_snapshots(
+            self.backup_path, collection_filter=collection_name
+        )
+        total = len(all_snapshots)
         offset = (page - 1) * page_size
-        query = query.limit(page_size).offset(offset)
-
-        result = await db.execute(query)
-        snapshots = result.scalars().all()
+        page_items = all_snapshots[offset : offset + page_size]
 
         return QdrantSnapshotListResponse(
             snapshots=[
                 QdrantSnapshotInfo(
-                    id=s.id,
+                    id=s.snapshot_id,
                     name=s.name,
                     description=s.description,
-                    collection_name=s.collection_name,
+                    collection_name=s.collection_name or "unknown",
                     file_size=s.file_size,
-                    points_count=s.points_count,
+                    points_count=s.points_count or 0,
                     created_by=s.created_by,
                     created_at=s.created_at,
                     status=s.status,
                     restored_count=s.restored_count,
                 )
-                for s in snapshots
+                for s in page_items
             ],
             total=total,
             page=page,
             page_size=page_size,
-            has_more=(offset + len(snapshots) < total),
+            has_more=(offset + len(page_items) < total),
         )
 
     # ---------------------------------------------------------- detail
-    async def get_snapshot_detail(
-        self, db: AsyncSession, snapshot_id: str
+    def get_snapshot_detail(
+        self,
+        snapshot_id: str,
+        date_str: Optional[str] = None,
     ) -> Optional[QdrantSnapshotDetail]:
-        """Get detailed info about a Qdrant snapshot."""
-        snapshot = await db.get(QdrantSnapshot, snapshot_id)
-        if not snapshot:
+        """Get detailed info about a Qdrant snapshot from disk."""
+        snap = find_snapshot(
+            self.backup_path, snapshot_id, self.BACKUP_FILENAME, date_str=date_str
+        )
+        if not snap:
             return None
 
         return QdrantSnapshotDetail(
-            id=snapshot.id,
-            name=snapshot.name,
-            description=snapshot.description,
-            collection_name=snapshot.collection_name,
-            qdrant_snapshot_name=snapshot.qdrant_snapshot_name,
-            file_path=snapshot.file_path,
-            file_size=snapshot.file_size,
-            checksum=snapshot.checksum,
-            points_count=snapshot.points_count,
-            vectors_count=snapshot.vectors_count,
-            created_by=snapshot.created_by,
-            created_at=snapshot.created_at,
-            restored_count=snapshot.restored_count,
-            last_restored_at=snapshot.last_restored_at,
-            last_restored_by=snapshot.last_restored_by,
-            status=snapshot.status,
-            error_message=snapshot.error_message,
+            id=snap.snapshot_id,
+            name=snap.name,
+            description=snap.description,
+            collection_name=snap.collection_name or "unknown",
+            qdrant_snapshot_name=snap.qdrant_snapshot_name,
+            file_path=snap.file_path,
+            file_size=snap.file_size,
+            checksum=snap.checksum,
+            points_count=snap.points_count or 0,
+            vectors_count=snap.vectors_count or 0,
+            created_by=snap.created_by,
+            created_at=snap.created_at,
+            restored_count=snap.restored_count,
+            last_restored_at=snap.last_restored_at,
+            last_restored_by=snap.last_restored_by,
+            status=snap.status,
+            error_message=snap.error_message,
         )
 
     # ---------------------------------------------------------- delete
-    async def delete_snapshot(
-        self, db: AsyncSession, snapshot_id: str, user: str
+    def delete_snapshot(
+        self,
+        snapshot_id: str,
+        user: str,
+        date_str: Optional[str] = None,
     ) -> DeleteQdrantSnapshotResponse:
-        """Delete a Qdrant snapshot (local file + DB record)."""
+        """Delete a Qdrant snapshot directory from disk."""
         try:
-            snapshot = await db.get(QdrantSnapshot, snapshot_id)
-            if not snapshot:
+            snap = find_snapshot(
+                self.backup_path, snapshot_id, self.BACKUP_FILENAME, date_str=date_str
+            )
+            if not snap:
                 return DeleteQdrantSnapshotResponse(
                     success=False,
                     message=f"Snapshot {snapshot_id} not found",
                     deleted_file=False,
                 )
 
-            # Delete local file
-            local_file = Path(snapshot.file_path)
-            deleted_file = False
+            snapshot_dir = snap.metadata_path.parent
+            shutil.rmtree(snapshot_dir)
 
-            if local_file.exists():
-                local_file.unlink()
-                deleted_file = True
-
-                # Delete metadata if present
-                snapshot_dir = local_file.parent
-                metadata_file = snapshot_dir / "metadata.json"
-                if metadata_file.exists():
-                    metadata_file.unlink()
-
-                # Remove dir if empty
-                try:
-                    snapshot_dir.rmdir()
-                except OSError:
-                    pass
-
-            # Delete DB record
-            await db.delete(snapshot)
-            await db.commit()
+            # Try to remove parent date dir if empty
+            try:
+                snapshot_dir.parent.rmdir()
+            except OSError:
+                pass
 
             logger.info(f"Qdrant snapshot {snapshot_id} deleted by {user}")
 
             return DeleteQdrantSnapshotResponse(
                 success=True,
                 message=f"Snapshot {snapshot_id} deleted successfully",
-                deleted_file=deleted_file,
+                deleted_file=True,
             )
 
         except Exception as e:
@@ -611,7 +552,6 @@ class QdrantSnapshotService:
     async def get_job_status(
         self, db: AsyncSession, job_id: str
     ) -> Optional[JobStatusResponse]:
-        """Get status of a Qdrant snapshot job."""
         job = await db.get(ProcessingJob, job_id)
         if not job:
             return None
@@ -625,73 +565,6 @@ class QdrantSnapshotService:
             completed_at=job.completed_at,
             error_message=job.error_message,
         )
-
-
-    # -------------------------------------------------------------- sync
-    async def sync_from_disk(self, db: AsyncSession) -> int:
-        """Scan backup directory for metadata.json files and upsert into qdrant_snapshots.
-
-        Returns the number of snapshots re-registered.
-        """
-        registered = 0
-        if not self.backup_path.exists():
-            return registered
-
-        result = await db.execute(select(QdrantSnapshot.id))
-        known_ids = {row[0] for row in result.all()}
-
-        # Sort descending by parent date directory so latest date wins for duplicate IDs
-        metadata_files = sorted(
-            self.backup_path.rglob("metadata.json"),
-            key=lambda p: p.parent.parent.name,
-            reverse=True,
-        )
-
-        for metadata_file in metadata_files:
-            try:
-                with open(metadata_file) as f:
-                    meta = json.load(f)
-
-                snap_id = meta.get("snapshot_id")
-                if not snap_id or snap_id in known_ids:
-                    continue
-
-                snapshot_dir = metadata_file.parent
-                snapshot_file = snapshot_dir / "snapshot.snapshot"
-                if not snapshot_file.exists():
-                    logger.warning("sync_from_disk: snapshot.snapshot missing for {}", snap_id)
-                    continue
-
-                created_at = datetime.fromisoformat(meta["created_at"])
-
-                snapshot = QdrantSnapshot(
-                    id=snap_id,
-                    name=meta.get("name", snap_id),
-                    description=meta.get("description"),
-                    collection_name=meta.get("collection_name", "unknown"),
-                    qdrant_snapshot_name=meta.get("qdrant_snapshot_name"),
-                    file_path=str(snapshot_file),
-                    file_size=meta.get("file_size", snapshot_file.stat().st_size),
-                    checksum=meta.get("checksum"),
-                    points_count=meta.get("points_count", 0),
-                    vectors_count=meta.get("vectors_count", 0),
-                    created_by=meta.get("created_by", "unknown"),
-                    created_at=created_at,
-                    restored_count=0,
-                    status="completed",
-                )
-                db.add(snapshot)
-                known_ids.add(snap_id)
-                registered += 1
-                logger.info("sync_from_disk: re-registered snapshot {} from {}", snap_id, snapshot_dir.parent.name)
-            except Exception as e:
-                logger.warning("sync_from_disk: failed to parse {}: {}", metadata_file, e)
-
-        if registered:
-            await db.commit()
-            logger.info("sync_from_disk: re-registered {} Qdrant snapshot(s)", registered)
-
-        return registered
 
 
 # Singleton
