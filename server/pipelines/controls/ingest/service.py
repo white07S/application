@@ -673,6 +673,7 @@ async def run_controls_ingestion(
             # Accumulators for batch inserts
             ref_rows: List[dict] = []
             ver_rows: List[dict] = []
+            ingested_control_ids: Set[str] = set()  # tracks all ref_control IDs across batches
             rel_parent_rows: List[dict] = []
             rel_owns_func_rows: List[dict] = []
             rel_owns_loc_rows: List[dict] = []
@@ -720,6 +721,7 @@ async def run_controls_ingestion(
                             "control_id": cid,
                             "created_at": tx_from,
                         })
+                        ingested_control_ids.add(cid)
 
                     # Close old version + relations if updating
                     if not is_new:
@@ -847,12 +849,11 @@ async def run_controls_ingestion(
                         valid_node_ids=valid_node_ids,
                         valid_theme_ids=valid_theme_ids,
                     )
-                    # Clear accumulators
+                    # Clear accumulators (parent edges kept for deferred insert)
                     ref_rows.clear()
                     ver_rows.clear()
                     cids_to_close_ver.clear()
                     cids_to_close_rel.clear()
-                    rel_parent_rows.clear()
                     rel_owns_func_rows.clear()
                     rel_owns_loc_rows.clear()
                     rel_related_func_rows.clear()
@@ -889,6 +890,29 @@ async def run_controls_ingestion(
                 valid_node_ids=valid_node_ids,
                 valid_theme_ids=valid_theme_ids,
             )
+
+            # ── Deferred parent-edge insert ─────────────────────────────
+            # All ref_control rows now exist, so parent FK references within
+            # the ingestion set are satisfied regardless of processing order.
+            # Filter out edges whose parent is truly missing (not in DB).
+            if rel_parent_rows:
+                valid_control_ids = existing_ids | ingested_control_ids
+                before = len(rel_parent_rows)
+                rel_parent_rows = [
+                    r for r in rel_parent_rows
+                    if r["parent_control_id"] in valid_control_ids
+                ]
+                skipped = before - len(rel_parent_rows)
+                if skipped:
+                    logger.warning(
+                        "rel_parent: skipped {} edges whose parent_control_id "
+                        "does not exist in src_controls_ref_control",
+                        skipped,
+                    )
+                if rel_parent_rows:
+                    await _execute_inserts(
+                        conn, src_controls_rel_parent, rel_parent_rows, "parent-edges",
+                    )
 
         # Transaction committed at this point
 
@@ -1148,8 +1172,9 @@ async def _flush_batch(
             )
         rel_risk_theme_rows[:] = filtered
 
-    if rel_parent_rows:
-        await _execute_inserts(conn, src_controls_rel_parent, rel_parent_rows, label)
+    # Parent edges are deferred — inserted after all batches so that
+    # parent ref_control rows from later batches already exist.
+
     if rel_owns_func_rows:
         await _execute_inserts(conn, src_controls_rel_owns_function, rel_owns_func_rows, label)
     if rel_owns_loc_rows:
