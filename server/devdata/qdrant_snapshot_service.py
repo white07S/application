@@ -631,7 +631,14 @@ class QdrantSnapshotService:
         result = await db.execute(select(QdrantSnapshot.id))
         known_ids = {row[0] for row in result.all()}
 
-        for metadata_file in self.backup_path.rglob("metadata.json"):
+        # Sort descending by parent date directory so latest date wins for duplicate IDs
+        metadata_files = sorted(
+            self.backup_path.rglob("metadata.json"),
+            key=lambda p: p.parent.parent.name,
+            reverse=True,
+        )
+
+        for metadata_file in metadata_files:
             try:
                 with open(metadata_file) as f:
                     meta = json.load(f)
@@ -667,7 +674,7 @@ class QdrantSnapshotService:
                 db.add(snapshot)
                 known_ids.add(snap_id)
                 registered += 1
-                logger.info("sync_from_disk: re-registered snapshot {}", snap_id)
+                logger.info("sync_from_disk: re-registered snapshot {} from {}", snap_id, snapshot_dir.parent.name)
             except Exception as e:
                 logger.warning("sync_from_disk: failed to parse {}: {}", metadata_file, e)
 

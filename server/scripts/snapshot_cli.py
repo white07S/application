@@ -11,13 +11,15 @@ snapshots it finds on disk.
 Usage:
     python snapshot_cli.py list                                          # List Postgres snapshots
     python snapshot_cli.py create --name "Backup Name"                   # Create Postgres snapshot
-    python snapshot_cli.py restore --id SNAP-2024-0001                   # Restore Postgres snapshot
+    python snapshot_cli.py restore --id SNAP-2024-0001                   # Restore Postgres snapshot (latest date)
+    python snapshot_cli.py restore --id SNAP-2024-0001 --date 2024-03-15 # Restore from a specific date
     python snapshot_cli.py delete --id SNAP-2024-0001                    # Delete Postgres snapshot
     python snapshot_cli.py status                                        # Check Postgres operation status
 
     python snapshot_cli.py --type qdrant list                            # List Qdrant snapshots
     python snapshot_cli.py --type qdrant create --name "Backup" --collection nfr_connect_controls
-    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001    # Restore Qdrant snapshot
+    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001                   # Restore Qdrant (latest date)
+    python snapshot_cli.py --type qdrant restore --id QSNAP-2026-0001 --date 2026-02-20 # Restore from specific date
     python snapshot_cli.py --type qdrant delete --id QSNAP-2026-0001     # Delete Qdrant snapshot
     python snapshot_cli.py --type qdrant status                          # Check Qdrant operation status
     python snapshot_cli.py --type qdrant collections                     # List Qdrant collections
@@ -143,6 +145,12 @@ async def pg_restore_snapshot(args):
         return
 
     async with get_db_session_context() as db:
+        # If --date provided, resolve and point DB record at that specific copy
+        if args.date:
+            resolved = await _resolve_pg_snapshot_by_date(db, args.id, args.date)
+            if not resolved:
+                return
+
         snapshot = await snapshot_service.get_snapshot_detail(db, args.id)
         if not snapshot:
             print(f"Snapshot {args.id} not found")
@@ -150,6 +158,7 @@ async def pg_restore_snapshot(args):
 
         print(f"Restoring from snapshot: {snapshot.name}")
         print(f"Created: {snapshot.created_at}")
+        print(f"File: {snapshot.file_path}")
         print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
 
         if not args.skip_confirm:
@@ -381,6 +390,12 @@ async def qdrant_restore_snapshot(args):
         return
 
     async with get_db_session_context() as db:
+        # If --date provided, resolve and point DB record at that specific copy
+        if args.date:
+            resolved = await _resolve_qdrant_snapshot_by_date(db, args.id, args.date)
+            if not resolved:
+                return
+
         snapshot = await qdrant_snapshot_service.get_snapshot_detail(db, args.id)
         if not snapshot:
             print(f"Snapshot {args.id} not found")
@@ -389,6 +404,7 @@ async def qdrant_restore_snapshot(args):
         print(f"Restoring from Qdrant snapshot: {snapshot.name}")
         print(f"Collection: {snapshot.collection_name}")
         print(f"Points: {snapshot.points_count}")
+        print(f"File: {snapshot.file_path}")
         print(f"Size: {snapshot.file_size / (1024 * 1024):.2f} MB")
 
         if not args.skip_confirm:
@@ -526,6 +542,122 @@ async def qdrant_list_collections(args):
 
 
 # ======================================================================
+# Date resolution helpers
+# ======================================================================
+
+async def _resolve_pg_snapshot_by_date(db, snap_id: str, date_str: str) -> bool:
+    """Point the DB record's file_path at a specific date folder, registering from disk if needed."""
+    from server.devdata.snapshot_models import PostgresSnapshot
+
+    backup_path = get_settings().postgres_backup_path
+    snapshot_dir = backup_path / date_str / snap_id
+    backup_file = snapshot_dir / "backup.dump"
+    metadata_file = snapshot_dir / "metadata.json"
+
+    if not backup_file.exists():
+        print(f"No backup found at {snapshot_dir}")
+        # List available dates for this ID
+        _print_available_dates(backup_path, snap_id, "backup.dump")
+        return False
+
+    # Ensure DB record exists (may need to register from disk)
+    snapshot = await db.get(PostgresSnapshot, snap_id)
+    if not snapshot and metadata_file.exists():
+        # Register from metadata.json
+        with open(metadata_file) as f:
+            meta = json.load(f)
+        snapshot = PostgresSnapshot(
+            id=snap_id,
+            name=meta.get("name", snap_id),
+            description=meta.get("description"),
+            file_path=str(backup_file),
+            file_size=meta.get("file_size", backup_file.stat().st_size),
+            checksum=meta.get("checksum"),
+            alembic_version=meta.get("alembic_version", "unknown"),
+            table_count=meta.get("table_count", 0),
+            total_records=meta.get("total_records", 0),
+            created_by=meta.get("created_by", "unknown"),
+            created_at=datetime.fromisoformat(meta["created_at"]),
+            restored_count=0,
+            is_scheduled=False,
+            status="completed",
+        )
+        db.add(snapshot)
+        await db.commit()
+        print(f"Registered snapshot {snap_id} from {date_str}")
+    elif snapshot:
+        # Update file_path to point at the date-specific copy
+        snapshot.file_path = str(backup_file)
+        await db.commit()
+    else:
+        print(f"No metadata.json found at {snapshot_dir}")
+        return False
+
+    return True
+
+
+async def _resolve_qdrant_snapshot_by_date(db, snap_id: str, date_str: str) -> bool:
+    """Point the DB record's file_path at a specific date folder, registering from disk if needed."""
+    from server.devdata.qdrant_snapshot_models import QdrantSnapshot
+
+    backup_path = get_settings().qdrant_backup_path
+    snapshot_dir = backup_path / date_str / snap_id
+    snapshot_file = snapshot_dir / "snapshot.snapshot"
+    metadata_file = snapshot_dir / "metadata.json"
+
+    if not snapshot_file.exists():
+        print(f"No snapshot found at {snapshot_dir}")
+        _print_available_dates(backup_path, snap_id, "snapshot.snapshot")
+        return False
+
+    snapshot = await db.get(QdrantSnapshot, snap_id)
+    if not snapshot and metadata_file.exists():
+        with open(metadata_file) as f:
+            meta = json.load(f)
+        snapshot = QdrantSnapshot(
+            id=snap_id,
+            name=meta.get("name", snap_id),
+            description=meta.get("description"),
+            collection_name=meta.get("collection_name", "unknown"),
+            qdrant_snapshot_name=meta.get("qdrant_snapshot_name"),
+            file_path=str(snapshot_file),
+            file_size=meta.get("file_size", snapshot_file.stat().st_size),
+            checksum=meta.get("checksum"),
+            points_count=meta.get("points_count", 0),
+            vectors_count=meta.get("vectors_count", 0),
+            created_by=meta.get("created_by", "unknown"),
+            created_at=datetime.fromisoformat(meta["created_at"]),
+            restored_count=0,
+            status="completed",
+        )
+        db.add(snapshot)
+        await db.commit()
+        print(f"Registered snapshot {snap_id} from {date_str}")
+    elif snapshot:
+        snapshot.file_path = str(snapshot_file)
+        await db.commit()
+    else:
+        print(f"No metadata.json found at {snapshot_dir}")
+        return False
+
+    return True
+
+
+def _print_available_dates(backup_path: Path, snap_id: str, expected_file: str):
+    """List date folders that contain a given snapshot ID."""
+    found = sorted(
+        (d.parent.name for d in backup_path.rglob(f"{snap_id}/{expected_file}")),
+        reverse=True,
+    )
+    if found:
+        print(f"Available dates for {snap_id}:")
+        for date in found:
+            print(f"  - {date}")
+    else:
+        print(f"No copies of {snap_id} found on disk.")
+
+
+# ======================================================================
 # Sync + Main
 # ======================================================================
 
@@ -571,6 +703,7 @@ def main():
     # Restore command
     restore_parser = subparsers.add_parser('restore', help='Restore from a snapshot')
     restore_parser.add_argument('--id', required=True, help='Snapshot ID')
+    restore_parser.add_argument('--date', help='Date folder (YYYY-MM-DD) when same ID exists under multiple dates')
     restore_parser.add_argument('--skip-backup', action='store_true', help='(Postgres only) Skip pre-restore backup')
     restore_parser.add_argument('--skip-confirm', action='store_true', help='Skip confirmation prompt')
     restore_parser.add_argument('--force', action='store_true', help='Force restore')
