@@ -618,5 +618,65 @@ class QdrantSnapshotService:
         )
 
 
+    # -------------------------------------------------------------- sync
+    async def sync_from_disk(self, db: AsyncSession) -> int:
+        """Scan backup directory for metadata.json files and upsert into qdrant_snapshots.
+
+        Returns the number of snapshots re-registered.
+        """
+        registered = 0
+        if not self.backup_path.exists():
+            return registered
+
+        result = await db.execute(select(QdrantSnapshot.id))
+        known_ids = {row[0] for row in result.all()}
+
+        for metadata_file in self.backup_path.rglob("metadata.json"):
+            try:
+                with open(metadata_file) as f:
+                    meta = json.load(f)
+
+                snap_id = meta.get("snapshot_id")
+                if not snap_id or snap_id in known_ids:
+                    continue
+
+                snapshot_dir = metadata_file.parent
+                snapshot_file = snapshot_dir / "snapshot.snapshot"
+                if not snapshot_file.exists():
+                    logger.warning("sync_from_disk: snapshot.snapshot missing for {}", snap_id)
+                    continue
+
+                created_at = datetime.fromisoformat(meta["created_at"])
+
+                snapshot = QdrantSnapshot(
+                    id=snap_id,
+                    name=meta.get("name", snap_id),
+                    description=meta.get("description"),
+                    collection_name=meta.get("collection_name", "unknown"),
+                    qdrant_snapshot_name=meta.get("qdrant_snapshot_name"),
+                    file_path=str(snapshot_file),
+                    file_size=meta.get("file_size", snapshot_file.stat().st_size),
+                    checksum=meta.get("checksum"),
+                    points_count=meta.get("points_count", 0),
+                    vectors_count=meta.get("vectors_count", 0),
+                    created_by=meta.get("created_by", "unknown"),
+                    created_at=created_at,
+                    restored_count=0,
+                    status="completed",
+                )
+                db.add(snapshot)
+                known_ids.add(snap_id)
+                registered += 1
+                logger.info("sync_from_disk: re-registered snapshot {}", snap_id)
+            except Exception as e:
+                logger.warning("sync_from_disk: failed to parse {}: {}", metadata_file, e)
+
+        if registered:
+            await db.commit()
+            logger.info("sync_from_disk: re-registered {} Qdrant snapshot(s)", registered)
+
+        return registered
+
+
 # Singleton
 qdrant_snapshot_service = QdrantSnapshotService()

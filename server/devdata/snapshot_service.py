@@ -905,5 +905,67 @@ class PostgresSnapshotService:
         )
 
 
+    # -------------------------------------------------------------- sync
+    async def sync_from_disk(self, db: AsyncSession) -> int:
+        """Scan backup directory for metadata.json files and upsert into postgres_snapshots.
+
+        Returns the number of snapshots re-registered.
+        """
+        registered = 0
+        if not self.backup_path.exists():
+            return registered
+
+        # Collect all known IDs so we skip what's already tracked
+        result = await db.execute(select(PostgresSnapshot.id))
+        known_ids = {row[0] for row in result.all()}
+
+        for metadata_file in self.backup_path.rglob("metadata.json"):
+            try:
+                with open(metadata_file) as f:
+                    meta = json.load(f)
+
+                snap_id = meta.get("snapshot_id")
+                if not snap_id or snap_id in known_ids:
+                    continue
+
+                # Resolve backup file next to metadata.json
+                snapshot_dir = metadata_file.parent
+                backup_file = snapshot_dir / "backup.dump"
+                if not backup_file.exists():
+                    logger.warning("sync_from_disk: backup.dump missing for {}", snap_id)
+                    continue
+
+                created_at = datetime.fromisoformat(meta["created_at"])
+
+                snapshot = PostgresSnapshot(
+                    id=snap_id,
+                    name=meta.get("name", snap_id),
+                    description=meta.get("description"),
+                    file_path=str(backup_file),
+                    file_size=meta.get("file_size", backup_file.stat().st_size),
+                    checksum=meta.get("checksum"),
+                    alembic_version=meta.get("alembic_version", "unknown"),
+                    table_count=meta.get("table_count", 0),
+                    total_records=meta.get("total_records", 0),
+                    created_by=meta.get("created_by", "unknown"),
+                    created_at=created_at,
+                    restored_count=0,
+                    is_scheduled=False,
+                    status="completed",
+                )
+                db.add(snapshot)
+                known_ids.add(snap_id)
+                registered += 1
+                logger.info("sync_from_disk: re-registered snapshot {}", snap_id)
+            except Exception as e:
+                logger.warning("sync_from_disk: failed to parse {}: {}", metadata_file, e)
+
+        if registered:
+            await db.commit()
+            logger.info("sync_from_disk: re-registered {} PostgreSQL snapshot(s)", registered)
+
+        return registered
+
+
 # Create singleton instance
 snapshot_service = PostgresSnapshotService()

@@ -2,6 +2,12 @@
 """
 Snapshot Management CLI — PostgreSQL & Qdrant
 
+On every invocation the CLI automatically syncs snapshot metadata from disk
+(metadata.json files written alongside each backup) into the PostgreSQL
+catalog tables.  This means snapshots are recoverable even after the database
+has been wiped and re-migrated — the first CLI command will re-register all
+snapshots it finds on disk.
+
 Usage:
     python snapshot_cli.py list                                          # List Postgres snapshots
     python snapshot_cli.py create --name "Backup Name"                   # Create Postgres snapshot
@@ -520,8 +526,21 @@ async def qdrant_list_collections(args):
 
 
 # ======================================================================
-# Main
+# Sync + Main
 # ======================================================================
+
+async def _run_with_sync(handler, args):
+    """Re-register any on-disk snapshots missing from the DB, then run the handler."""
+    from server.devdata.qdrant_snapshot_service import qdrant_snapshot_service
+
+    async with get_db_session_context() as db:
+        pg_count = await snapshot_service.sync_from_disk(db)
+        qdrant_count = await qdrant_snapshot_service.sync_from_disk(db)
+        if pg_count or qdrant_count:
+            print(f"Synced from disk: {pg_count} Postgres + {qdrant_count} Qdrant snapshot(s)")
+
+    await handler(args)
+
 
 def main():
     """Main CLI entry point."""
@@ -606,7 +625,7 @@ def main():
     s = get_settings()
     init_engine(s.postgres_url, s.postgres_pool_size, s.postgres_max_overflow)
 
-    asyncio.run(handler(args))
+    asyncio.run(_run_with_sync(handler, args))
 
 
 if __name__ == '__main__':
