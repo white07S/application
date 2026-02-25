@@ -391,6 +391,16 @@ class PostgresBackupHandler:
         if progress_callback:
             await self._emit_progress(progress_callback, "Initializing restore...", 10)
 
+        # Known benign pg_restore errors (e.g. PG version mismatch for
+        # non-critical SET commands).  If the ONLY errors are benign ones
+        # the restore is treated as successful despite a non-zero exit code.
+        _BENIGN_ERROR_PATTERNS = [
+            "transaction_timeout",
+            "does not exist, skipping",          # --clean --if-exists drops
+            "no matching tables",                # harmless schema mismatch
+            "role \"" ,                          # role ownership warnings
+        ]
+
         try:
             # Execute pg_restore
             process = await asyncio.create_subprocess_exec(
@@ -404,9 +414,10 @@ class PostgresBackupHandler:
             stdout_lines = []
             stderr_lines = []
             object_count = 0
+            total_objects = 0  # estimated from first pass
 
             async def read_stream(stream, lines_list, is_stderr=False):
-                nonlocal object_count
+                nonlocal object_count, total_objects
                 while True:
                     line = await stream.readline()
                     if not line:
@@ -414,15 +425,15 @@ class PostgresBackupHandler:
                     line_str = line.decode('utf-8', errors='replace').strip()
                     lines_list.append(line_str)
 
-                    # Track progress from verbose output
                     if is_stderr and progress_callback:
-                        if any(keyword in line_str.lower() for keyword in ['creating', 'processing', 'restoring']):
+                        if any(kw in line_str.lower() for kw in ['creating', 'processing', 'restoring']):
                             object_count += 1
-                            # Estimate progress
+                            # Use a log scale so progress doesn't stall
+                            pct = min(90, int(10 + 80 * (1 - 1 / (1 + object_count / 50))))
                             await self._emit_progress(
                                 progress_callback,
                                 f"Restoring object {object_count}...",
-                                min(90, 10 + object_count),
+                                pct,
                             )
 
             # Read both stdout and stderr concurrently
@@ -438,20 +449,39 @@ class PostgresBackupHandler:
             if temp_path and temp_path.exists():
                 temp_path.unlink()
 
-            if return_code == 0:
-                if progress_callback:
-                    await self._emit_progress(progress_callback, "Restore completed", 100)
+            stderr_text = '\n'.join(stderr_lines)
+
+            # Check if all errors are benign
+            success = return_code == 0
+            if not success:
+                real_errors = []
+                for line in stderr_lines:
+                    if "error:" in line.lower():
+                        if not any(bp in line for bp in _BENIGN_ERROR_PATTERNS):
+                            real_errors.append(line)
+                if not real_errors:
+                    logger.warning(
+                        "pg_restore exited with code {} but all errors are benign, treating as success",
+                        return_code,
+                    )
+                    success = True
+                else:
+                    logger.error(
+                        "pg_restore failed with return code {} ({} fatal error(s))",
+                        return_code, len(real_errors),
+                    )
+
+            if success and progress_callback:
+                await self._emit_progress(progress_callback, "Restore completed", 100)
                 logger.info(f"Restore successful from {backup_path}")
-            else:
-                logger.error(f"pg_restore failed with return code {return_code}")
 
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
             return SubprocessResult(
-                success=(return_code == 0),
+                success=success,
                 return_code=return_code,
                 stdout='\n'.join(stdout_lines),
-                stderr='\n'.join(stderr_lines),
+                stderr=stderr_text,
                 duration_seconds=duration
             )
 

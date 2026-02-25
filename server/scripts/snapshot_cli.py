@@ -185,40 +185,33 @@ async def pg_restore_snapshot(args):
         db.add(job)
         await db.commit()
 
-        print("Starting restore...")
+        print("Starting restore (progress logged to server logs)...")
 
-        task = asyncio.create_task(
-            snapshot_service.restore_snapshot(
-                db=db,
-                job_id=job_id,
-                snapshot_id=args.id,
-                user=args.user or "cli_user",
-                create_pre_restore_backup=not args.skip_backup,
-                force=args.force
-            )
+        # pg_restore drops/recreates the DB, so we cannot poll
+        # processing_jobs during the restore.  Just await completion.
+        result = await snapshot_service.restore_snapshot(
+            db=db,
+            job_id=job_id,
+            snapshot_id=args.id,
+            user=args.user or "cli_user",
+            create_pre_restore_backup=not args.skip_backup,
+            force=args.force
         )
 
-        prev_percent = 0
-        while not task.done():
-            await asyncio.sleep(2)
-            job = await db.get(ProcessingJob, job_id)
-            if job:
-                if job.progress_percent != prev_percent:
-                    print(f"Progress: {job.progress_percent}% - {job.current_step}")
-                    prev_percent = job.progress_percent
-                if job.status == "completed":
-                    print("Database restored successfully!")
-                    print("\nIMPORTANT: You may need to restart the application and re-run data ingestion:")
-                    print("   1. Restart the server to reconnect to the restored database")
-                    print("   2. Run context provider ingestion if needed")
-                    print("   3. Run control ingestion if needed")
-                    print("   4. Re-index Qdrant collections if needed")
-                    break
-                elif job.status == "failed":
-                    print(f"Restore failed: {job.error_message}")
-                    break
-
-        await task
+        # Check final status after restore completes
+        await db.rollback()  # clear any stale transaction state
+        job = await db.get(ProcessingJob, job_id)
+        if job and job.status == "completed":
+            print("Database restored successfully!")
+            print("\nIMPORTANT: You may need to restart the application and re-run data ingestion:")
+            print("   1. Restart the server to reconnect to the restored database")
+            print("   2. Run context provider ingestion if needed")
+            print("   3. Run control ingestion if needed")
+            print("   4. Re-index Qdrant collections if needed")
+        elif job and job.status == "failed":
+            print(f"Restore failed: {job.error_message}")
+        else:
+            print("Restore finished (check server logs for details).")
 
 
 async def pg_delete_snapshot(args):

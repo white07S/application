@@ -431,6 +431,26 @@ class PostgresSnapshotService:
             if lock_acquired:
                 self.release_operation_lock()
 
+    @staticmethod
+    async def _ensure_job_record(db: AsyncSession, job_id: str) -> None:
+        """Re-create job record if pg_restore replaced the DB contents."""
+        existing = await db.get(ProcessingJob, job_id)
+        if existing:
+            return
+        job = ProcessingJob(
+            id=job_id,
+            job_type="snapshot_restore",
+            batch_id=0,
+            upload_id="restored",
+            status="running",
+            progress_percent=0,
+            current_step="Finalizing...",
+            started_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(job)
+        await db.commit()
+
     async def restore_snapshot(
         self,
         db: AsyncSession,
@@ -577,13 +597,11 @@ class PostgresSnapshotService:
             )
 
             async def progress_callback(step: str, percent: int):
-                # Map pg_restore progress to overall progress (30-95%)
+                # During pg_restore the DB is being dropped/recreated, so
+                # writing progress to processing_jobs is impossible.  Log
+                # to console instead.
                 overall_percent = 30 + int(percent * 0.65)
-                await tracker.update_progress(
-                    job_id=job_id,
-                    progress_percent=overall_percent,
-                    current_step=step
-                )
+                logger.info("pg_restore progress: {}% - {}", overall_percent, step)
 
             # Use parallel jobs for better performance
             parallel_jobs = getattr(self.settings, 'postgres_backup_parallel_jobs', 4)
@@ -595,14 +613,24 @@ class PostgresSnapshotService:
                 progress_callback=progress_callback
             )
 
-            if result.success:
-                # Update snapshot restore tracking
-                snapshot.restored_count += 1
-                snapshot.last_restored_at = datetime.now(timezone.utc)
-                snapshot.last_restored_by = user
-                await db.commit()
+            # pg_restore --clean drops/recreates tables in the same DB,
+            # which poisons the session's transaction.  Rollback clears the
+            # failed-transaction state so subsequent SQL works again.
+            await db.rollback()
 
-                # Update job as completed
+            if result.success:
+                # Re-fetch snapshot — ORM object was invalidated by rollback
+                snapshot = await db.get(PostgresSnapshot, snapshot_id)
+                if snapshot:
+                    snapshot.restored_count += 1
+                    snapshot.last_restored_at = datetime.now(timezone.utc)
+                    snapshot.last_restored_by = user
+                    await db.commit()
+
+                # Job record may have been replaced by the restored DB
+                # content, so re-create it before updating status.
+                await self._ensure_job_record(db, job_id)
+
                 await tracker.update_progress(
                     job_id=job_id,
                     status="completed",
@@ -613,7 +641,8 @@ class PostgresSnapshotService:
                 logger.info(f"Successfully restored snapshot {snapshot_id} by {user}")
                 return pre_restore_snapshot_id
             else:
-                # Update job as failed
+                await self._ensure_job_record(db, job_id)
+
                 await tracker.update_progress(
                     job_id=job_id,
                     status="failed",
@@ -627,13 +656,17 @@ class PostgresSnapshotService:
         except Exception as e:
             logger.error(f"Error restoring snapshot: {e}")
 
-            # Update job as failed
-            await tracker.update_progress(
-                job_id=job_id,
-                status="failed",
-                current_step="Unexpected error",
-                error_message=str(e)
-            )
+            try:
+                await db.rollback()
+                await self._ensure_job_record(db, job_id)
+                await tracker.update_progress(
+                    job_id=job_id,
+                    status="failed",
+                    current_step="Unexpected error",
+                    error_message=str(e)
+                )
+            except Exception as inner:
+                logger.error(f"Failed to update job status after error: {inner}")
             return None
         finally:
             # Release lock if acquired

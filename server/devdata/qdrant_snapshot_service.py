@@ -178,18 +178,26 @@ class QdrantSnapshotService:
     ) -> None:
         """Upload a local snapshot file to Qdrant for restore."""
         file_size = file_path.stat().st_size
+        logger.info(
+            "Uploading snapshot {} ({:.1f} MB) to collection {}",
+            file_path.name, file_size / (1024 * 1024), collection_name,
+        )
 
-        async with httpx.AsyncClient(timeout=SNAPSHOT_TIMEOUT) as client:
+        # No read/write timeout for large file transfers
+        timeout = httpx.Timeout(30.0, read=None, write=None)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
             with open(file_path, "rb") as f:
                 resp = await client.post(
                     f"{self.qdrant_url}/collections/{collection_name}/snapshots/upload",
-                    content=f,
-                    headers={
-                        "Content-Type": "application/octet-stream",
-                        "Content-Length": str(file_size),
-                    },
+                    files={"snapshot": (file_path.name, f, "application/octet-stream")},
                 )
-                resp.raise_for_status()
+            if resp.status_code >= 400:
+                logger.error(
+                    "Qdrant upload failed: status={} body={}",
+                    resp.status_code, resp.text[:500],
+                )
+            resp.raise_for_status()
 
     async def _qdrant_delete_snapshot(
         self, collection_name: str, snapshot_name: str
@@ -455,12 +463,13 @@ class QdrantSnapshotService:
             logger.info(f"Qdrant snapshot {snapshot_id} restored by {user}")
 
         except Exception as e:
-            logger.error(f"Error restoring Qdrant snapshot: {e}")
+            error_msg = f"{type(e).__name__}: {e}"
+            logger.error("Error restoring Qdrant snapshot: {}", error_msg, exc_info=True)
             await tracker.update_progress(
                 job_id=job_id,
                 status="failed",
                 current_step="Unexpected error",
-                error_message=str(e),
+                error_message=error_msg,
             )
         finally:
             if lock_acquired:
