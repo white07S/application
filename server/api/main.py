@@ -9,6 +9,7 @@ from server.devdata.api.router import router as devdata_router
 from server.devdata_qdrant.api.router import router as devdata_qdrant_router
 from server.explorer.filters.api.router import router as explorer_filters_router
 from server.explorer.controls.api.router import router as explorer_controls_router
+from server.explorer.dashboard.api.router import router as dashboard_router
 from . import docs
 from . import health
 from . import stats
@@ -24,6 +25,7 @@ api_router.include_router(devdata_router)
 api_router.include_router(devdata_qdrant_router)
 api_router.include_router(explorer_filters_router)
 api_router.include_router(explorer_controls_router)
+api_router.include_router(dashboard_router)
 api_router.include_router(docs.router)
 api_router.include_router(health.router)
 api_router.include_router(stats.router)

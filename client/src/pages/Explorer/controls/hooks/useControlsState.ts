@@ -8,6 +8,7 @@ import {
     ControlGroup,
     GroupByField,
     SemanticFeature,
+    CommittedSearch,
     DateField,
     AppliedSidebarFilters,
     EMPTY_SIDEBAR_FILTERS,
@@ -32,6 +33,7 @@ const initialState: ControlsViewState = {
     dateField: 'created_on' as DateField,
     searchTags: [],
     expandedGroups: new Set<string>(),
+    committedSearch: null,
     // Server-driven state
     controls: [],
     cursor: null,
@@ -113,6 +115,25 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
                 cursor: action.payload.cursor,
                 hasMore: action.payload.hasMore,
             };
+        case 'EXECUTE_SEARCH':
+            return {
+                ...state,
+                committedSearch: {
+                    searchQuery: state.searchQuery,
+                    searchMode: state.searchMode,
+                    searchTags: [...state.searchTags],
+                    semanticFeatures: Array.from(state.semanticFeatures),
+                },
+            };
+        case 'CLEAR_SEARCH':
+            return {
+                ...state,
+                searchQuery: '',
+                searchMode: 'keyword',
+                searchTags: [],
+                semanticFeatures: new Set<SemanticFeature>(['control_title', 'control_description']),
+                committedSearch: null,
+            };
         case 'RESET_CONTROLS':
             return {
                 ...state,
@@ -188,11 +209,14 @@ function buildSearchParams(
         params.relationship_scope = appliedFilters.relationshipScope;
     }
 
-    // Search
-    if (state.searchQuery.trim()) {
-        params.search_query = state.searchQuery.trim();
-        params.search_mode = state.searchMode;
-        params.search_fields = Array.from(state.semanticFeatures);
+    // Search — use committedSearch; skip when sidebar filters are active
+    if (state.committedSearch && !hasSidebar) {
+        const cs = state.committedSearch;
+        if (cs.searchQuery.trim()) {
+            params.search_query = cs.searchQuery.trim();
+            params.search_mode = cs.searchMode;
+            params.search_fields = cs.semanticFeatures;
+        }
     }
 
     // Toolbar filters
@@ -215,13 +239,28 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
     const [state, dispatch] = useReducer(reducer, initialState);
     const { getApiAccessToken } = useAuth();
     const abortRef = useRef<AbortController | null>(null);
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const hasSidebarFilters = useMemo(() =>
+        appliedFilters.functions.length > 0 ||
+        appliedFilters.locations.length > 0 ||
+        appliedFilters.consolidated_entities.length > 0 ||
+        appliedFilters.assessment_units.length > 0 ||
+        appliedFilters.risk_themes.length > 0,
+        [appliedFilters],
+    );
+
+    // Auto-clear search when sidebar filters become active
+    useEffect(() => {
+        if (hasSidebarFilters && state.committedSearch) {
+            dispatch({ type: 'CLEAR_SEARCH' });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasSidebarFilters]);
 
     // Build a dependency key from params that should trigger a new fetch
+    // Draft search fields are excluded — only committedSearch triggers fetches
     const searchDepsKey = JSON.stringify({
-        q: state.searchQuery,
-        mode: state.searchMode,
-        features: Array.from(state.semanticFeatures).sort(),
+        committed: state.committedSearch,
         keyControl: state.filterKeyControl,
         activeOnly: state.filterActiveOnly,
         level1: state.filterLevel1,
@@ -233,18 +272,16 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
         filters: appliedFilters,
     });
 
-    // Fetch on param changes (debounced)
+    // Fetch on param changes (immediate — search is explicit, other triggers are discrete)
     useEffect(() => {
-        // Cancel previous request
         if (abortRef.current) abortRef.current.abort();
-        if (debounceRef.current) clearTimeout(debounceRef.current);
 
         dispatch({ type: 'RESET_CONTROLS' });
 
-        debounceRef.current = setTimeout(async () => {
-            const controller = new AbortController();
-            abortRef.current = controller;
+        const controller = new AbortController();
+        abortRef.current = controller;
 
+        (async () => {
             dispatch({ type: 'FETCH_START' });
             try {
                 const token = await getApiAccessToken();
@@ -267,11 +304,10 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
                 if (err?.name === 'AbortError') return;
                 dispatch({ type: 'FETCH_ERROR', payload: err?.message || 'Failed to fetch controls' });
             }
-        }, 300);
+        })();
 
         return () => {
             if (abortRef.current) abortRef.current.abort();
-            if (debounceRef.current) clearTimeout(debounceRef.current);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchDepsKey]);
@@ -322,5 +358,6 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
         loading: state.loading,
         loadingMore: state.loadingMore,
         hasMore: state.hasMore,
+        hasSidebarFilters,
     };
 }

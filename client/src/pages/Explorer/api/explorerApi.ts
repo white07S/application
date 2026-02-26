@@ -1,4 +1,10 @@
 import { appConfig } from '../../../config/appConfig';
+import type {
+    ControlDetailData,
+    ControlVersionSummary,
+    ControlDiffData,
+    ControlBrief,
+} from '../controls/types';
 
 const BASE = `${appConfig.api.baseUrl}/api/v2/explorer/filters`;
 
@@ -223,6 +229,74 @@ export async function searchControls(
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(params),
+        signal,
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    return res.json();
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Control Detail Overlay APIs
+// ──────────────────────────────────────────────────────────────────────
+
+export async function fetchControlDetail(
+    token: string,
+    controlId: string,
+    signal?: AbortSignal,
+): Promise<ControlDetailData> {
+    const res = await fetch(`${CONTROLS_BASE}/${encodeURIComponent(controlId)}/detail`, {
+        headers: { 'X-MS-TOKEN-AAD': token },
+        signal,
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    return res.json();
+}
+
+export async function fetchControlVersions(
+    token: string,
+    controlId: string,
+    signal?: AbortSignal,
+): Promise<{ control_id: string; versions: ControlVersionSummary[] }> {
+    const res = await fetch(`${CONTROLS_BASE}/${encodeURIComponent(controlId)}/versions`, {
+        headers: { 'X-MS-TOKEN-AAD': token },
+        signal,
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    return res.json();
+}
+
+export async function fetchControlDiff(
+    token: string,
+    controlId: string,
+    fromTx: string,
+    toTx: string,
+    signal?: AbortSignal,
+): Promise<ControlDiffData> {
+    const res = await fetch(`${CONTROLS_BASE}/${encodeURIComponent(controlId)}/diff`, {
+        method: 'POST',
+        headers: {
+            'X-MS-TOKEN-AAD': token,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from_tx: fromTx, to_tx: toTx }),
+        signal,
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    return res.json();
+}
+
+export async function fetchControlDescriptions(
+    token: string,
+    controlIds: string[],
+    signal?: AbortSignal,
+): Promise<{ controls: ControlBrief[] }> {
+    const res = await fetch(`${CONTROLS_BASE}/descriptions`, {
+        method: 'POST',
+        headers: {
+            'X-MS-TOKEN-AAD': token,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ control_ids: controlIds }),
         signal,
     });
     if (!res.ok) throw new Error(`Server error: ${res.status}`);

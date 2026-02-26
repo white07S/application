@@ -341,8 +341,17 @@ async def _run_ingestion_background(job_id: str, batch_id: int, upload_id: str) 
                 from server.cache import invalidate_namespace
                 await invalidate_namespace("explorer")
                 await invalidate_namespace("stats")
+                await invalidate_namespace("dashboard")
             except Exception as cache_err:
                 logger.warning("Cache invalidation after ingestion failed (non-fatal): {}", cache_err)
+
+            # Capture dashboard snapshot for time-series tracking
+            try:
+                from server.explorer.dashboard.snapshot_builder import capture_dashboard_snapshot
+                snapshot_id = await capture_dashboard_snapshot(upload_id=upload_id)
+                logger.info("Dashboard snapshot captured: snapshot_id={}", snapshot_id)
+            except Exception as snap_err:
+                logger.warning("Dashboard snapshot failed (non-fatal): {}", snap_err)
 
             logger.info(
                 "Ingestion job completed: job_id={}, total={}, new={}, changed={}, unchanged={}",

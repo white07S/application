@@ -11,11 +11,12 @@ interface Props {
     hasMore?: boolean;
     loadingMore?: boolean;
     onLoadMore?: () => void;
+    onShowDetails?: (controlId: string) => void;
 }
 
 export const ControlsList: React.FC<Props> = ({
     groups, expandedGroups, onToggleGroup, isGrouped,
-    hasMore = false, loadingMore = false, onLoadMore,
+    hasMore = false, loadingMore = false, onLoadMore, onShowDetails,
 }) => {
     const sentinelRef = useRef<HTMLDivElement>(null);
     const totalControls = groups.reduce((sum, g) => sum + g.controls.length, 0);
@@ -70,7 +71,7 @@ export const ControlsList: React.FC<Props> = ({
         return (
             <div className="space-y-2">
                 {groups[0]?.controls.map((item) => (
-                    <ControlCard key={item.control.control_id} item={item} />
+                    <ControlCard key={item.control.control_id} item={item} onShowDetails={onShowDetails} />
                 ))}
                 {loadMoreIndicator}
             </div>
@@ -90,7 +91,7 @@ export const ControlsList: React.FC<Props> = ({
                     {isExpanded(group.key) && (
                         <div className="space-y-2 mt-2">
                             {group.controls.map((item) => (
-                                <ControlCard key={item.control.control_id} item={item} />
+                                <ControlCard key={item.control.control_id} item={item} onShowDetails={onShowDetails} />
                             ))}
                         </div>
                     )}

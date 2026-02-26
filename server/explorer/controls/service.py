@@ -13,9 +13,17 @@ from server.config.qdrant import get_qdrant_client
 from server.explorer.shared.embeddings import embed_query
 from server.explorer.shared.models import (
     SEARCH_FIELD_NAMES,
+    AIEnrichmentDetailResponse,
     AIEnrichmentResponse,
-    ControlResponse,
+    ControlBriefResponse,
+    ControlDescriptionsResponse,
+    ControlDetailResponse,
+    ControlDiffResponse,
     ControlRelationshipsResponse,
+    ControlResponse,
+    ControlVersionListResponse,
+    ControlVersionSnapshot,
+    ControlVersionSummary,
     ControlWithDetailsResponse,
     ControlsSearchParams,
     ControlsSearchResponse,
@@ -84,6 +92,29 @@ _L2_YES_NO_COLS = [
     "frequency_yes_no", "preventative_detective_yes_no",
     "automation_level_yes_no", "followup_yes_no",
     "escalation_yes_no", "evidence_yes_no", "abbreviations_yes_no",
+]
+
+# _details narrative columns on enrichment (for detail overlay)
+_DETAILS_COL_NAMES = [
+    "what_details", "where_details", "who_details", "when_details",
+    "why_details", "what_why_details", "risk_theme_details",
+    "frequency_details", "preventative_detective_details",
+    "automation_level_details", "followup_details", "escalation_details",
+    "evidence_details", "abbreviations_details",
+]
+
+# Extended ver_control columns for the detail overlay (beyond the 17 in _load_controls)
+_EXTENDED_PEOPLE_COLS = [
+    "control_delegate", "control_delegate_gpn",
+    "control_assessor", "control_assessor_gpn",
+    "control_created_by", "control_created_by_gpn",
+    "last_control_modification_requested_by",
+    "last_control_modification_requested_by_gpn",
+    "control_administrator", "control_administrator_gpn",
+]
+
+_EXTENDED_COMPLIANCE_COLS = [
+    "ccar_relevant", "bcbs239_relevant", "sox_rationale", "sox_assertions",
 ]
 
 
@@ -1057,3 +1088,281 @@ async def _load_similar_controls(
             rank=r["rank"],
         ))
     return result
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Control Detail Overlay — single-control endpoints
+# ──────────────────────────────────────────────────────────────────────
+
+
+async def get_control_detail(control_id: str) -> ControlDetailResponse:
+    """Load the full detail for a single control (overlay view)."""
+    engine = get_engine()
+    vc = ver_control
+
+    async with engine.connect() as conn:
+        # 1. Core control + extended columns
+        core_cols = [
+            vc.c.ref_control_id, vc.c.control_title, vc.c.control_description,
+            vc.c.key_control, vc.c.hierarchy_level, vc.c.preventative_detective,
+            vc.c.manual_automated, vc.c.execution_frequency, vc.c.four_eyes_check,
+            vc.c.control_status, vc.c.evidence_description,
+            vc.c.local_functional_information, vc.c.last_modified_on,
+            vc.c.control_created_on, vc.c.control_owner, vc.c.control_owner_gpn,
+            vc.c.sox_relevant,
+        ]
+        ext_cols = [getattr(vc.c, c) for c in _EXTENDED_PEOPLE_COLS + _EXTENDED_COMPLIANCE_COLS]
+
+        q = (
+            select(*core_cols, *ext_cols)
+            .where(_is_current(vc.c.tx_to))
+            .where(vc.c.ref_control_id == control_id)
+        )
+        row = (await conn.execute(q)).mappings().first()
+        if not row:
+            raise ValueError(f"Control {control_id} not found")
+
+        control = ControlResponse(
+            control_id=row["ref_control_id"],
+            control_title=row["control_title"],
+            control_description=row["control_description"],
+            key_control=row["key_control"],
+            hierarchy_level=row["hierarchy_level"],
+            preventative_detective=row["preventative_detective"],
+            manual_automated=row["manual_automated"],
+            execution_frequency=row["execution_frequency"],
+            four_eyes_check=row["four_eyes_check"],
+            control_status=row["control_status"],
+            evidence_description=row["evidence_description"],
+            local_functional_information=row["local_functional_information"],
+            last_modified_on=row["last_modified_on"],
+            control_created_on=row["control_created_on"],
+            control_owner=row["control_owner"],
+            control_owner_gpn=row["control_owner_gpn"],
+            sox_relevant=row["sox_relevant"],
+        )
+
+        # 2. Parallel loads: relationships, enrichment+details, taxonomy, similar
+        rels_task = _load_relationships(conn, [control_id])
+        enr_task = _load_enrichment_with_details(conn, control_id)
+        tax_task = _load_taxonomy(conn, [control_id])
+        sim_task = _load_similar_controls(conn, [control_id])
+
+        rels_map, enr_data, tax_map, sim_map = await asyncio.gather(
+            rels_task, enr_task, tax_task, sim_task,
+        )
+
+        # 3. Build AI enrichment detail (with _details narrative fields)
+        ai_response = None
+        tax_data = tax_map.get(control_id)
+        if enr_data or tax_data:
+            ai_response = AIEnrichmentDetailResponse(
+                **(enr_data or {}),
+                **({"primary_risk_theme_id": tax_data.get("primary_risk_theme_id"),
+                    "secondary_risk_theme_id": tax_data.get("secondary_risk_theme_id")}
+                   if tax_data else {}),
+            )
+
+        # 4. Parent L1 score for L2 controls
+        parent_l1_score = None
+        rels = rels_map.get(control_id)
+        if control.hierarchy_level == "Level 2" and rels and rels.parent:
+            parent_id = rels.parent.id
+            parent_enr = await _load_enrichment(conn, [parent_id])
+            p_data = parent_enr.get(parent_id)
+            if p_data:
+                parent_l1_score = _build_parent_l1_score(parent_id, p_data)
+
+        return ControlDetailResponse(
+            control=control,
+            relationships=rels_map.get(control_id, ControlRelationshipsResponse()),
+            ai=ai_response,
+            parent_l1_score=parent_l1_score,
+            similar_controls=sim_map.get(control_id, []),
+            # Extended people
+            control_delegate=row["control_delegate"],
+            control_delegate_gpn=row["control_delegate_gpn"],
+            control_assessor=row["control_assessor"],
+            control_assessor_gpn=row["control_assessor_gpn"],
+            control_created_by=row["control_created_by"],
+            control_created_by_gpn=row["control_created_by_gpn"],
+            last_control_modification_requested_by=row["last_control_modification_requested_by"],
+            last_control_modification_requested_by_gpn=row["last_control_modification_requested_by_gpn"],
+            control_administrator=row["control_administrator"] or [],
+            control_administrator_gpn=row["control_administrator_gpn"] or [],
+            # Extended compliance
+            ccar_relevant=row["ccar_relevant"],
+            bcbs239_relevant=row["bcbs239_relevant"],
+            sox_rationale=row["sox_rationale"],
+            sox_assertions=row["sox_assertions"] or [],
+        )
+
+
+async def _load_enrichment_with_details(conn, control_id: str) -> dict | None:
+    """Load enrichment including _details narrative fields for a single control."""
+    cols = [
+        ai_enrichment.c.ref_control_id,
+        ai_enrichment.c.summary,
+        ai_enrichment.c.control_as_event,
+        ai_enrichment.c.control_as_issues,
+    ]
+    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES:
+        cols.append(getattr(ai_enrichment.c, col_name))
+
+    q = (
+        select(*cols)
+        .where(_is_current(ai_enrichment.c.tx_to))
+        .where(ai_enrichment.c.ref_control_id == control_id)
+    )
+    row = (await conn.execute(q)).mappings().first()
+    if not row:
+        return None
+
+    data = {}
+    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES:
+        data[col_name] = row[col_name]
+    data["summary"] = row["summary"]
+    data["control_as_event"] = row["control_as_event"]
+    data["control_as_issues"] = row["control_as_issues"]
+    return data
+
+
+async def get_control_versions(control_id: str) -> ControlVersionListResponse:
+    """Return all version timestamps for a control, ordered past → future."""
+    engine = get_engine()
+    vc = ver_control
+
+    async with engine.connect() as conn:
+        q = (
+            select(vc.c.tx_from, vc.c.tx_to)
+            .where(vc.c.ref_control_id == control_id)
+            .order_by(vc.c.tx_from.asc())
+        )
+        rows = (await conn.execute(q)).mappings().all()
+
+        versions = [
+            ControlVersionSummary(tx_from=r["tx_from"], tx_to=r["tx_to"])
+            for r in rows
+        ]
+
+        return ControlVersionListResponse(control_id=control_id, versions=versions)
+
+
+async def get_control_diff(
+    control_id: str, from_tx, to_tx,
+) -> ControlDiffResponse:
+    """Load two version snapshots of a control for diff comparison."""
+    engine = get_engine()
+    vc = ver_control
+
+    material_cols = [
+        vc.c.tx_from,
+        vc.c.control_status, vc.c.key_control,
+        vc.c.control_title, vc.c.control_description,
+        vc.c.evidence_description, vc.c.local_functional_information,
+        vc.c.execution_frequency, vc.c.preventative_detective,
+        vc.c.manual_automated, vc.c.control_administrator,
+        vc.c.control_owner, vc.c.control_owner_gpn,
+        vc.c.last_modified_on,
+    ]
+
+    async with engine.connect() as conn:
+        # Load both versions in parallel
+        from_q = (
+            select(*material_cols)
+            .where(vc.c.ref_control_id == control_id)
+            .where(vc.c.tx_from == from_tx)
+        )
+        to_q = (
+            select(*material_cols)
+            .where(vc.c.ref_control_id == control_id)
+            .where(vc.c.tx_from == to_tx)
+        )
+
+        from_row, to_row = await asyncio.gather(
+            conn.execute(from_q),
+            conn.execute(to_q),
+        )
+        from_row = from_row.mappings().first()
+        to_row = to_row.mappings().first()
+
+        if not from_row or not to_row:
+            raise ValueError("One or both version timestamps not found")
+
+        # Resolve parent control at each version timestamp
+        from_parent_q = (
+            select(rel_parent.c.parent_control_id)
+            .where(rel_parent.c.child_control_id == control_id)
+            .where(rel_parent.c.tx_from <= from_tx)
+            .where(or_(rel_parent.c.tx_to.is_(None), rel_parent.c.tx_to > from_tx))
+        )
+        to_parent_q = (
+            select(rel_parent.c.parent_control_id)
+            .where(rel_parent.c.child_control_id == control_id)
+            .where(rel_parent.c.tx_from <= to_tx)
+            .where(or_(rel_parent.c.tx_to.is_(None), rel_parent.c.tx_to > to_tx))
+        )
+
+        from_parent_res, to_parent_res = await asyncio.gather(
+            conn.execute(from_parent_q),
+            conn.execute(to_parent_q),
+        )
+        from_parent = from_parent_res.scalar()
+        to_parent = to_parent_res.scalar()
+
+        def _snapshot(row, parent_id):
+            return ControlVersionSnapshot(
+                tx_from=row["tx_from"],
+                parent_control_id=parent_id,
+                control_status=row["control_status"],
+                key_control=row["key_control"],
+                control_title=row["control_title"],
+                control_description=row["control_description"],
+                evidence_description=row["evidence_description"],
+                local_functional_information=row["local_functional_information"],
+                execution_frequency=row["execution_frequency"],
+                preventative_detective=row["preventative_detective"],
+                manual_automated=row["manual_automated"],
+                control_administrator=row["control_administrator"] or [],
+                control_owner=row["control_owner"],
+                control_owner_gpn=row["control_owner_gpn"],
+                last_modified_on=row["last_modified_on"],
+            )
+
+        return ControlDiffResponse(
+            from_version=_snapshot(from_row, from_parent),
+            to_version=_snapshot(to_row, to_parent),
+        )
+
+
+async def get_control_descriptions(control_ids: list[str]) -> ControlDescriptionsResponse:
+    """Fetch brief info for a list of control IDs (for linked-control expansion)."""
+    engine = get_engine()
+    vc = ver_control
+
+    async with engine.connect() as conn:
+        q = (
+            select(
+                vc.c.ref_control_id,
+                vc.c.control_title,
+                vc.c.control_description,
+                vc.c.hierarchy_level,
+                vc.c.control_status,
+            )
+            .where(_is_current(vc.c.tx_to))
+            .where(vc.c.ref_control_id.in_(control_ids))
+        )
+        rows = (await conn.execute(q)).mappings().all()
+
+        controls = [
+            ControlBriefResponse(
+                control_id=r["ref_control_id"],
+                control_title=r["control_title"],
+                control_description=r["control_description"],
+                hierarchy_level=r["hierarchy_level"],
+                control_status=r["control_status"],
+            )
+            for r in rows
+        ]
+
+        return ControlDescriptionsResponse(controls=controls)

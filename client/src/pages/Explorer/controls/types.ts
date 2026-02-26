@@ -98,6 +98,14 @@ export const EMPTY_SIDEBAR_FILTERS: AppliedSidebarFilters = {
 
 export type DateField = 'created_on' | 'last_modified_on';
 
+/** Snapshot of search params committed by explicit user action (Enter / Search button). */
+export interface CommittedSearch {
+    searchQuery: string;
+    searchMode: SearchMode;
+    searchTags: string[];
+    semanticFeatures: string[];
+}
+
 export interface ControlsViewState {
     searchQuery: string;
     searchMode: SearchMode;
@@ -113,6 +121,7 @@ export interface ControlsViewState {
     dateField: DateField;
     searchTags: string[];
     expandedGroups: Set<string>;
+    committedSearch: CommittedSearch | null;
     // Server-driven state
     controls: ControlWithDetails[];
     cursor: string | null;
@@ -138,6 +147,8 @@ export type ControlsAction =
     | { type: 'SET_DATE_TO'; payload: string }
     | { type: 'SET_DATE_FIELD'; payload: DateField }
     | { type: 'SET_SEARCH_TAGS'; payload: string[] }
+    | { type: 'EXECUTE_SEARCH' }
+    | { type: 'CLEAR_SEARCH' }
     // Async fetch actions
     | { type: 'FETCH_START' }
     | { type: 'FETCH_SUCCESS'; payload: { items: ControlWithDetails[]; cursor: string | null; totalEstimate: number; hasMore: boolean } }
@@ -150,6 +161,145 @@ export interface ControlGroup {
     key: string;
     label: string;
     controls: ControlWithDetails[];
+}
+
+// ── Control Detail Overlay Types ────────────────────────────────────
+
+/** AI enrichment with _details narrative fields (from detail endpoint). */
+export interface AIEnrichmentDetail {
+    // yes/no fields (same as AIEnrichment.criteria but with string values)
+    what_yes_no: string | null;
+    where_yes_no: string | null;
+    who_yes_no: string | null;
+    when_yes_no: string | null;
+    why_yes_no: string | null;
+    what_why_yes_no: string | null;
+    risk_theme_yes_no: string | null;
+    frequency_yes_no: string | null;
+    preventative_detective_yes_no: string | null;
+    automation_level_yes_no: string | null;
+    followup_yes_no: string | null;
+    escalation_yes_no: string | null;
+    evidence_yes_no: string | null;
+    abbreviations_yes_no: string | null;
+    // _details narrative fields
+    what_details: string | null;
+    where_details: string | null;
+    who_details: string | null;
+    when_details: string | null;
+    why_details: string | null;
+    what_why_details: string | null;
+    risk_theme_details: string | null;
+    frequency_details: string | null;
+    preventative_detective_details: string | null;
+    automation_level_details: string | null;
+    followup_details: string | null;
+    escalation_details: string | null;
+    evidence_details: string | null;
+    abbreviations_details: string | null;
+    // Summary & narratives
+    summary: string | null;
+    control_as_event: string | null;
+    control_as_issues: string | null;
+    // Taxonomy
+    primary_risk_theme_id: string | null;
+    secondary_risk_theme_id: string | null;
+}
+
+/** Extended control detail response from GET /controls/{id}/detail. */
+export interface ControlDetailData {
+    control: {
+        control_id: string;
+        control_title: string | null;
+        control_description: string | null;
+        key_control: boolean | null;
+        hierarchy_level: string | null;
+        preventative_detective: string | null;
+        manual_automated: string | null;
+        execution_frequency: string | null;
+        four_eyes_check: boolean | null;
+        control_status: string | null;
+        evidence_description: string | null;
+        local_functional_information: string | null;
+        last_modified_on: string | null;
+        control_created_on: string | null;
+        control_owner: string | null;
+        control_owner_gpn: string | null;
+        sox_relevant: boolean | null;
+    };
+    relationships: {
+        parent: { id: string; name: string | null } | null;
+        children: { id: string; name: string | null }[];
+        owns_functions: { id: string; name: string | null }[];
+        owns_locations: { id: string; name: string | null }[];
+        related_functions: { id: string; name: string | null }[];
+        related_locations: { id: string; name: string | null }[];
+        risk_themes: { id: string; name: string | null }[];
+    };
+    ai: AIEnrichmentDetail | null;
+    parent_l1_score: {
+        control_id: string;
+        criteria: { key: string; yes_no: boolean }[];
+        yes_count: number;
+        total: number;
+    } | null;
+    similar_controls: SimilarControl[];
+    // People
+    control_delegate: string | null;
+    control_delegate_gpn: string | null;
+    control_assessor: string | null;
+    control_assessor_gpn: string | null;
+    control_created_by: string | null;
+    control_created_by_gpn: string | null;
+    last_control_modification_requested_by: string | null;
+    last_control_modification_requested_by_gpn: string | null;
+    control_administrator: string[];
+    control_administrator_gpn: string[];
+    // Compliance
+    ccar_relevant: boolean | null;
+    bcbs239_relevant: boolean | null;
+    sox_rationale: string | null;
+    sox_assertions: string[];
+}
+
+/** Version summary from GET /controls/{id}/versions. */
+export interface ControlVersionSummary {
+    tx_from: string;
+    tx_to: string | null;
+}
+
+/** Material fields snapshot for diff comparison. */
+export interface ControlVersionSnapshot {
+    tx_from: string;
+    parent_control_id: string | null;
+    control_status: string | null;
+    key_control: boolean | null;
+    control_title: string | null;
+    control_description: string | null;
+    evidence_description: string | null;
+    local_functional_information: string | null;
+    execution_frequency: string | null;
+    preventative_detective: string | null;
+    manual_automated: string | null;
+    control_administrator: string[];
+    control_owner: string | null;
+    control_owner_gpn: string | null;
+    last_modified_on: string | null;
+}
+
+/** Diff response from POST /controls/{id}/diff. */
+export interface ControlDiffData {
+    from_version: ControlVersionSnapshot;
+    to_version: ControlVersionSnapshot;
+}
+
+/** Brief control info for linked-control expansion. */
+export interface ControlBrief {
+    control_id: string;
+    control_title: string | null;
+    control_description: string | null;
+    hierarchy_level: string | null;
+    control_status: string | null;
 }
 
 /** Map server API response to client ControlWithDetails type. */

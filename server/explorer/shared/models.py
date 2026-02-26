@@ -226,3 +226,125 @@ class ControlsSearchResponse(BaseModel):
     cursor: str | None = None
     total_estimate: int
     has_more: bool
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Control Detail Overlay models
+# ──────────────────────────────────────────────────────────────────────
+
+
+class AIEnrichmentDetailResponse(AIEnrichmentResponse):
+    """Extends AIEnrichmentResponse with _details narrative fields."""
+
+    what_details: str | None = None
+    where_details: str | None = None
+    who_details: str | None = None
+    when_details: str | None = None
+    why_details: str | None = None
+    what_why_details: str | None = None
+    risk_theme_details: str | None = None
+    frequency_details: str | None = None
+    preventative_detective_details: str | None = None
+    automation_level_details: str | None = None
+    followup_details: str | None = None
+    escalation_details: str | None = None
+    evidence_details: str | None = None
+    abbreviations_details: str | None = None
+
+
+class ControlDetailResponse(BaseModel):
+    """Extended single-control response for the detail overlay."""
+
+    control: ControlResponse
+    relationships: ControlRelationshipsResponse = Field(
+        default_factory=ControlRelationshipsResponse,
+    )
+    ai: AIEnrichmentDetailResponse | None = None
+    parent_l1_score: ParentL1ScoreResponse | None = None
+    similar_controls: list[SimilarControlResponse] = Field(default_factory=list)
+    # People
+    control_delegate: str | None = None
+    control_delegate_gpn: str | None = None
+    control_assessor: str | None = None
+    control_assessor_gpn: str | None = None
+    control_created_by: str | None = None
+    control_created_by_gpn: str | None = None
+    last_control_modification_requested_by: str | None = None
+    last_control_modification_requested_by_gpn: str | None = None
+    control_administrator: list[str] = Field(default_factory=list)
+    control_administrator_gpn: list[str] = Field(default_factory=list)
+    # Compliance
+    ccar_relevant: bool | None = None
+    bcbs239_relevant: bool | None = None
+    sox_rationale: str | None = None
+    sox_assertions: list[str] = Field(default_factory=list)
+
+
+class ControlVersionSummary(BaseModel):
+    """A single version entry (tx_from / tx_to pair)."""
+
+    tx_from: datetime
+    tx_to: datetime | None = None
+
+
+class ControlVersionListResponse(BaseModel):
+    """List of version timestamps for a control."""
+
+    control_id: str
+    versions: list[ControlVersionSummary]
+
+
+class ControlVersionSnapshot(BaseModel):
+    """Material fields captured at a point-in-time for diff comparison."""
+
+    tx_from: datetime
+    parent_control_id: str | None = None
+    control_status: str | None = None
+    key_control: bool | None = None
+    control_title: str | None = None
+    control_description: str | None = None
+    evidence_description: str | None = None
+    local_functional_information: str | None = None
+    execution_frequency: str | None = None
+    preventative_detective: str | None = None
+    manual_automated: str | None = None
+    control_administrator: list[str] = Field(default_factory=list)
+    control_owner: str | None = None
+    control_owner_gpn: str | None = None
+    last_modified_on: datetime | None = None
+
+
+class ControlDiffRequest(BaseModel):
+    """POST body for the diff endpoint."""
+
+    from_tx: datetime
+    to_tx: datetime
+
+
+class ControlDiffResponse(BaseModel):
+    """Side-by-side version snapshots for client-side diff rendering."""
+
+    from_version: ControlVersionSnapshot
+    to_version: ControlVersionSnapshot
+
+
+class ControlDescriptionsRequest(BaseModel):
+    """POST body to fetch brief descriptions for a list of control IDs."""
+
+    control_ids: list[str] = Field(..., min_length=1, max_length=50)
+
+
+class ControlBriefResponse(BaseModel):
+    """Minimal control info for linked-control expansion."""
+
+    control_id: str
+    control_title: str | None = None
+    control_description: str | None = None
+    hierarchy_level: str | None = None
+    control_status: str | None = None
+
+
+class ControlDescriptionsResponse(BaseModel):
+    """Batch response for brief control descriptions."""
+
+    controls: list[ControlBriefResponse]

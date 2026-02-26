@@ -100,6 +100,13 @@ async def lifespan(app: FastAPI):
     init_storage_directories()
     logger.info("Storage directories initialized")
 
+    # Seed initial dashboard snapshot if none exists
+    try:
+        from server.explorer.dashboard.snapshot_builder import seed_initial_snapshot
+        await seed_initial_snapshot()
+    except Exception as e:
+        logger.warning("Dashboard snapshot seed failed (non-fatal): {}", e)
+
     logger.info("Server initialization complete")
 
     yield

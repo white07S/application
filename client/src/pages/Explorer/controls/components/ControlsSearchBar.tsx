@@ -7,6 +7,8 @@ interface Props {
     searchTags: string[];
     semanticFeatures: Set<SemanticFeature>;
     dispatch: React.Dispatch<ControlsAction>;
+    disabled?: boolean;
+    onExecuteSearch: () => void;
 }
 
 const MODE_OPTIONS: { key: SearchMode; label: string; icon: string; description: string }[] = [
@@ -23,17 +25,18 @@ const PLACEHOLDER: Record<SearchMode, string> = {
     hybrid: 'Type keyword or description, press Enter or |',
 };
 
+const DISABLED_PLACEHOLDER = 'Clear sidebar filters to search';
+
 const DELIMITER_RE = /[|,;]/;
 
-export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTags, semanticFeatures, dispatch }) => {
-    // ID mode: local text with debounce
+export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTags, semanticFeatures, dispatch, disabled, onExecuteSearch }) => {
+    // ID mode: local text (no debounce — only dispatched on Enter / Search button)
     const [localValue, setLocalValue] = useState(value);
     // Tag mode: current text being typed (not yet committed)
     const [tagInput, setTagInput] = useState('');
 
     const [modeOpen, setModeOpen] = useState(false);
     const [featuresOpen, setFeaturesOpen] = useState(false);
-    const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const modeRef = useRef<HTMLDivElement>(null);
     const featuresRef = useRef<HTMLDivElement>(null);
     const tagInputRef = useRef<HTMLInputElement>(null);
@@ -43,15 +46,19 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
     // Sync external value for ID mode
     useEffect(() => { setLocalValue(value); }, [value]);
 
-    // ID mode: debounced text input
+    // ID mode: update local state only (no dispatch)
     const handleIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const v = e.target.value;
-        setLocalValue(v);
-        clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(() => dispatch({ type: 'SET_SEARCH', payload: v }), 200);
+        setLocalValue(e.target.value);
     };
 
-    useEffect(() => () => clearTimeout(timerRef.current), []);
+    // ID mode: execute search on Enter
+    const handleIdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            dispatch({ type: 'SET_SEARCH', payload: localValue });
+            onExecuteSearch();
+        }
+    };
 
     // Tag mode: commit current input as a tag
     const commitTag = (text: string) => {
@@ -83,12 +90,13 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
                 commitTag(tagInput);
                 setTagInput('');
             }
+            onExecuteSearch();
         } else if (e.key === 'Backspace' && tagInput === '' && searchTags.length > 0) {
             dispatch({ type: 'SET_SEARCH_TAGS', payload: searchTags.slice(0, -1) });
         }
     };
 
-    // Tag mode: commit on blur
+    // Tag mode: commit on blur (tag becomes a chip, but no search execution)
     const handleTagBlur = () => {
         if (tagInput.trim()) {
             commitTag(tagInput);
@@ -112,9 +120,20 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
 
     const currentMode = MODE_OPTIONS.find((m) => m.key === searchMode)!;
     const showFeatures = searchMode === 'semantic' || searchMode === 'hybrid';
+    const hasQuery = isIdMode ? localValue.trim().length > 0 : searchTags.length > 0 || tagInput.trim().length > 0;
+
+    const handleSearchClick = () => {
+        if (isIdMode) {
+            dispatch({ type: 'SET_SEARCH', payload: localValue });
+        } else if (tagInput.trim()) {
+            commitTag(tagInput);
+            setTagInput('');
+        }
+        onExecuteSearch();
+    };
 
     return (
-        <div className="flex items-stretch gap-0 min-h-[32px]">
+        <div className={`flex items-stretch gap-0 h-8 w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
             {/* Mode selector dropdown */}
             <div ref={modeRef} className="relative flex-shrink-0">
                 <button
@@ -164,9 +183,14 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
                         type="text"
                         value={localValue}
                         onChange={handleIdChange}
-                        placeholder={PLACEHOLDER.id}
+                        onKeyDown={handleIdKeyDown}
+                        placeholder={disabled ? DISABLED_PLACEHOLDER : PLACEHOLDER.id}
                         className="h-full flex-1 text-xs px-2 py-0 border-none focus:ring-0 focus:outline-none bg-transparent text-text-main placeholder-text-sub min-w-0"
                     />
+                    {/* Enter hint */}
+                    {hasQuery && (
+                        <span className="text-[10px] text-text-sub/60 pr-2 flex-shrink-0 select-none">Enter</span>
+                    )}
                 </div>
             ) : (
                 /* Tag mode: chip input */
@@ -197,9 +221,13 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
                         onChange={handleTagInputChange}
                         onKeyDown={handleTagKeyDown}
                         onBlur={handleTagBlur}
-                        placeholder={searchTags.length === 0 ? PLACEHOLDER[searchMode] : ''}
+                        placeholder={disabled ? DISABLED_PLACEHOLDER : (searchTags.length === 0 ? PLACEHOLDER[searchMode] : '')}
                         className="flex-1 min-w-[80px] text-xs px-1 py-0 border-none focus:ring-0 focus:outline-none bg-transparent text-text-main placeholder-text-sub"
                     />
+                    {/* Enter hint */}
+                    {(hasQuery || tagInput.trim()) && (
+                        <span className="text-[10px] text-text-sub/60 flex-shrink-0 select-none">Enter</span>
+                    )}
                 </div>
             )}
 
@@ -247,13 +275,19 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
                 </div>
             )}
 
-            {/* Right cap — round the corner */}
-            {!showFeatures && (
-                <div className="h-full border-r border-y border-border-light rounded-r w-0" />
-            )}
-            {showFeatures && (
-                <div className="rounded-r" />
-            )}
+            {/* Search execute button — integrated right cap */}
+            <button
+                onClick={handleSearchClick}
+                disabled={!hasQuery}
+                className={`flex items-center gap-1.5 h-full px-3 border border-l-0 border-border-light rounded-r transition-colors text-xs font-medium ${
+                    hasQuery
+                        ? 'bg-primary text-white hover:bg-primary/90 cursor-pointer'
+                        : 'bg-surface-light text-text-sub cursor-default'
+                }`}
+                title="Execute search (Enter)"
+            >
+                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </button>
         </div>
     );
 };

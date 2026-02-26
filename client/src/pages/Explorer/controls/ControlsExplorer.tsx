@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { useControlsState } from './hooks/useControlsState';
 import { ControlsToolbar } from './components/ControlsToolbar';
 import { ActiveFilters } from './components/ActiveFilters';
 import { ControlsList } from './components/ControlsList';
+import { ControlDetailOverlay } from './detail/ControlDetailOverlay';
 import { AppliedSidebarFilters } from './types';
 
 interface ControlsExplorerProps {
@@ -19,12 +20,17 @@ const ControlsExplorer: React.FC<ControlsExplorerProps> = ({
     const {
         state, dispatch, groups, totalFiltered, totalAll,
         loadMore, loading, loadingMore, hasMore,
+        hasSidebarFilters,
     } = useControlsState(appliedFilters);
+
+    const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
+    const handleShowDetails = useCallback((controlId: string) => setSelectedControlId(controlId), []);
+    const handleCloseOverlay = useCallback(() => setSelectedControlId(null), []);
 
     return (
         <div className="flex flex-col gap-0 h-full">
             {/* Toolbar: range + search + group-by */}
-            <ControlsToolbar state={state} dispatch={dispatch} />
+            <ControlsToolbar state={state} dispatch={dispatch} searchDisabled={hasSidebarFilters} />
 
             {/* Active filter chips + count */}
             <ActiveFilters
@@ -66,9 +72,18 @@ const ControlsExplorer: React.FC<ControlsExplorerProps> = ({
                         hasMore={hasMore}
                         loadingMore={loadingMore}
                         onLoadMore={loadMore}
+                        onShowDetails={handleShowDetails}
                     />
                 )}
             </div>
+
+            {/* Detail overlay */}
+            {selectedControlId && (
+                <ControlDetailOverlay
+                    controlId={selectedControlId}
+                    onClose={handleCloseOverlay}
+                />
+            )}
         </div>
     );
 };

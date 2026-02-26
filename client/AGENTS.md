@@ -49,6 +49,28 @@ light: #e0dfd7 — ubs-neutral25
 
 default: #cccabc — ubs-neutral30
 
+## Chart & Data Visualization Colors
+
+All dashboard charts must use the shared palette from `src/pages/Explorer/dashboard/chartColors.ts`. Never hardcode hex colors in chart components.
+
+**Rules:**
+- **Primary color**: `#008e97` (teal/lagoon) — use for single-series charts
+- **Multi-series**: pick sequentially from `CHART_SERIES` (teal, slate, indigo, sky, violet, light teal)
+- **No red in charts** — red (`#e60000`) is reserved for UBS brand CTA and error states only, never for data series
+- **No pie/doughnut charts** — always use horizontal bar charts for categorical breakdowns (clearer, easier to compare)
+- **Minimal color usage** — prefer 1-2 colors per chart. Use the series palette only when multiple datasets need distinction
+- **Heatmap thresholds**: emerald (>=85%), amber (60-84%), slate (<60%) — no red
+
+**Palette (in order):**
+| Index | Hex       | Name        |
+|-------|-----------|-------------|
+| 0     | `#008e97` | Teal        |
+| 1     | `#64748b` | Slate       |
+| 2     | `#6366f1` | Indigo      |
+| 3     | `#0ea5e9` | Sky Blue    |
+| 4     | `#8b5cf6` | Violet      |
+| 5     | `#14b8a6` | Light Teal  |
+
 , design principle: Design Principle:
 
 Sharp, Functional, Information-First
