@@ -88,12 +88,7 @@ const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ data }) => {
                 )}
                 {execFreqDist && (
                     <SummaryCard title="Execution Frequency" icon="schedule">
-                        <ScoreDistributionChart
-                            distribution={execFreqDist.values}
-                            maxScore={Object.keys(execFreqDist.values).length - 1}
-                            label="Controls"
-                            color={CHART_SERIES[2]}
-                        />
+                        <AttributeBarChart values={execFreqDist.values} />
                     </SummaryCard>
                 )}
             </div>
