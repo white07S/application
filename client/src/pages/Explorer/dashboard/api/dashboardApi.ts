@@ -6,10 +6,8 @@
 import { appConfig } from '../../../../config/appConfig';
 import type {
     DashboardFiltersPayload,
-    DocQualityData,
     ExecutiveOverviewData,
     LifecycleHeatmapData,
-    PortfolioAnalyticsData,
     RegulatoryComplianceData,
     ScoreTrendData,
     TrendData,
@@ -55,24 +53,6 @@ export const fetchExecutiveOverview = (
     filters?: DashboardFiltersPayload,
     signal?: AbortSignal,
 ) => dashboardFetch<ExecutiveOverviewData>('/executive-overview', token, {
-    body: filters || {},
-    signal,
-});
-
-export const fetchDocQuality = (
-    token: string,
-    filters?: DashboardFiltersPayload,
-    signal?: AbortSignal,
-) => dashboardFetch<DocQualityData>('/doc-quality', token, {
-    body: filters || {},
-    signal,
-});
-
-export const fetchPortfolioAnalytics = (
-    token: string,
-    filters?: DashboardFiltersPayload,
-    signal?: AbortSignal,
-) => dashboardFetch<PortfolioAnalyticsData>('/portfolio-analytics', token, {
     body: filters || {},
     signal,
 });

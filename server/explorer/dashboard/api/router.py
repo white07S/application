@@ -13,7 +13,6 @@ from server.explorer.dashboard.models import (
     FilteredTrendRequest,
     HistoryChangeResponse,
     LifecycleHeatmapResponse,
-    PortfolioAnalyticsResponse,
     RegulatoryComplianceResponse,
     ScoreTrendResponse,
     SnapshotRebuildResponse,
@@ -23,7 +22,6 @@ from server.explorer.dashboard.service import (
     compute_doc_quality,
     compute_executive_overview,
     compute_lifecycle_heatmap,
-    compute_portfolio_analytics,
     compute_regulatory_compliance,
     get_score_trends,
     get_snapshot_trends,
@@ -62,15 +60,6 @@ async def get_doc_quality(
 ):
     """Documentation quality: score histograms, worst criteria, score by function."""
     return await compute_doc_quality(filters)
-
-
-@router.post("/portfolio-analytics", response_model=PortfolioAnalyticsResponse)
-async def get_portfolio_analytics(
-    filters: DashboardFilters = DashboardFilters(),
-    token: str = Depends(_require_explorer_access),
-):
-    """Portfolio analytics: attribute distributions, function/risk breakdowns, timelines."""
-    return await compute_portfolio_analytics(filters)
 
 
 @router.post("/regulatory-compliance", response_model=RegulatoryComplianceResponse)

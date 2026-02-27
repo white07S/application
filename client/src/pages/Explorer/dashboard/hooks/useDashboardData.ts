@@ -7,23 +7,17 @@ import { useAuth } from '../../../../auth/useAuth';
 import type { AppliedSidebarFilters } from '../../controls/types';
 import type {
     DashboardTab,
-    DocQualityData,
     ExecutiveOverviewData,
-    PortfolioAnalyticsData,
     RegulatoryComplianceData,
 } from '../types';
 import {
-    fetchDocQuality,
     fetchExecutiveOverview,
-    fetchPortfolioAnalytics,
     fetchRegulatoryCompliance,
 } from '../api/dashboardApi';
 import { buildDashboardFilters } from './useDashboardFilters';
 
 export type DashboardData =
     | ExecutiveOverviewData
-    | DocQualityData
-    | PortfolioAnalyticsData
     | RegulatoryComplianceData
     | null;
 
@@ -60,12 +54,6 @@ export function useDashboardData(
                 switch (activeTab) {
                     case 'overview':
                         result = await fetchExecutiveOverview(token, filters, controller.signal);
-                        break;
-                    case 'doc-quality':
-                        result = await fetchDocQuality(token, filters, controller.signal);
-                        break;
-                    case 'analytics':
-                        result = await fetchPortfolioAnalytics(token, filters, controller.signal);
                         break;
                     case 'regulatory':
                         result = await fetchRegulatoryCompliance(token, filters, controller.signal);

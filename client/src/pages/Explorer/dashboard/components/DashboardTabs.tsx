@@ -8,10 +8,8 @@ interface DashboardTabsProps {
 
 const TABS: { key: DashboardTab; label: string; icon: string }[] = [
     { key: 'overview', label: 'Executive Overview', icon: 'dashboard' },
-    { key: 'doc-quality', label: 'Doc Quality', icon: 'checklist' },
     { key: 'controls', label: 'Control Explorer', icon: 'search' },
     { key: 'history', label: 'History & Trends', icon: 'trending_up' },
-    { key: 'analytics', label: 'Portfolio Analytics', icon: 'analytics' },
     { key: 'regulatory', label: 'Regulatory', icon: 'gavel' },
 ];
 

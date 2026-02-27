@@ -106,19 +106,10 @@ class ExecutiveOverviewResponse(BaseModel):
 
 
 class DocQualityResponse(BaseModel):
-    l1_score_dist: ScoreDistribution
-    l2_score_dist: ScoreDistribution
-    criterion_pass_rates: list[CriterionPassRate]
-    worst_criteria: list[CriterionPassRate]  # sorted ascending by pass_rate
-    score_by_function: list[FunctionBreakdown]
-
-
-class PortfolioAnalyticsResponse(BaseModel):
-    attribute_distributions: list[AttributeDistribution]
-    function_breakdown: list[FunctionBreakdown]
-    risk_theme_breakdown: list[RiskThemeBreakdown]
-    controls_created_by_month: dict[str, int]  # {"2024-01": 15, ...}
-    controls_modified_by_month: dict[str, int]
+    l1_avg_score: float | None
+    l1_total_assessed: int
+    l2_avg_score: float | None
+    l2_total_assessed: int
 
 
 class RegulatoryComplianceResponse(BaseModel):

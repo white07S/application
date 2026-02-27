@@ -3,15 +3,11 @@ import type { AppliedSidebarFilters } from '../controls/types';
 import type {
     DashboardTab,
     ExecutiveOverviewData,
-    DocQualityData,
-    PortfolioAnalyticsData,
     RegulatoryComplianceData,
 } from './types';
 import { useDashboardData } from './hooks/useDashboardData';
 import ExecutiveOverview from './components/ExecutiveOverview';
-import DocQualityMonitor from './components/DocQualityMonitor';
 import HistoryTracking from './components/HistoryTracking';
-import PortfolioAnalytics from './components/PortfolioAnalytics';
 import RegulatoryCompliance from './components/RegulatoryCompliance';
 
 interface DashboardLayoutProps {
@@ -81,10 +77,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, appliedFil
         switch (activeTab) {
             case 'overview':
                 return <ExecutiveOverview data={data as ExecutiveOverviewData} />;
-            case 'doc-quality':
-                return <DocQualityMonitor data={data as DocQualityData} />;
-            case 'analytics':
-                return <PortfolioAnalytics data={data as PortfolioAnalyticsData} />;
             case 'regulatory':
                 return <RegulatoryCompliance data={data as RegulatoryComplianceData} />;
             default:

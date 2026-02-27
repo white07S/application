@@ -1,13 +1,12 @@
 import React from 'react';
 import type { ExecutiveOverviewData } from '../types';
-import { CHART_PRIMARY, CHART_SERIES } from '../chartColors';
+import { CHART_SERIES } from '../chartColors';
 import KPICard from './cards/KPICard';
 import SummaryCard from './cards/SummaryCard';
 import ScoreDistributionChart from './charts/ScoreDistributionChart';
 import CriterionRadarChart from './charts/CriterionRadarChart';
 import AttributeBarChart from './charts/AttributePieChart';
 import FunctionBarChart from './charts/FunctionBarChart';
-import ScoreHeatmap from './charts/ScoreHeatmap';
 
 interface ExecutiveOverviewProps {
     data: ExecutiveOverviewData;
@@ -27,6 +26,8 @@ const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ data }) => {
     const top_risk_themes = data.top_risk_themes ?? [];
 
     const prevDetDist = attribute_distributions.find(d => d.field === 'preventative_detective');
+    const manualAutoDist = attribute_distributions.find(d => d.field === 'manual_automated');
+    const execFreqDist = attribute_distributions.find(d => d.field === 'execution_frequency');
 
     return (
         <div className="space-y-4">
@@ -66,33 +67,51 @@ const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ data }) => {
                 </SummaryCard>
             </div>
 
-            {/* Criterion Pass Rates */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <SummaryCard title="Criterion Pass Rates" icon="fact_check">
-                    <ScoreHeatmap criteria={criterion_pass_rates} />
-                </SummaryCard>
-
+            {/* Criterion Radar */}
+            {criterion_pass_rates.length > 0 && (
                 <SummaryCard title="Criterion Radar" icon="radar">
                     <CriterionRadarChart criteria={criterion_pass_rates} />
                 </SummaryCard>
-            </div>
+            )}
 
-            {/* Distributions & Breakdowns */}
+            {/* Attribute Distributions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 {prevDetDist && (
                     <SummaryCard title="Preventative vs Detective" icon="shield">
                         <AttributeBarChart values={prevDetDist.values} />
                     </SummaryCard>
                 )}
+                {manualAutoDist && (
+                    <SummaryCard title="Automation Level" icon="precision_manufacturing">
+                        <AttributeBarChart values={manualAutoDist.values} />
+                    </SummaryCard>
+                )}
+                {execFreqDist && (
+                    <SummaryCard title="Execution Frequency" icon="schedule">
+                        <ScoreDistributionChart
+                            distribution={execFreqDist.values}
+                            maxScore={Object.keys(execFreqDist.values).length - 1}
+                            label="Controls"
+                            color={CHART_SERIES[2]}
+                        />
+                    </SummaryCard>
+                )}
+            </div>
 
-                <SummaryCard title="Top Functions" icon="apartment">
-                    <FunctionBarChart items={top_functions.map(f => ({ name: f.name, value: f.control_count }))} />
+            {/* Function & Risk Theme Breakdowns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <SummaryCard title="Controls by Function" icon="apartment">
+                    <FunctionBarChart
+                        items={top_functions.slice(0, 15).map(f => ({ name: f.name, value: f.control_count }))}
+                        height={Math.max(200, Math.min(top_functions.length, 15) * 22)}
+                    />
                 </SummaryCard>
 
-                <SummaryCard title="Risk Theme Distribution" icon="category">
+                <SummaryCard title="Controls by Risk Theme" icon="category">
                     <FunctionBarChart
-                        items={top_risk_themes.map(t => ({ name: t.name, value: t.control_count }))}
+                        items={top_risk_themes.slice(0, 15).map(t => ({ name: t.name, value: t.control_count }))}
                         color={CHART_SERIES[2]}
+                        height={Math.max(200, Math.min(top_risk_themes.length, 15) * 22)}
                     />
                 </SummaryCard>
             </div>

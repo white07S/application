@@ -24,7 +24,6 @@ from server.explorer.dashboard.models import (
     FunctionBreakdown,
     LifecycleHeatmapResponse,
     LifecycleMonthPoint,
-    PortfolioAnalyticsResponse,
     PortfolioSummary,
     RegulatoryComplianceResponse,
     RiskThemeBreakdown,
@@ -317,7 +316,7 @@ def _build_score_distribution(scores: list[int], max_score: int) -> ScoreDistrib
 async def _compute_criterion_pass_rates(
     conn, candidates: set[str] | None = None,
 ) -> list[CriterionPassRate]:
-    cols_to_select = [enr.c.ref_control_id]
+    cols_to_select = [enr.c.ref_control_id, vc.c.hierarchy_level]
     for col_name in _ALL_YES_NO_COLS:
         cols_to_select.append(getattr(enr.c, col_name))
 
@@ -335,8 +334,7 @@ async def _compute_criterion_pass_rates(
     q = _apply_candidate_filter(q, enr.c.ref_control_id, candidates)
 
     rows = (await conn.execute(q)).mappings().all()
-    total = len(rows)
-    if total == 0:
+    if not rows:
         return [
             CriterionPassRate(
                 criterion=c, label=_CRITERION_LABELS[c],
@@ -345,17 +343,29 @@ async def _compute_criterion_pass_rates(
             for c in _ALL_YES_NO_COLS
         ]
 
+    # Split rows by hierarchy level so each criterion uses the correct denominator.
+    # L1 criteria are only assessed on L1 controls; L2 criteria only on L2 controls.
+    l1_rows = [r for r in rows if r.get("hierarchy_level") == "Level 1"]
+    l2_rows = [r for r in rows if r.get("hierarchy_level") == "Level 2"]
+    l1_total = len(l1_rows)
+    l2_total = len(l2_rows)
+
+    _L1_SET = set(_L1_YES_NO_COLS)
+
     results = []
     for col_name in _ALL_YES_NO_COLS:
+        is_l1 = col_name in _L1_SET
+        level_rows = l1_rows if is_l1 else l2_rows
+        level_total = l1_total if is_l1 else l2_total
         pass_count = sum(
-            1 for r in rows if (r.get(col_name) or "").lower() == "yes"
+            1 for r in level_rows if (r.get(col_name) or "").lower() == "yes"
         )
         results.append(CriterionPassRate(
             criterion=col_name,
             label=_CRITERION_LABELS[col_name],
-            pass_rate=round(pass_count / total, 4),
+            pass_rate=round(pass_count / level_total, 4) if level_total > 0 else 0.0,
             pass_count=pass_count,
-            total_count=total,
+            total_count=level_total,
         ))
     return results
 
@@ -515,45 +525,16 @@ async def compute_doc_quality(
     async with engine.connect() as conn:
         candidates = await _resolve_candidates(conn, filters)
 
-        l1_dist, l2_dist, criteria, funcs = await asyncio.gather(
+        l1_dist, l2_dist = await asyncio.gather(
             _compute_l1_score_distribution(conn, candidates),
             _compute_l2_score_distribution(conn, candidates),
-            _compute_criterion_pass_rates(conn, candidates),
-            _compute_function_breakdown(conn, candidates),
         )
-
-    worst = sorted(criteria, key=lambda c: c.pass_rate)
 
     return DocQualityResponse(
-        l1_score_dist=l1_dist,
-        l2_score_dist=l2_dist,
-        criterion_pass_rates=criteria,
-        worst_criteria=worst,
-        score_by_function=funcs,
-    )
-
-
-async def compute_portfolio_analytics(
-    filters: DashboardFilters,
-) -> PortfolioAnalyticsResponse:
-    engine = get_engine()
-    async with engine.connect() as conn:
-        candidates = await _resolve_candidates(conn, filters)
-
-        attr_dists, funcs, themes, created, modified = await asyncio.gather(
-            _compute_attribute_distributions(conn, candidates),
-            _compute_function_breakdown(conn, candidates),
-            _compute_risk_theme_breakdown(conn, candidates),
-            _compute_controls_by_month(conn, "control_created_on", candidates),
-            _compute_controls_by_month(conn, "last_modified_on", candidates),
-        )
-
-    return PortfolioAnalyticsResponse(
-        attribute_distributions=attr_dists,
-        function_breakdown=funcs,
-        risk_theme_breakdown=themes,
-        controls_created_by_month=created,
-        controls_modified_by_month=modified,
+        l1_avg_score=l1_dist.avg_score,
+        l1_total_assessed=l1_dist.total_assessed,
+        l2_avg_score=l2_dist.avg_score,
+        l2_total_assessed=l2_dist.total_assessed,
     )
 
 

@@ -65,22 +65,6 @@ export interface ExecutiveOverviewData {
     snapshot_at: string | null;
 }
 
-export interface DocQualityData {
-    l1_score_dist: ScoreDistribution;
-    l2_score_dist: ScoreDistribution;
-    criterion_pass_rates: CriterionPassRate[];
-    worst_criteria: CriterionPassRate[];
-    score_by_function: FunctionBreakdown[];
-}
-
-export interface PortfolioAnalyticsData {
-    attribute_distributions: AttributeDistribution[];
-    function_breakdown: FunctionBreakdown[];
-    risk_theme_breakdown: RiskThemeBreakdown[];
-    controls_created_by_month: Record<string, number>;
-    controls_modified_by_month: Record<string, number>;
-}
-
 export interface RegulatoryComplianceData {
     summary: PortfolioSummary;
     sox_controls: number;
@@ -136,11 +120,9 @@ export interface LifecycleHeatmapData {
 
 export type DashboardTab =
     | 'overview'
-    | 'doc-quality'
     | 'controls'
     | 'similarity'
     | 'history'
-    | 'analytics'
     | 'regulatory';
 
 export interface DashboardFiltersPayload {
