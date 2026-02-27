@@ -62,15 +62,22 @@ class RiskTaxonomiesResponse(BaseModel):
 # Controls search request / response models
 # ──────────────────────────────────────────────────────────────────────
 
-# The 6 searchable fields (FTS columns in clean_text + Qdrant named vectors)
-SEARCH_FIELD_NAMES = [
+# Semantic/hybrid searchable (Qdrant named vectors)
+SEMANTIC_FIELD_NAMES = ["what", "why", "where"]
+
+# Keyword searchable (PostgreSQL FTS tsvector columns)
+KEYWORD_FIELD_NAMES = [
     "control_title",
     "control_description",
+    "what",
+    "why",
+    "where",
     "evidence_description",
     "local_functional_information",
-    "control_as_event",
-    "control_as_issues",
 ]
+
+# Combined for backward compatibility
+SEARCH_FIELD_NAMES = KEYWORD_FIELD_NAMES
 
 
 class SidebarFilters(BaseModel):
@@ -116,7 +123,7 @@ class ControlsSearchParams(BaseModel):
     search_mode: Literal["keyword", "semantic", "hybrid", "id"] | None = None
     search_fields: list[str] = Field(
         default_factory=lambda: list(SEARCH_FIELD_NAMES),
-        description="Which clean_text / Qdrant fields to search",
+        description="Which feature_prep / Qdrant fields to search",
     )
 
     # Toolbar filters
@@ -200,6 +207,7 @@ class SimilarControlResponse(BaseModel):
     control_id: str
     score: float
     rank: int
+    category: str | None = None  # "near_duplicate" or "weak_similar"
 
 
 class ParentL1ScoreResponse(BaseModel):
@@ -250,6 +258,11 @@ class AIEnrichmentDetailResponse(AIEnrichmentResponse):
     escalation_details: str | None = None
     evidence_details: str | None = None
     abbreviations_details: str | None = None
+    # Narrative fields (from enrichment)
+    roles: str | None = None
+    process: str | None = None
+    product: str | None = None
+    service: str | None = None
 
 
 class ControlDetailResponse(BaseModel):

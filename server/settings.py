@@ -192,7 +192,7 @@ def get_settings() -> Settings:
     (settings.data_ingested_path / "controls").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / "model_runs" / "taxonomy").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / "model_runs" / "enrichment").mkdir(parents=True, exist_ok=True)
-    (settings.data_ingested_path / "model_runs" / "clean_text").mkdir(parents=True, exist_ok=True)
+    (settings.data_ingested_path / "model_runs" / "feature_prep").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / "model_runs" / "embeddings").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / ".tus_temp").mkdir(parents=True, exist_ok=True)
     (settings.data_ingested_path / ".state").mkdir(parents=True, exist_ok=True)

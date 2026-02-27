@@ -122,14 +122,16 @@ export const ControlCardAI: React.FC<Props> = ({ ai, parentScore, similarControl
                         {similarControls.map((sc) => {
                             const maxScore = similarControls[0]?.score || 1;
                             const intensity = Math.max(0.4, sc.score / maxScore);
+                            const isNearDup = sc.category === 'near_duplicate';
+                            const borderColor = isNearDup ? 'border-red-200' : 'border-primary/10';
                             return (
                                 <span
                                     key={sc.control_id}
-                                    className="inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border border-primary/10"
-                                    style={{ opacity: intensity, backgroundColor: `rgba(var(--color-primary-rgb, 59, 130, 246), ${0.05 + intensity * 0.1})` }}
-                                    title={`Score: ${sc.score.toFixed(2)} (Rank #${sc.rank})`}
+                                    className={`inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${borderColor}`}
+                                    style={{ opacity: intensity, backgroundColor: isNearDup ? 'rgba(239, 68, 68, 0.08)' : `rgba(var(--color-primary-rgb, 59, 130, 246), ${0.05 + intensity * 0.1})` }}
+                                    title={`Score: ${sc.score.toFixed(2)} (Rank #${sc.rank})${sc.category ? ` — ${sc.category.replace('_', ' ')}` : ''}`}
                                 >
-                                    <span className="text-primary">{sc.control_id}</span>
+                                    <span className={isNearDup ? 'text-red-600' : 'text-primary'}>{sc.control_id}</span>
                                     <span className="text-text-sub text-[9px]">{sc.score.toFixed(2)}</span>
                                 </span>
                             );

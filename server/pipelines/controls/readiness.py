@@ -18,7 +18,7 @@ logger = get_logger(name=__name__)
 MODEL_CHECKS = [
     {"name": "taxonomy", "suffix": ".jsonl"},
     {"name": "enrichment", "suffix": ".jsonl"},
-    {"name": "clean_text", "suffix": ".jsonl"},
+    {"name": "feature_prep", "suffix": ".jsonl"},
     {"name": "embeddings", "suffix": ".npz"},
 ]
 
@@ -31,7 +31,7 @@ class ReadinessResult:
     source_jsonl: bool = False
     taxonomy: bool = False
     enrichment: bool = False
-    clean_text: bool = False
+    feature_prep: bool = False
     embeddings: bool = False
     missing_models: List[str] = field(default_factory=list)
     missing_control_ids: Dict[str, List[str]] = field(default_factory=dict)
@@ -43,7 +43,7 @@ class ReadinessResult:
             "source_jsonl": self.source_jsonl,
             "taxonomy": self.taxonomy,
             "enrichment": self.enrichment,
-            "clean_text": self.clean_text,
+            "feature_prep": self.feature_prep,
             "embeddings": self.embeddings,
             "missing_models": self.missing_models,
             "missing_control_ids": self.missing_control_ids,

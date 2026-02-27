@@ -47,11 +47,6 @@ NARRATIVE_FIELDS = [
     "summary", "roles", "process", "product", "service",
 ]
 
-# Derived text fields (populated for all qualifying controls)
-DERIVED_TEXT_FIELDS = [
-    "control_as_issues", "control_as_event",
-]
-
 ENRICHMENT_FIELDS = [
     "summary",
     "what_yes_no", "what_details",
@@ -69,7 +64,6 @@ ENRICHMENT_FIELDS = [
     "escalation_yes_no", "escalation_details",
     "evidence_yes_no", "evidence_details",
     "abbreviations_yes_no", "abbreviations_details",
-    "control_as_issues", "control_as_event",
 ]
 
 
@@ -108,28 +102,63 @@ def null_enrichment_payload() -> Dict[str, Any]:
     return {field: None for field in ENRICHMENT_FIELDS}
 
 
-def _build_w_criteria(row: Dict[str, Any], hash_value: str) -> Dict[str, Any]:
-    """Build the 7 W criteria fields (Level 1 scoring)."""
+def _build_w_criteria(
+    row: Dict[str, Any],
+    hash_value: str,
+    text_pool_entry: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Build the 7 W criteria fields (Level 1 scoring).
+
+    Uses text pool from dataset for meaningful what/why/where details when
+    available.  Coverage targets (for L1 Active Key):
+      what  = 100%
+      why   =  99%  (skip when seed % 100 == 0)
+      where =  98%  (skip when seed % 50  == 0)
+    """
+    control_id = str(row["control_id"])
+    seed = _seed_int(control_id, hash_value)
+
     title = normalize_text(row.get("control_title"))
     desc = normalize_text(row.get("control_description"))
-    evidence = normalize_text(row.get("evidence_description"))
     when_hint = normalize_text(row.get("execution_frequency"))
     where_hint = normalize_text(row.get("owning_organization_location_id"))
     who_hint = normalize_text(row.get("control_owner"))
 
+    # ── what_details: 100% coverage ──
+    if text_pool_entry and text_pool_entry.get("what"):
+        what_details = text_pool_entry["what"]
+    else:
+        what_details = desc or title
+
+    # ── why_details: 99% coverage ──
+    if seed % 100 == 0:
+        why_details = None
+    elif text_pool_entry and text_pool_entry.get("why"):
+        why_details = text_pool_entry["why"]
+    else:
+        why_details = desc or title
+
+    # ── where_details: 98% coverage ──
+    if seed % 50 == 0:
+        where_details = None
+    elif text_pool_entry and text_pool_entry.get("where"):
+        where_details = text_pool_entry["where"]
+    else:
+        where_details = where_hint
+
     return {
-        "what_yes_no": _yes_no(bool(title or desc)),
-        "what_details": desc or title,
-        "where_yes_no": _yes_no(bool(where_hint)),
-        "where_details": where_hint,
+        "what_yes_no": _yes_no(bool(what_details)),
+        "what_details": what_details,
+        "where_yes_no": _yes_no(bool(where_details)),
+        "where_details": where_details,
         "who_yes_no": _yes_no(bool(who_hint)),
         "who_details": who_hint,
         "when_yes_no": _yes_no(bool(when_hint)),
         "when_details": when_hint,
-        "why_yes_no": _yes_no(bool(desc)),
-        "why_details": "Control objective inferred from description." if desc else None,
-        "what_why_yes_no": _yes_no(bool(title and desc)),
-        "what_why_details": "What/Why linkage present in source control text." if title and desc else None,
+        "why_yes_no": _yes_no(bool(why_details)),
+        "why_details": why_details,
+        "what_why_yes_no": _yes_no(bool(what_details and why_details)),
+        "what_why_details": "What/Why linkage present in source control text." if what_details and why_details else None,
         "risk_theme_yes_no": _yes_no(bool(row.get("risk_theme"))),
         "risk_theme_details": "risk_theme entries: {}".format(len(row.get("risk_theme") or [])),
     }
@@ -180,30 +209,6 @@ def _build_narrative_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_derived_text(
-    row: Dict[str, Any],
-    text_pool_entry: Optional[Dict[str, str]],
-) -> Dict[str, Any]:
-    """Build control_as_event and control_as_issues.
-
-    Uses text pool from dataset if available, otherwise derives from control fields.
-    """
-    if text_pool_entry is not None:
-        return {
-            "control_as_event": text_pool_entry.get("control_as_event"),
-            "control_as_issues": text_pool_entry.get("control_as_issues"),
-        }
-
-    evidence = normalize_text(row.get("evidence_description"))
-    desc = normalize_text(row.get("control_description"))
-    local_info = normalize_text(row.get("local_functional_information"))
-
-    return {
-        "control_as_event": evidence or desc,
-        "control_as_issues": local_info,
-    }
-
-
 def _null_w_criteria() -> Dict[str, Any]:
     """Return None for all 7 W criteria fields."""
     result = {}
@@ -229,14 +234,14 @@ def build_l1_payload(
 ) -> Dict[str, Any]:
     """Build enrichment payload for Level 1 + Active + Key Control.
 
-    Populates: 7 W criteria + narrative fields + derived text.
-    Sets: 7 operational criteria to None.
+    Populates: 7 W criteria (with meaningful what/why/where from text pool)
+               + narrative fields.
+    Sets: 7 operational criteria to None, control_as_event/issues to None.
     """
     payload = {}
-    payload.update(_build_w_criteria(row, hash_value))
+    payload.update(_build_w_criteria(row, hash_value, text_pool_entry))
     payload.update(_null_operational_criteria())
     payload.update(_build_narrative_fields(row))
-    payload.update(_build_derived_text(row, text_pool_entry))
     return payload
 
 
@@ -247,14 +252,14 @@ def build_l2_payload(
 ) -> Dict[str, Any]:
     """Build enrichment payload for Level 2 + Active + Key Control.
 
-    Populates: 7 operational criteria + narrative fields + derived text.
-    Sets: 7 W criteria to None.
+    Populates: 7 operational criteria + narrative fields.
+    Sets: 7 W criteria to None, control_as_event/issues to None.
+    L2 controls inherit what/why/where from L1 parent, not populated here.
     """
     payload = {}
     payload.update(_null_w_criteria())
     payload.update(_build_operational_criteria(row, hash_value))
     payload.update(_build_narrative_fields(row))
-    payload.update(_build_derived_text(row, text_pool_entry))
     return payload
 
 
@@ -296,6 +301,185 @@ def build_record(
     }
     record.update(payload)
     return record
+
+
+# ── Intentional duplicate clusters for testing similarity ──────────
+
+# Near-duplicate templates: controls sharing ALL 3 features → score ~1.0
+NEAR_DUPLICATE_TEMPLATES = [
+    {
+        "what": "This control ensures that all bank reconciliation entries are reviewed and approved by an independent party within five business days of month-end close to prevent material misstatements.",
+        "why": "Required by SOX Section 404 and internal audit standards to ensure completeness and accuracy of financial reporting and to mitigate the risk of undetected errors in cash balances.",
+        "where": "Finance Operations — Treasury and Cash Management division across all regional entities.",
+    },
+    {
+        "what": "Automated validation of trade settlement amounts against counterparty confirmations prior to release of payment instructions through the SWIFT messaging platform.",
+        "why": "Regulatory requirement under MiFID II and internal risk framework to prevent settlement failures and reduce operational losses from incorrect payment instructions.",
+        "where": "Capital Markets Operations — Trade Settlement and Confirmation unit in London and New York.",
+    },
+    {
+        "what": "Quarterly review of user access rights to critical financial applications including SAP, Oracle EBS, and Bloomberg Terminal to identify and remove inappropriate or excessive privileges.",
+        "why": "Mandated by information security policy and SOX ITGC requirements to enforce least-privilege access and prevent unauthorized transactions or data manipulation.",
+        "where": "Information Technology — Identity and Access Management team, global scope.",
+    },
+    {
+        "what": "Daily monitoring of intercompany loan balances and automated alerting when balances exceed pre-approved credit limits or deviate more than five percent from expected values.",
+        "why": "Transfer pricing compliance and liquidity risk management require continuous monitoring to prevent regulatory penalties and ensure adequate cash flow across entities.",
+        "where": "Group Treasury — Intercompany Lending and Borrowing desk, headquarters.",
+    },
+    {
+        "what": "Three-way matching of purchase orders, goods receipts, and vendor invoices before payment authorization, with automated exception flagging for discrepancies exceeding one thousand euros.",
+        "why": "Procurement policy and internal controls framework require three-way matching to prevent duplicate payments, overpayments, and fraudulent invoices.",
+        "where": "Accounts Payable — Procure-to-Pay operations center serving European entities.",
+    },
+    {
+        "what": "Annual stress testing of credit risk models using macroeconomic scenarios defined by the central bank, with results reported to the board risk committee within thirty days.",
+        "why": "Basel III Pillar 2 requirements and supervisory expectations mandate regular stress testing to assess capital adequacy under adverse conditions.",
+        "where": "Risk Management — Credit Risk Analytics team, group level.",
+    },
+]
+
+# Weak-similar templates: controls sharing 2 of 3 features → score ~0.67
+# Each group has a shared pair (what+why, what+where, or why+where) and a unique third field
+WEAK_SIMILAR_TEMPLATES = [
+    {   # Share what + why, different where
+        "what": "Monthly reconciliation of derivative instrument valuations between front-office pricing models and independent third-party valuations to detect pricing discrepancies.",
+        "why": "IFRS 13 fair value hierarchy and internal risk policy require independent price verification to ensure accurate mark-to-market reporting.",
+        "unique_field": "where",
+        "variants": [
+            "Derivatives Trading — Interest Rate Swaps desk in Frankfurt.",
+            "Structured Products — Credit Derivatives team in Singapore.",
+            "FX Options — Currency Derivatives unit in Tokyo.",
+            "Commodities Trading — Energy Derivatives desk in Houston.",
+        ],
+    },
+    {   # Share what + where, different why
+        "what": "Weekly review of suspicious activity monitoring alerts generated by the transaction monitoring system, with escalation of confirmed cases to the financial intelligence unit.",
+        "unique_field": "why",
+        "where": "Compliance — Anti-Money Laundering operations center, all jurisdictions.",
+        "variants": [
+            "AML regulations under the Bank Secrecy Act require timely investigation of potentially suspicious transactions to avoid regulatory penalties.",
+            "EU Anti-Money Laundering Directive mandates continuous monitoring and reporting of unusual transaction patterns to national authorities.",
+            "FATF recommendations and local regulatory expectations require robust transaction surveillance to combat terrorist financing.",
+            "Internal compliance framework demands proactive detection and escalation of potential financial crime to protect institutional reputation.",
+        ],
+    },
+    {   # Share why + where, different what
+        "why": "Data privacy regulations including GDPR Article 32 require appropriate technical measures to protect personal data and demonstrate accountability to supervisory authorities.",
+        "where": "Data Protection Office — Privacy Engineering team, European operations.",
+        "unique_field": "what",
+        "variants": [
+            "Annual data protection impact assessment for all high-risk processing activities involving customer personal data and sensitive financial information.",
+            "Automated scanning of databases and file shares to detect and classify unencrypted personal data stores and trigger remediation workflows.",
+            "Quarterly audit of data retention schedules to verify that expired personal data records are purged according to the approved retention policy.",
+            "Review of third-party data processor agreements to confirm contractual data protection clauses align with current regulatory requirements.",
+        ],
+    },
+    {   # Share what + why, different where
+        "what": "Dual authorization requirement for all wire transfers exceeding fifty thousand USD or equivalent, with segregation between payment initiator and approver roles.",
+        "why": "Payment fraud prevention policy and banking regulations require maker-checker controls on high-value outgoing payments to prevent unauthorized fund transfers.",
+        "unique_field": "where",
+        "variants": [
+            "Treasury Operations — Payments Processing team in Zurich.",
+            "Corporate Banking — Client Payments unit in Dublin.",
+            "Retail Banking — High-Value Payments desk in Amsterdam.",
+            "Private Banking — Wealth Management transfers team in Geneva.",
+        ],
+    },
+    {   # Share what + where, different why
+        "what": "Automated daily backup verification of core banking databases with integrity checksums and monthly restore testing to validate recoverability within the four-hour RTO target.",
+        "unique_field": "why",
+        "where": "IT Infrastructure — Database Administration team, primary and disaster recovery data centers.",
+        "variants": [
+            "Business continuity management policy requires validated backup and recovery capabilities to ensure operational resilience during system failures.",
+            "Regulatory expectations from the central bank mandate demonstrable disaster recovery capabilities with tested recovery time objectives.",
+            "Internal audit findings require formalized backup verification procedures after previous incidents of corrupted backup media went undetected.",
+            "SOX ITGC requirements demand evidence of regular backup testing to support the reliability of financial reporting systems.",
+        ],
+    },
+    {   # Share why + where, different what
+        "why": "Vendor risk management policy requires ongoing assessment of critical third-party providers to ensure service continuity and protect against concentration risk.",
+        "where": "Procurement — Third Party Risk Management function, enterprise-wide.",
+        "unique_field": "what",
+        "variants": [
+            "Annual financial health assessment of tier-one vendors including review of audited financial statements, credit ratings, and insurance coverage adequacy.",
+            "Quarterly service level agreement performance review meetings with critical technology vendors to track delivery against contractual commitments.",
+            "Biannual on-site audit of key outsourcing partners to verify compliance with information security requirements and data handling procedures.",
+            "Continuous monitoring of critical vendor cybersecurity posture through automated threat intelligence feeds and security rating platforms.",
+        ],
+    },
+]
+
+
+def _inject_similarity_clusters(
+    output_records: List[Dict[str, Any]],
+    controls_rows: List[Dict[str, Any]],
+) -> int:
+    """Post-process enrichment records to inject intentional duplicate clusters.
+
+    Finds L1 Active Key controls and overwrites their what/why/where details
+    with shared template text to create near-duplicate and weak-similar pairs.
+
+    Returns the number of controls modified.
+    """
+    # Find indices of L1 Active Key controls
+    l1_ak_indices = []
+    for idx, row in enumerate(controls_rows):
+        if (
+            is_level_one(row.get("hierarchy_level"))
+            and is_active_status(row.get("control_status"))
+            and is_key_control_yes(row.get("key_control"))
+        ):
+            l1_ak_indices.append(idx)
+
+    if len(l1_ak_indices) < 100:
+        return 0  # Not enough controls to inject clusters
+
+    modified = 0
+    cluster_size = 4
+    cursor = 0  # Index into l1_ak_indices
+
+    # Near-duplicate clusters: overwrite all 3 features with shared text
+    for template in NEAR_DUPLICATE_TEMPLATES:
+        if cursor + cluster_size > len(l1_ak_indices):
+            break
+        for k in range(cluster_size):
+            rec_idx = l1_ak_indices[cursor + k]
+            output_records[rec_idx]["what_details"] = template["what"]
+            output_records[rec_idx]["why_details"] = template["why"]
+            output_records[rec_idx]["where_details"] = template["where"]
+            # Update yes_no flags to reflect populated fields
+            output_records[rec_idx]["what_yes_no"] = "yes"
+            output_records[rec_idx]["why_yes_no"] = "yes"
+            output_records[rec_idx]["where_yes_no"] = "yes"
+            modified += 1
+        cursor += cluster_size
+
+    # Weak-similar clusters: share 2 features, vary the third
+    for template in WEAK_SIMILAR_TEMPLATES:
+        if cursor + cluster_size > len(l1_ak_indices):
+            break
+        unique = template["unique_field"]
+        for k in range(cluster_size):
+            rec_idx = l1_ak_indices[cursor + k]
+            # Set the two shared features
+            if unique != "what":
+                output_records[rec_idx]["what_details"] = template["what"]
+                output_records[rec_idx]["what_yes_no"] = "yes"
+            if unique != "why":
+                output_records[rec_idx]["why_details"] = template["why"]
+                output_records[rec_idx]["why_yes_no"] = "yes"
+            if unique != "where":
+                output_records[rec_idx]["where_details"] = template["where"]
+                output_records[rec_idx]["where_yes_no"] = "yes"
+            # Set the unique/variant field
+            variant_text = template["variants"][k % len(template["variants"])]
+            output_records[rec_idx][f"{unique}_details"] = variant_text
+            output_records[rec_idx][f"{unique}_yes_no"] = "yes"
+            modified += 1
+        cursor += cluster_size
+
+    return modified
 
 
 def parse_args() -> argparse.Namespace:
@@ -366,6 +550,9 @@ def main() -> int:
             previous_row=None, text_pool_entry=pool_entry,
         ))
 
+    # Inject intentional duplicate clusters for similarity testing
+    n_injected = _inject_similarity_clusters(output_records, controls_rows)
+
     index_path = write_jsonl_with_index(
         records=output_records, output_path=output_path,
         model_name=MODEL_NAME, run_date=run_date,
@@ -378,6 +565,7 @@ def main() -> int:
     print(f"l1_enriched={l1_matched}")
     print(f"l2_enriched={l2_matched}")
     print(f"skipped={skipped}")
+    print(f"similarity_clusters_injected={n_injected}")
     return 0
 
 

@@ -35,7 +35,7 @@ from server.pipelines.controls.schema import (
     src_controls_rel_risk_theme,
     ai_controls_model_taxonomy,
     ai_controls_model_enrichment,
-    ai_controls_model_clean_text,
+    ai_controls_model_feature_prep,
 )
 from server.pipelines.orgs.schema import src_orgs_ref_node
 from server.pipelines.risks.schema import src_risks_ref_theme, src_risks_ver_theme
@@ -235,18 +235,18 @@ async def _get_existing_model_hashes(conn, table) -> Dict[str, Optional[str]]:
     return {row.ref_control_id: row.hash for row in result}
 
 
-async def _get_existing_clean_text_hashes(conn) -> Dict[str, Dict[str, Optional[str]]]:
-    """Get current per-feature hashes from ai_controls_model_clean_text.
+async def _get_existing_feature_prep_hashes(conn) -> Dict[str, Dict[str, Optional[str]]]:
+    """Get current per-feature hashes from ai_controls_model_feature_prep.
 
     Returns:
-        Dict mapping control_id → {hash_control_title: ..., hash_control_description: ..., ...}
+        Dict mapping control_id → {hash_what: ..., hash_why: ..., hash_where: ...}
     """
-    cols = [ai_controls_model_clean_text.c.ref_control_id]
+    cols = [ai_controls_model_feature_prep.c.ref_control_id]
     for hash_col_name in HASH_COLUMN_NAMES:
-        cols.append(getattr(ai_controls_model_clean_text.c, hash_col_name))
+        cols.append(getattr(ai_controls_model_feature_prep.c, hash_col_name))
 
     result = await conn.execute(
-        select(*cols).where(ai_controls_model_clean_text.c.tx_to.is_(None))
+        select(*cols).where(ai_controls_model_feature_prep.c.tx_to.is_(None))
     )
 
     out: Dict[str, Dict[str, Optional[str]]] = {}
@@ -593,7 +593,7 @@ async def run_controls_ingestion(
         logger.info("Loading AI model outputs for {}", upload_id)
         taxonomy_rows = load_model_jsonl_by_id("taxonomy", upload_id)
         enrichment_rows = load_model_jsonl_by_id("enrichment", upload_id)
-        clean_text_rows = load_model_jsonl_by_id("clean_text", upload_id)
+        feature_prep_rows = load_model_jsonl_by_id("feature_prep", upload_id)
 
         # Load embeddings
         embeddings_npz = load_embeddings_npz(upload_id)
@@ -617,11 +617,11 @@ async def run_controls_ingestion(
                     )
 
         logger.info(
-            "Loaded: {} controls, {} taxonomy, {} enrichment, {} clean_text, {} embeddings",
+            "Loaded: {} controls, {} taxonomy, {} enrichment, {} feature_prep, {} embeddings",
             len(controls),
             len(taxonomy_rows),
             len(enrichment_rows),
-            len(clean_text_rows),
+            len(feature_prep_rows),
             len(embeddings_by_cid),
         )
         logger.info("PostgreSQL writer config: batch_size={}", BATCH_SIZE)
@@ -644,7 +644,7 @@ async def run_controls_ingestion(
             existing,
             existing_taxonomy_hashes,
             existing_enrichment_hashes,
-            existing_clean_text_hashes,
+            existing_feature_prep_hashes,
             valid_node_ids,
             theme_lookup_result,
             current_qdrant_hashes,
@@ -652,7 +652,7 @@ async def run_controls_ingestion(
             _pq(_get_existing_control_ids),
             _pq(_get_existing_model_hashes, ai_controls_model_taxonomy),
             _pq(_get_existing_model_hashes, ai_controls_model_enrichment),
-            _pq(_get_existing_clean_text_hashes),
+            _pq(_get_existing_feature_prep_hashes),
             _pq(_load_valid_org_node_ids),
             _pq(_load_theme_lookup),
             qdrant_hashes_task,
@@ -682,7 +682,7 @@ async def run_controls_ingestion(
             rel_risk_theme_rows: List[dict] = []
             ai_taxonomy_rows: List[dict] = []
             ai_enrichment_rows: List[dict] = []
-            ai_clean_text_rows: List[dict] = []
+            ai_feature_prep_rows: List[dict] = []
 
             # Control IDs that need version/relation closing
             cids_to_close_ver: List[str] = []
@@ -690,7 +690,7 @@ async def run_controls_ingestion(
             # AI model control IDs that need closing
             cids_to_close_taxonomy: List[str] = []
             cids_to_close_enrichment: List[str] = []
-            cids_to_close_clean_text: List[str] = []
+            cids_to_close_feature_prep: List[str] = []
 
             total_pending = 0
 
@@ -791,37 +791,40 @@ async def run_controls_ingestion(
                         ai_enrichment_rows.append(row_dict)
                         existing_enrichment_hashes[cid] = incoming_hash
 
-                # AI Clean Text (6 per-feature hashes)
-                clean_row = clean_text_rows.get(cid)
+                # AI Clean Text (3 per-feature hashes: what, why, where)
+                clean_row = feature_prep_rows.get(cid)
                 if clean_row:
                     incoming_ct_hashes = {
                         h: clean_row.get(h) for h in HASH_COLUMN_NAMES
                     }
-                    existing_ct_hashes = existing_clean_text_hashes.get(cid, {})
+                    existing_ct_hashes = existing_feature_prep_hashes.get(cid, {})
                     ct_changed = any(
                         incoming_ct_hashes.get(h) != existing_ct_hashes.get(h)
                         for h in HASH_COLUMN_NAMES
                     )
                     if ct_changed:
                         if existing_ct_hashes:
-                            cids_to_close_clean_text.append(cid)
+                            cids_to_close_feature_prep.append(cid)
                         model_run_ts = _parse_timestamp(clean_row.get("model_run_timestamp"), tx_from_iso)
                         row_dict = {
                             "ref_control_id": cid,
                             "model_run_timestamp": model_run_ts,
+                            # Semantic feature texts (from enrichment)
+                            "what": clean_row.get("what"),
+                            "why": clean_row.get("why"),
+                            "where": clean_row.get("where"),
+                            # Keyword FTS fields (pass-through)
                             "control_title": clean_row.get("control_title"),
                             "control_description": clean_row.get("control_description"),
                             "evidence_description": clean_row.get("evidence_description"),
                             "local_functional_information": clean_row.get("local_functional_information"),
-                            "control_as_event": clean_row.get("control_as_event"),
-                            "control_as_issues": clean_row.get("control_as_issues"),
                             "tx_from": tx_from,
                             "tx_to": None,
                         }
                         for h in HASH_COLUMN_NAMES:
                             row_dict[h] = incoming_ct_hashes.get(h)
-                        ai_clean_text_rows.append(row_dict)
-                        existing_clean_text_hashes[cid] = incoming_ct_hashes
+                        ai_feature_prep_rows.append(row_dict)
+                        existing_feature_prep_hashes[cid] = incoming_ct_hashes
 
                 # Embedding delta detection is done after the loop via Qdrant hashes
                 # (no per-control work needed here)
@@ -833,7 +836,7 @@ async def run_controls_ingestion(
                     len(ref_rows) + len(ver_rows) +
                     len(rel_parent_rows) + len(rel_owns_func_rows) + len(rel_owns_loc_rows) +
                     len(rel_related_func_rows) + len(rel_related_loc_rows) + len(rel_risk_theme_rows) +
-                    len(ai_taxonomy_rows) + len(ai_enrichment_rows) + len(ai_clean_text_rows)
+                    len(ai_taxonomy_rows) + len(ai_enrichment_rows) + len(ai_feature_prep_rows)
                 )
 
                 if total_pending >= BATCH_SIZE:
@@ -843,8 +846,8 @@ async def run_controls_ingestion(
                         cids_to_close_ver, cids_to_close_rel,
                         rel_parent_rows, rel_owns_func_rows, rel_owns_loc_rows,
                         rel_related_func_rows, rel_related_loc_rows, rel_risk_theme_rows,
-                        cids_to_close_taxonomy, cids_to_close_enrichment, cids_to_close_clean_text,
-                        ai_taxonomy_rows, ai_enrichment_rows, ai_clean_text_rows,
+                        cids_to_close_taxonomy, cids_to_close_enrichment, cids_to_close_feature_prep,
+                        ai_taxonomy_rows, ai_enrichment_rows, ai_feature_prep_rows,
                         f"batch-{idx}",
                         valid_node_ids=valid_node_ids,
                         valid_theme_ids=valid_theme_ids,
@@ -861,10 +864,10 @@ async def run_controls_ingestion(
                     rel_risk_theme_rows.clear()
                     cids_to_close_taxonomy.clear()
                     cids_to_close_enrichment.clear()
-                    cids_to_close_clean_text.clear()
+                    cids_to_close_feature_prep.clear()
                     ai_taxonomy_rows.clear()
                     ai_enrichment_rows.clear()
-                    ai_clean_text_rows.clear()
+                    ai_feature_prep_rows.clear()
 
                 # Progress callback
                 if progress_callback and (idx + 1) % max(1, BATCH_SIZE) == 0:
@@ -884,8 +887,8 @@ async def run_controls_ingestion(
                 cids_to_close_ver, cids_to_close_rel,
                 rel_parent_rows, rel_owns_func_rows, rel_owns_loc_rows,
                 rel_related_func_rows, rel_related_loc_rows, rel_risk_theme_rows,
-                cids_to_close_taxonomy, cids_to_close_enrichment, cids_to_close_clean_text,
-                ai_taxonomy_rows, ai_enrichment_rows, ai_clean_text_rows,
+                cids_to_close_taxonomy, cids_to_close_enrichment, cids_to_close_feature_prep,
+                ai_taxonomy_rows, ai_enrichment_rows, ai_feature_prep_rows,
                 "final",
                 valid_node_ids=valid_node_ids,
                 valid_theme_ids=valid_theme_ids,
@@ -1073,10 +1076,10 @@ async def _flush_batch(
     rel_risk_theme_rows: List[dict],
     cids_to_close_taxonomy: List[str],
     cids_to_close_enrichment: List[str],
-    cids_to_close_clean_text: List[str],
+    cids_to_close_feature_prep: List[str],
     ai_taxonomy_rows: List[dict],
     ai_enrichment_rows: List[dict],
-    ai_clean_text_rows: List[dict],
+    ai_feature_prep_rows: List[dict],
     label: str,
     valid_node_ids: Optional[Set[str]] = None,
     valid_theme_ids: Optional[Set[str]] = None,
@@ -1086,8 +1089,8 @@ async def _flush_batch(
         ref_rows or ver_rows or cids_to_close_ver or cids_to_close_rel or
         rel_parent_rows or rel_owns_func_rows or rel_owns_loc_rows or
         rel_related_func_rows or rel_related_loc_rows or rel_risk_theme_rows or
-        cids_to_close_taxonomy or cids_to_close_enrichment or cids_to_close_clean_text or
-        ai_taxonomy_rows or ai_enrichment_rows or ai_clean_text_rows
+        cids_to_close_taxonomy or cids_to_close_enrichment or cids_to_close_feature_prep or
+        ai_taxonomy_rows or ai_enrichment_rows or ai_feature_prep_rows
     )
     if not has_work:
         return
@@ -1199,11 +1202,11 @@ async def _flush_batch(
             ai_controls_model_enrichment.c.ref_control_id,
             cids_to_close_enrichment, close_values, f"close-enrichment-{label}",
         )
-    if cids_to_close_clean_text:
+    if cids_to_close_feature_prep:
         await _execute_updates(
-            conn, ai_controls_model_clean_text,
-            ai_controls_model_clean_text.c.ref_control_id,
-            cids_to_close_clean_text, close_values, f"close-clean_text-{label}",
+            conn, ai_controls_model_feature_prep,
+            ai_controls_model_feature_prep.c.ref_control_id,
+            cids_to_close_feature_prep, close_values, f"close-feature_prep-{label}",
         )
 
     # 7. Insert new AI model rows
@@ -1211,7 +1214,7 @@ async def _flush_batch(
         await _execute_inserts(conn, ai_controls_model_taxonomy, ai_taxonomy_rows, label)
     if ai_enrichment_rows:
         await _execute_inserts(conn, ai_controls_model_enrichment, ai_enrichment_rows, label)
-    if ai_clean_text_rows:
-        await _execute_inserts(conn, ai_controls_model_clean_text, ai_clean_text_rows, label)
+    if ai_feature_prep_rows:
+        await _execute_inserts(conn, ai_controls_model_feature_prep, ai_feature_prep_rows, label)
 
     logger.debug("Flushed batch {} to PostgreSQL", label)

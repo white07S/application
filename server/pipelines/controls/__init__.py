@@ -3,7 +3,7 @@
 Submodules:
     api: FastAPI routers for upload (TUS), ingestion, and job status
     ingest: Ingestion service for loading controls into PostgreSQL + Qdrant
-    model_runners: CLI scripts for running AI models (taxonomy, enrichment, clean_text, embeddings)
+    model_runners: CLI scripts for running AI models (taxonomy, enrichment, feature_prep, embeddings)
     upload: File processing — CSV splitting and mock JSONL generation
     schema: PostgreSQL table definitions for controls domain
     schema_validation: Pydantic models for JSONL validation

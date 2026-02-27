@@ -192,6 +192,7 @@ export interface ApiSimilarControl {
     control_id: string;
     score: number;
     rank: number;
+    category: string | null;
 }
 
 export interface ApiParentL1Score {

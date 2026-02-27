@@ -67,13 +67,13 @@ def main() -> int:
         return 1
     controls_rows = load_controls(input_path, limit=args.limit)
 
-    # Load clean_text output (required dependency — provides per-feature hashes)
-    clean_text_path = model_output_path(data_ingested_path, "clean_text", args.upload_id)
-    if not clean_text_path.exists():
-        print(f"ERROR: Clean text output not found: {clean_text_path}")
-        print("Run clean_text model first: python -m server.pipelines.controls.model_runners.run_clean_text_mock --upload-id " + args.upload_id)
+    # Load feature_prep output (required dependency — provides per-feature hashes)
+    feature_prep_path = model_output_path(data_ingested_path, "feature_prep", args.upload_id)
+    if not feature_prep_path.exists():
+        print(f"ERROR: Clean text output not found: {feature_prep_path}")
+        print("Run feature_prep model first: python -m server.pipelines.controls.model_runners.run_feature_prep_mock --upload-id " + args.upload_id)
         return 1
-    clean_text_rows = load_jsonl_by_control_id(clean_text_path)
+    feature_prep_rows = load_jsonl_by_control_id(feature_prep_path)
 
     output_npz_path = model_output_path(data_ingested_path, MODEL_NAME, args.upload_id, suffix=".npz")
     if output_npz_path.exists() and not args.overwrite:
@@ -107,10 +107,10 @@ def main() -> int:
 
     for row_idx, row in enumerate(controls_rows):
         control_id = str(row["control_id"])
-        clean_row = clean_text_rows.get(control_id, {})
+        clean_row = feature_prep_rows.get(control_id, {})
         control_ids.append(control_id)
 
-        # Read 6 per-feature hashes + masks from clean_text output
+        # Read per-feature hashes + masks from feature_prep output
         feature_hashes: Dict[str, Optional[str]] = {}
         for hash_col in HASH_COLUMN_NAMES:
             feature_hashes[hash_col] = clean_row.get(hash_col)
@@ -157,7 +157,7 @@ def main() -> int:
         hashes_by_control_id=hashes_by_control_id, embedding_dim=args.embedding_dim,
     )
 
-    print(f"clean_text_input={clean_text_path if clean_text_rows else 'none'}")
+    print(f"feature_prep_input={feature_prep_path if feature_prep_rows else 'none'}")
     print(f"output={output_npz_path}")
     print(f"index={index_path}")
     print(f"rows={len(control_ids)}")

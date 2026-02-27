@@ -1,13 +1,10 @@
 """Shared loader for DBpedia Arrow IPC dataset text + embeddings.
 
 Provides deterministic mapping of dataset entries to control fields.
-Each control uses 6 dataset entries (one per text field):
-  6*i + 0 → control_title
-  6*i + 1 → control_description
-  6*i + 2 → evidence_description
-  6*i + 3 → local_functional_information
-  6*i + 4 → control_as_event
-  6*i + 5 → control_as_issues
+Each control uses 3 dataset entries (one per semantic feature):
+  3*i + 0 → what
+  3*i + 1 → why
+  3*i + 2 → where
 
 Dataset: HuggingFace-format Arrow IPC stream files with columns:
   _id, title, text, text-embedding-ada-002-1536-embedding,
@@ -23,14 +20,11 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import pyarrow as pa
 
-FIELDS_PER_CONTROL = 6
+FIELDS_PER_CONTROL = 3
 FIELD_NAMES = [
-    "control_title",
-    "control_description",
-    "evidence_description",
-    "local_functional_information",
-    "control_as_event",
-    "control_as_issues",
+    "what",
+    "why",
+    "where",
 ]
 
 EMBEDDING_COLUMN = "text-embedding-3-large-3072-embedding"
@@ -114,7 +108,7 @@ def iter_texts(dataset_path: Path, needed: int) -> Iterator[str]:
 
 
 def load_text_pool(dataset_path: Path, num_controls: int) -> List[Dict[str, str]]:
-    """Load 6 texts per control from the dataset.
+    """Load 3 texts per control from the dataset (what, why, where).
 
     Returns:
         List of dicts (one per control), each mapping field_name → text string.

@@ -28,7 +28,7 @@ const saveActiveJobIds = (jobIds: string[]) => {
 const MODEL_LABELS: Record<string, string> = {
     taxonomy: 'Taxonomy',
     enrichment: 'Enrichment',
-    clean_text: 'Clean Text',
+    feature_prep: 'Feature Prep',
     embeddings: 'Embeddings',
 };
 
@@ -347,7 +347,7 @@ const Processing: FC = () => {
                                                             <ReadinessIcon ready={batch.readiness.source_jsonl} label="Source" />
                                                             <ReadinessIcon ready={batch.readiness.taxonomy} label={MODEL_LABELS.taxonomy} />
                                                             <ReadinessIcon ready={batch.readiness.enrichment} label={MODEL_LABELS.enrichment} />
-                                                            <ReadinessIcon ready={batch.readiness.clean_text} label={MODEL_LABELS.clean_text} />
+                                                            <ReadinessIcon ready={batch.readiness.feature_prep} label={MODEL_LABELS.feature_prep} />
                                                             <ReadinessIcon ready={batch.readiness.embeddings} label={MODEL_LABELS.embeddings} />
                                                         </div>
 

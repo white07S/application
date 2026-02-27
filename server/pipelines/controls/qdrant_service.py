@@ -1,8 +1,8 @@
 """Qdrant service for controls embeddings.
 
 Manages embedding upserts and deletions in the controls_embeddings collection.
-Each control has a single point with 6 named vectors, identified by a UUID5
-derived deterministically from the control_id.
+Each control has a single point with 3 named vectors (what, why, where),
+identified by a UUID5 derived deterministically from the control_id.
 
 Supports per-feature delta detection: only re-uploads vectors whose hash
 changed, using hashes stored in each point's payload.
@@ -31,9 +31,9 @@ NAMED_VECTORS: List[str] = FEATURE_NAMES
 CONTROLS_UUID_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 
 # Batch size for Qdrant upserts.
-# Each point has 6 named vectors × 3072 dims. JSON-serialized floats use
-# ~8-10 bytes each, so per point ≈ 6×3072×10 ≈ 184 KB.
-# Qdrant default payload limit is 32 MB → 32000/184 ≈ 170 points max.
+# Each point has 3 named vectors × 3072 dims. JSON-serialized floats use
+# ~8-10 bytes each, so per point ≈ 3×3072×10 ≈ 92 KB.
+# Qdrant default payload limit is 32 MB → 32000/92 ≈ 347 points max.
 QDRANT_BATCH_SIZE = 64
 
 # Number of parallel workers (CPU cores)
@@ -100,7 +100,7 @@ async def read_current_hashes() -> Dict[str, Dict[str, Optional[str]]]:
     """Read current per-feature hashes from all Qdrant point payloads.
 
     Returns:
-        Dict mapping control_id → {hash_control_title: ..., hash_control_description: ..., ...}
+        Dict mapping control_id → {hash_what: ..., hash_why: ..., hash_where: ...}
     """
     settings = get_settings()
     collection = settings.qdrant_collection
@@ -155,7 +155,7 @@ def compute_embedding_delta(
     """Compare incoming vs current per-feature hashes to determine what needs updating.
 
     Returns:
-        - new_control_ids: Controls not in Qdrant → need full 6-vector upsert
+        - new_control_ids: Controls not in Qdrant → need full upsert
         - changed_features: Controls with some features changed → need per-feature update
         - unchanged_control_ids: No changes needed
     """
@@ -200,7 +200,7 @@ async def upsert_new_controls(
     hashes: Dict[str, Dict[str, Optional[str]]],
     progress_callback: Optional[Callable] = None,
 ) -> int:
-    """Upsert full points for new controls (all 6 vectors + payload with hashes).
+    """Upsert full points for new controls (all 3 vectors + payload with hashes).
 
     Returns number of points upserted.
     """
@@ -219,7 +219,7 @@ async def upsert_new_controls(
             raw_vec = cid_data.get(feature_name)
             vectors[feature_name] = coerce_embedding_vector_or_zero(raw_vec)
 
-        # Payload: control_id + 6 per-feature hashes + 6 feature masks
+        # Payload: control_id + per-feature hashes + feature masks
         payload: Dict[str, Any] = {"control_id": cid}
         cid_hashes = hashes.get(cid, {})
         for hash_col in HASH_COLUMN_NAMES:

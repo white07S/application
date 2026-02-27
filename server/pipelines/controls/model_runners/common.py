@@ -8,16 +8,25 @@ import orjson
 
 
 # ---------------------------------------------------------------------------
-# Feature names (single source of truth for all 6 searchable/embeddable fields)
+# Feature names (single source of truth for embeddable/similarity fields)
+# These are LLM-extracted semantic features from enrichment (_details columns).
 # ---------------------------------------------------------------------------
 
 FEATURE_NAMES: List[str] = [
+    "what",
+    "why",
+    "where",
+]
+
+# Keyword-searchable fields (PostgreSQL FTS tsvector columns in feature_prep table)
+KEYWORD_FIELD_NAMES: List[str] = [
     "control_title",
     "control_description",
+    "what",
+    "why",
+    "where",
     "evidence_description",
     "local_functional_information",
-    "control_as_event",
-    "control_as_issues",
 ]
 
 HASH_COLUMN_NAMES: List[str] = [f"hash_{f}" for f in FEATURE_NAMES]
@@ -149,8 +158,8 @@ def write_jsonl_with_index(
     """Write JSONL records and a companion index JSON file.
 
     Args:
-        hashes_by_control_id: Maps control_id → {hash_control_title: ..., hash_control_description: ..., ...}
-            Each value is a dict of 6 per-feature hashes (or None for empty features).
+        hashes_by_control_id: Maps control_id → {hash_what: ..., hash_why: ..., ...}
+            Each value is a dict of per-feature hashes (or None for empty features).
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -205,7 +214,7 @@ def write_npz_index(
     """Write NPZ index JSON file with per-feature hashes.
 
     Args:
-        hashes_by_control_id: Maps control_id → {hash_control_title: ..., ...}
+        hashes_by_control_id: Maps control_id → {hash_what: ..., ...}
     """
     by_control_id: Dict[str, Dict[str, Any]] = {}
 

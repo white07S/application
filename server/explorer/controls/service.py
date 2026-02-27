@@ -45,7 +45,7 @@ from server.pipelines.controls.schema import (
     src_controls_rel_risk_theme as rel_risk_theme,
     ai_controls_model_enrichment as ai_enrichment,
     ai_controls_model_taxonomy as ai_taxonomy,
-    ai_controls_model_clean_text as ai_clean_text,
+    ai_controls_model_feature_prep as ai_feature_prep,
     ai_controls_similar_controls as similar_controls,
 )
 from server.pipelines.orgs.schema import (
@@ -72,14 +72,15 @@ _RRF_K = 60
 # Batch size for IN clauses — asyncpg limit is 32767 parameters per statement
 _BATCH_SIZE = 30_000
 
-# Map clean_text field names → tsvector column names
+# Map feature_prep field names → tsvector column names
 _TS_COLUMN_MAP = {
+    "what": "ts_what",
+    "why": "ts_why",
+    "where": "ts_where",
     "control_title": "ts_control_title",
     "control_description": "ts_control_description",
     "evidence_description": "ts_evidence_description",
     "local_functional_information": "ts_local_functional_information",
-    "control_as_event": "ts_control_as_event",
-    "control_as_issues": "ts_control_as_issues",
 }
 
 # L1 W-criteria yes/no columns
@@ -381,7 +382,7 @@ async def _search_by_keyword(
     search_fields: list[str],
     candidates: set[str] | None,
 ) -> list[tuple[str, float]]:
-    """Full-text search via tsvector columns in ai_controls_model_clean_text."""
+    """Full-text search via tsvector columns in ai_controls_model_feature_prep."""
     ts_query = func.plainto_tsquery("english", query)
 
     # Build rank expression: sum of ts_rank across selected fields
@@ -389,7 +390,7 @@ async def _search_by_keyword(
     for field in search_fields:
         ts_col_name = _TS_COLUMN_MAP.get(field)
         if ts_col_name:
-            ts_col = getattr(ai_clean_text.c, ts_col_name)
+            ts_col = getattr(ai_feature_prep.c, ts_col_name)
             rank_parts.append(func.coalesce(func.ts_rank(ts_col, ts_query), 0))
 
     if not rank_parts:
@@ -401,17 +402,17 @@ async def _search_by_keyword(
 
     q = (
         select(
-            ai_clean_text.c.ref_control_id,
+            ai_feature_prep.c.ref_control_id,
             total_rank.label("rank"),
         )
-        .where(_is_current(ai_clean_text.c.tx_to))
+        .where(_is_current(ai_feature_prep.c.tx_to))
         .where(total_rank > 0)
         .order_by(total_rank.desc())
         .limit(2000)
     )
 
     if candidates is not None:
-        q = q.where(ai_clean_text.c.ref_control_id.in_(candidates))
+        q = q.where(ai_feature_prep.c.ref_control_id.in_(candidates))
 
     rows = (await conn.execute(q)).fetchall()
     return [(r[0], float(r[1])) for r in rows]
@@ -1070,6 +1071,7 @@ async def _load_similar_controls(
             similar_controls.c.similar_control_id,
             similar_controls.c.rank,
             similar_controls.c.score,
+            similar_controls.c.category,
         )
         .where(_is_current(similar_controls.c.tx_to))
         .where(similar_controls.c.ref_control_id.in_(control_ids))
@@ -1086,6 +1088,7 @@ async def _load_similar_controls(
             control_id=r["similar_control_id"],
             score=r["score"],
             rank=r["rank"],
+            category=r["category"],
         ))
     return result
 
@@ -1200,13 +1203,14 @@ async def get_control_detail(control_id: str) -> ControlDetailResponse:
 
 async def _load_enrichment_with_details(conn, control_id: str) -> dict | None:
     """Load enrichment including _details narrative fields for a single control."""
+    _NARRATIVE_COLS = ["roles", "process", "product", "service"]
     cols = [
         ai_enrichment.c.ref_control_id,
         ai_enrichment.c.summary,
         ai_enrichment.c.control_as_event,
         ai_enrichment.c.control_as_issues,
     ]
-    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES:
+    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES + _NARRATIVE_COLS:
         cols.append(getattr(ai_enrichment.c, col_name))
 
     q = (
@@ -1219,7 +1223,7 @@ async def _load_enrichment_with_details(conn, control_id: str) -> dict | None:
         return None
 
     data = {}
-    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES:
+    for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES + _NARRATIVE_COLS:
         data[col_name] = row[col_name]
     data["summary"] = row["summary"]
     data["control_as_event"] = row["control_as_event"]

@@ -360,12 +360,25 @@ def generate_mock_jsonl(
             "Run context provider ingestion first."
         )
 
-    # Load real text from dataset if path provided
+    # Load real text from dataset if path provided.
+    # The pool returns {what, why, where} per control — we map these to source fields:
+    #   what  → control_title
+    #   why   → control_description
+    #   where → evidence_description / local_functional_information
     text_pool: Optional[List[Dict[str, str]]] = None
     if qdrant_dataset_path is not None:
         from server.pipelines.controls.model_runners.dataset_pool import load_text_pool
         logger.info("Loading text pool from dataset: {}", qdrant_dataset_path)
-        text_pool = load_text_pool(qdrant_dataset_path, num_controls)
+        raw_pool = load_text_pool(qdrant_dataset_path, num_controls)
+        text_pool = [
+            {
+                "control_title": entry.get("what", "")[:200],
+                "control_description": entry.get("why", ""),
+                "evidence_description": entry.get("where", ""),
+                "local_functional_information": entry.get("what", ""),
+            }
+            for entry in raw_pool
+        ]
         logger.info("Loaded text pool for {} controls", len(text_pool))
 
     # Build theme_id → taxonomy_id mapping for risk_theme entries

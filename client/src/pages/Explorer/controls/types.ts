@@ -35,6 +35,7 @@ export interface SimilarControl {
     control_id: string;
     score: number;
     rank: number;
+    category?: string | null; // "near_duplicate" or "weak_similar"
 }
 
 export interface AIEnrichment {
@@ -63,17 +64,27 @@ export interface ControlWithDetails {
 export type SearchMode = 'id' | 'keyword' | 'semantic' | 'hybrid';
 export type GroupByField = 'none' | 'preventative_detective' | 'manual_automated';
 
-/** Embedding features available for semantic/hybrid search */
+/** Embedding features available for semantic/hybrid search (Qdrant vectors) */
 export const SEMANTIC_FEATURES = [
-    { key: 'control_title', label: 'Title' },
-    { key: 'control_description', label: 'Description' },
-    { key: 'evidence_description', label: 'Evidence' },
-    { key: 'local_functional_information', label: 'Functional Info' },
-    { key: 'control_as_event', label: 'As Event' },
-    { key: 'control_as_issues', label: 'As Issues' },
+    { key: 'what', label: 'What' },
+    { key: 'why', label: 'Why' },
+    { key: 'where', label: 'Where' },
 ] as const;
 
 export type SemanticFeature = (typeof SEMANTIC_FEATURES)[number]['key'];
+
+/** Keyword searchable fields (PostgreSQL FTS) */
+export const KEYWORD_FIELDS = [
+    { key: 'control_title', label: 'Title', group: 'L1' },
+    { key: 'control_description', label: 'Description', group: 'L1' },
+    { key: 'what', label: 'What', group: 'L1' },
+    { key: 'why', label: 'Why', group: 'L1' },
+    { key: 'where', label: 'Where', group: 'L1' },
+    { key: 'evidence_description', label: 'Evidence', group: 'L2' },
+    { key: 'local_functional_information', label: 'Functional Info', group: 'L2' },
+] as const;
+
+export type KeywordField = (typeof KEYWORD_FIELDS)[number]['key'];
 
 /** Sidebar filter selections applied to the controls search. */
 export interface AppliedSidebarFilters {
@@ -104,12 +115,14 @@ export interface CommittedSearch {
     searchMode: SearchMode;
     searchTags: string[];
     semanticFeatures: string[];
+    keywordFields: string[];
 }
 
 export interface ControlsViewState {
     searchQuery: string;
     searchMode: SearchMode;
     semanticFeatures: Set<SemanticFeature>;
+    keywordFields: Set<KeywordField>;
     groupBy: GroupByField;
     aiScoreMax: number;
     filterKeyControl: boolean;
@@ -136,6 +149,7 @@ export type ControlsAction =
     | { type: 'SET_SEARCH'; payload: string }
     | { type: 'SET_SEARCH_MODE'; payload: SearchMode }
     | { type: 'TOGGLE_SEMANTIC_FEATURE'; payload: SemanticFeature }
+    | { type: 'TOGGLE_KEYWORD_FIELD'; payload: KeywordField }
     | { type: 'SET_GROUP_BY'; payload: GroupByField }
     | { type: 'SET_AI_SCORE_MAX'; payload: number }
     | { type: 'TOGGLE_KEY_CONTROL' }
@@ -201,6 +215,11 @@ export interface AIEnrichmentDetail {
     summary: string | null;
     control_as_event: string | null;
     control_as_issues: string | null;
+    // Narrative fields
+    roles: string | null;
+    process: string | null;
+    product: string | null;
+    service: string | null;
     // Taxonomy
     primary_risk_theme_id: string | null;
     secondary_risk_theme_id: string | null;
@@ -375,6 +394,7 @@ export function mapApiControl(api: ApiControlWithDetails): ControlWithDetails {
             control_id: sc.control_id,
             score: sc.score,
             rank: sc.rank,
+            category: sc.category,
         })),
         searchScore: api.search_score,
     };

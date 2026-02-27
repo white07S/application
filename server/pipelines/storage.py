@@ -9,7 +9,7 @@ DATA_INGESTED_PATH/
 ├── model_runs/        AI model outputs per upload
 │   ├── taxonomy/
 │   ├── enrichment/
-│   ├── clean_text/
+│   ├── feature_prep/
 │   └── embeddings/
 ├── jobs/              PostgreSQL job tracking (managed by Alembic)
 ├── .tus_temp/         TUS temporary uploads
@@ -130,7 +130,7 @@ def init_storage_directories() -> None:
         settings.data_ingested_path / CONTROLS_DIR,
         settings.data_ingested_path / MODEL_RUNS_DIR / "taxonomy",
         settings.data_ingested_path / MODEL_RUNS_DIR / "enrichment",
-        settings.data_ingested_path / MODEL_RUNS_DIR / "clean_text",
+        settings.data_ingested_path / MODEL_RUNS_DIR / "feature_prep",
         settings.data_ingested_path / MODEL_RUNS_DIR / "embeddings",
     ]
 

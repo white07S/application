@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchMode, SemanticFeature, SEMANTIC_FEATURES, ControlsAction } from '../types';
+import { SearchMode, SemanticFeature, SEMANTIC_FEATURES, KeywordField, KEYWORD_FIELDS, ControlsAction } from '../types';
 
 interface Props {
     value: string;
     searchMode: SearchMode;
     searchTags: string[];
     semanticFeatures: Set<SemanticFeature>;
+    keywordFields: Set<KeywordField>;
     dispatch: React.Dispatch<ControlsAction>;
     disabled?: boolean;
     onExecuteSearch: () => void;
@@ -29,7 +30,7 @@ const DISABLED_PLACEHOLDER = 'Clear sidebar filters to search';
 
 const DELIMITER_RE = /[|,;]/;
 
-export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTags, semanticFeatures, dispatch, disabled, onExecuteSearch }) => {
+export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTags, semanticFeatures, keywordFields, dispatch, disabled, onExecuteSearch }) => {
     // ID mode: local text (no debounce — only dispatched on Enter / Search button)
     const [localValue, setLocalValue] = useState(value);
     // Tag mode: current text being typed (not yet committed)
@@ -119,7 +120,9 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
     }, []);
 
     const currentMode = MODE_OPTIONS.find((m) => m.key === searchMode)!;
-    const showFeatures = searchMode === 'semantic' || searchMode === 'hybrid';
+    const showSemanticFeatures = searchMode === 'semantic' || searchMode === 'hybrid';
+    const showKeywordFields = searchMode === 'keyword' || searchMode === 'hybrid';
+    const showFieldToggle = showSemanticFeatures || showKeywordFields;
     const hasQuery = isIdMode ? localValue.trim().length > 0 : searchTags.length > 0 || tagInput.trim().length > 0;
 
     const handleSearchClick = () => {
@@ -231,45 +234,88 @@ export const ControlsSearchBar: React.FC<Props> = ({ value, searchMode, searchTa
                 </div>
             )}
 
-            {/* Semantic feature toggles (only for semantic/hybrid) */}
-            {showFeatures && (
+            {/* Search field toggles (semantic features / keyword fields) */}
+            {showFieldToggle && (
                 <div ref={featuresRef} className="relative flex-shrink-0">
                     <button
                         onClick={() => { setFeaturesOpen(!featuresOpen); setModeOpen(false); }}
                         className="flex items-center gap-1 h-full px-2.5 border border-l-0 border-border-light bg-surface-light hover:bg-surface-hover text-text-main transition-colors"
-                        title="Select embedding features"
+                        title="Select search fields"
                     >
                         <span className="material-symbols-outlined text-[14px] text-text-sub">tune</span>
-                        <span className="text-[10px] font-medium text-primary">{semanticFeatures.size}</span>
+                        <span className="text-[10px] font-medium text-primary">
+                            {showSemanticFeatures && !showKeywordFields && `${semanticFeatures.size}/${SEMANTIC_FEATURES.length}`}
+                            {showKeywordFields && !showSemanticFeatures && `${keywordFields.size}/${KEYWORD_FIELDS.length}`}
+                            {showSemanticFeatures && showKeywordFields && `${semanticFeatures.size}+${keywordFields.size}`}
+                        </span>
                         <span className={`material-symbols-outlined text-[12px] text-text-sub transition-transform ${featuresOpen ? 'rotate-180' : ''}`}>
                             expand_more
                         </span>
                     </button>
                     {featuresOpen && (
                         <div className="absolute top-full right-0 mt-1 bg-white border border-border-light rounded shadow-floating z-20 min-w-[220px] p-2">
-                            <div className="text-[10px] text-text-sub uppercase font-medium tracking-wide px-1 pb-1.5 border-b border-border-light mb-1.5">
-                                Search across features
-                            </div>
-                            {SEMANTIC_FEATURES.map((feat) => (
-                                <label
-                                    key={feat.key}
-                                    className="flex items-center gap-2 px-1 py-1 rounded hover:bg-surface-light cursor-pointer"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={semanticFeatures.has(feat.key)}
-                                        onChange={() => dispatch({ type: 'TOGGLE_SEMANTIC_FEATURE', payload: feat.key })}
-                                        className="h-3 w-3 rounded border-gray-300 text-primary focus:ring-primary/20"
-                                    />
-                                    <span className="text-xs text-text-main">{feat.label}</span>
-                                </label>
-                            ))}
-                            <div className="mt-1.5 pt-1.5 border-t border-border-light px-1">
-                                <span className="text-[10px] text-text-sub italic flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[10px]">info</span>
-                                    {semanticFeatures.size} of {SEMANTIC_FEATURES.length} vector fields active
-                                </span>
-                            </div>
+                            {/* Semantic features (semantic/hybrid) */}
+                            {showSemanticFeatures && (
+                                <>
+                                    <div className="text-[10px] text-text-sub uppercase font-medium tracking-wide px-1 pb-1.5 border-b border-border-light mb-1.5">
+                                        Vector fields
+                                    </div>
+                                    {SEMANTIC_FEATURES.map((feat) => (
+                                        <label
+                                            key={feat.key}
+                                            className="flex items-center gap-2 px-1 py-1 rounded hover:bg-surface-light cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={semanticFeatures.has(feat.key)}
+                                                onChange={() => dispatch({ type: 'TOGGLE_SEMANTIC_FEATURE', payload: feat.key })}
+                                                className="h-3 w-3 rounded border-gray-300 text-primary focus:ring-primary/20"
+                                            />
+                                            <span className="text-xs text-text-main">{feat.label}</span>
+                                        </label>
+                                    ))}
+                                    <div className="mt-1 px-1">
+                                        <span className="text-[10px] text-text-sub italic">
+                                            {semanticFeatures.size} of {SEMANTIC_FEATURES.length} vector fields
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+                            {/* Keyword fields (keyword/hybrid) */}
+                            {showKeywordFields && (
+                                <>
+                                    <div className={`text-[10px] text-text-sub uppercase font-medium tracking-wide px-1 pb-1.5 border-b border-border-light mb-1.5 ${showSemanticFeatures ? 'mt-2 pt-2' : ''}`}>
+                                        Keyword fields
+                                    </div>
+                                    {(['L1', 'L2'] as const).map((group) => {
+                                        const groupFields = KEYWORD_FIELDS.filter(f => f.group === group);
+                                        return (
+                                            <React.Fragment key={group}>
+                                                <div className="text-[9px] text-text-sub/70 uppercase font-medium tracking-wider px-1 pt-1 pb-0.5">{group}</div>
+                                                {groupFields.map((field) => (
+                                                    <label
+                                                        key={field.key}
+                                                        className="flex items-center gap-2 px-1 py-1 rounded hover:bg-surface-light cursor-pointer"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={keywordFields.has(field.key)}
+                                                            onChange={() => dispatch({ type: 'TOGGLE_KEYWORD_FIELD', payload: field.key })}
+                                                            className="h-3 w-3 rounded border-gray-300 text-primary focus:ring-primary/20"
+                                                        />
+                                                        <span className="text-xs text-text-main">{field.label}</span>
+                                                    </label>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                    <div className="mt-1 px-1">
+                                        <span className="text-[10px] text-text-sub italic">
+                                            {keywordFields.size} of {KEYWORD_FIELDS.length} keyword fields
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>

@@ -40,7 +40,7 @@ class ReadinessInfo(BaseModel):
     source_jsonl: bool
     taxonomy: bool
     enrichment: bool
-    clean_text: bool
+    feature_prep: bool
     embeddings: bool
     missing_models: List[str] = []
     missing_control_ids: Dict[str, List[str]] = {}

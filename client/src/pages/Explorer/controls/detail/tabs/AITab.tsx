@@ -143,6 +143,37 @@ export const AITab: React.FC<Props> = ({ data }) => {
                 ))}
             </div>
 
+            {/* Narrative Fields */}
+            {(() => {
+                const narratives = [
+                    { key: 'roles', label: 'Roles', icon: 'group' },
+                    { key: 'process', label: 'Process', icon: 'account_tree' },
+                    { key: 'product', label: 'Product', icon: 'inventory_2' },
+                    { key: 'service', label: 'Service', icon: 'support_agent' },
+                ] as const;
+                const populated = narratives.filter(n => aiRecord[n.key]);
+                if (populated.length === 0) return null;
+                return (
+                    <div className="mb-4">
+                        <div className="flex items-center gap-1.5 mb-2 pb-1 border-b border-border-light">
+                            <span className="material-symbols-outlined text-[14px] text-text-sub">description</span>
+                            <span className="text-[11px] font-semibold text-text-main uppercase tracking-wide">
+                                Narratives
+                            </span>
+                        </div>
+                        {populated.map(n => (
+                            <div key={n.key} className="mb-2 px-1">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="material-symbols-outlined text-[12px] text-text-sub">{n.icon}</span>
+                                    <span className="text-[10px] font-semibold text-text-sub uppercase tracking-wide">{n.label}</span>
+                                </div>
+                                <p className="text-[11px] text-text-main leading-relaxed pl-5">{aiRecord[n.key]}</p>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })()}
+
             {/* Similar / Linked Controls */}
             {similarControls.length > 0 && (
                 <div className="mb-4">
@@ -175,6 +206,7 @@ export const AITab: React.FC<Props> = ({ data }) => {
                             controlId={sc.control_id}
                             score={sc.score}
                             rank={sc.rank}
+                            category={sc.category}
                             expanded={expandedLinked.has(sc.control_id)}
                             onToggle={() => toggleLinked(sc.control_id)}
                         />

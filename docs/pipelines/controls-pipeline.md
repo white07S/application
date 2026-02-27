@@ -6,7 +6,7 @@ description: Detailed documentation for the Controls data ingestion, model execu
 
 # Controls Pipeline
 
-The Controls pipeline processes Key Performance Controls Inventory (KPCI) data through a multi-stage system: file upload, schema validation, model execution (taxonomy, enrichment, clean text, embeddings), temporal ingestion into PostgreSQL, vector indexing in Qdrant, and precomputed similar-controls scoring.
+The Controls pipeline processes Key Performance Controls Inventory (KPCI) data through a multi-stage system: file upload, schema validation, model execution (taxonomy, enrichment, feature prep, embeddings), temporal ingestion into PostgreSQL, vector indexing in Qdrant, and precomputed similar-controls scoring.
 
 ## Overview
 
@@ -27,7 +27,7 @@ flowchart TB
     subgraph Models["3. Model Execution"]
         TAX[Taxonomy]
         ENRICH[Enrichment]
-        CLEAN[Clean Text + Hashing]
+        FPREP[Feature Prep + Hashing]
         EMBED[Embeddings]
     end
 
@@ -46,7 +46,7 @@ flowchart TB
 
     CSV --> TUS --> BATCH
     BATCH --> PARSE --> VALIDATE --> JSONL
-    JSONL --> TAX --> ENRICH --> CLEAN --> EMBED
+    JSONL --> TAX --> ENRICH --> FPREP --> EMBED
     EMBED --> DELTA
     DELTA --> PG
     DELTA --> QDRANT
@@ -74,7 +74,7 @@ flowchart TB
 
 ### L1/L2 Control Hierarchy
 
-Controls follow a two-level hierarchy that is central to the pipeline's data-sharing and indexing strategy.
+Controls follow a two-level hierarchy that is central to the pipeline's indexing and similarity strategy.
 
 | Property | Level 1 | Level 2 |
 |---|---|---|
@@ -84,11 +84,9 @@ Controls follow a two-level hierarchy that is central to the pipeline's data-sha
 | **`control_description`** | Own text | Inherited from parent (~99.9%) |
 | **`evidence_description`** | Typically empty | Own text (L2-specific) |
 | **`local_functional_information`** | Typically empty | Own text (L2-specific) |
-| **`control_as_event`** | Own text (if active) | Often inherited from parent |
-| **`control_as_issues`** | Own text (if active) | Often inherited from parent |
 
-:::info Data Sharing Pattern
-In production data, ~99.9% of Level 2 controls share their `control_title` and `control_description` verbatim with their Level 1 parent. The pipeline's feature mask system detects this inheritance and avoids redundant embedding computation and similarity scoring for inherited fields. See [Feature Masks](#feature-masks) below.
+:::info Similarity Scope
+Because ~99.9% of L2 controls share title/description with their L1 parent, the pipeline restricts **embedding and similarity scoring to L1 Active Key controls only**. L2 controls are indexed for keyword search but do not receive their own similarity results — users are directed to check the L1 parent instead. See [Similar Controls](#similar-controls) below.
 :::
 
 ### Entity Relationship Diagram
@@ -104,7 +102,7 @@ erDiagram
     src_controls_ref_control ||--o{ src_controls_rel_risk_theme : "risk theme"
     src_controls_ref_control ||--o{ ai_controls_model_taxonomy : "taxonomy"
     src_controls_ref_control ||--o{ ai_controls_model_enrichment : "enrichment"
-    src_controls_ref_control ||--o{ ai_controls_model_clean_text : "clean text + FTS"
+    src_controls_ref_control ||--o{ ai_controls_model_feature_prep : "feature prep + FTS"
     src_controls_ref_control ||--o{ ai_controls_similar_controls : "similar"
 
     src_controls_ref_control {
@@ -132,15 +130,18 @@ erDiagram
         datetime tx_to
     }
 
-    ai_controls_model_clean_text {
+    ai_controls_model_feature_prep {
         bigint ver_id PK
         string ref_control_id FK
-        string control_title
-        string control_description
-        string hash_control_title
-        string hash_control_description
-        tsvector ts_control_title
-        tsvector ts_control_description
+        string what
+        string why
+        string where_col
+        string hash_what
+        string hash_why
+        string hash_where
+        tsvector ts_what
+        tsvector ts_why
+        tsvector ts_where
         datetime tx_from
         datetime tx_to
     }
@@ -206,18 +207,18 @@ flowchart LR
         E3[Store enrichment.jsonl]
     end
 
-    subgraph Clean["Clean Text"]
-        C1[Load control text]
-        C2[Normalize + clean 6 features]
+    subgraph FPrep["Feature Prep"]
+        C1[Load enrichment output]
+        C2[Extract what / why / where]
         C3[Compute per-feature SHA256 hashes]
-        C4[Compute feature masks vs parent]
-        C5[Store clean_text.jsonl]
+        C4[Set L1 Active Key masks]
+        C5[Store feature_prep.jsonl]
     end
 
     subgraph Embed["Embeddings"]
-        V1[Load clean text + masks]
-        V2[Generate 6 embeddings per control]
-        V3[Zero vectors for inherited features]
+        V1[Load feature prep + masks]
+        V2[Generate 3 embeddings per control]
+        V3[Zero vectors for non-L1 controls]
         V4[Store embeddings.npz + index]
     end
 
@@ -230,28 +231,42 @@ flowchart LR
 | Model | Input | Output | Key Fields |
 |---|---|---|---|
 | **Taxonomy** | Source JSONL | `taxonomy.jsonl` | NFR risk theme classifications, reasoning |
-| **Enrichment** | Source + taxonomy | `enrichment.jsonl` | Summary, complexity score, W-criteria yes/no flags |
-| **Clean Text** | Source JSONL | `clean_text.jsonl` | 6 cleaned text fields, 6 per-feature hashes, 6 feature masks |
-| **Embeddings** | Clean text output | `embeddings.npz` + index | 6 named embedding vectors (3072-dim each) |
+| **Enrichment** | Source + taxonomy | `enrichment.jsonl` | Summary, complexity score, W-criteria yes/no flags, what/why/where details, narratives (roles, process, product, service) |
+| **Feature Prep** | Enrichment output + source | `feature_prep.jsonl` | 3 semantic text fields (what, why, where), 3 per-feature hashes, 3 feature masks, keyword FTS pass-through fields |
+| **Embeddings** | Feature prep output | `embeddings.npz` + index | 3 named embedding vectors (3072-dim each) |
+
+---
+
+## Three Semantic Features
+
+The pipeline uses 3 LLM-extracted semantic features from enrichment instead of raw source text fields. These capture the essence of a control without boilerplate.
+
+| Feature | Source | Description |
+|---|---|---|
+| **what** | `what_details` from enrichment | What the control does — its objective and mechanism |
+| **why** | `why_details` from enrichment | Why the control exists — the risk or requirement it addresses |
+| **where** | `where_details` from enrichment | Where the control operates — organizational/process context |
+
+These 3 features are used for:
+- **Embedding vectors** in Qdrant (3 named vectors per point)
+- **Similarity scoring** between controls (TF-IDF + cosine)
+- **Semantic search** queries
 
 ---
 
 ## Per-Feature Hashing
 
-The clean text model computes an independent SHA-256 hash for each of the 6 text features, truncated to a 12-character hex prefix with a `CT` marker.
+The feature prep model computes an independent SHA-256 hash for each of the 3 semantic features, truncated to a 12-character hex prefix with a `CT` marker.
 
 **Hash Format:** `CT-{sha256[:12]}` (e.g., `CT-a3f8b2c1d4e5`)
 
 **Features hashed:**
 
-| Feature | Hash Column | Typical Source |
+| Feature | Hash Column | Source |
 |---|---|---|
-| `control_title` | `hash_control_title` | L1 own, L2 inherited |
-| `control_description` | `hash_control_description` | L1 own, L2 inherited |
-| `evidence_description` | `hash_evidence_description` | L2 own, L1 typically empty |
-| `local_functional_information` | `hash_local_functional_information` | L2 own, L1 typically empty |
-| `control_as_event` | `hash_control_as_event` | Active controls only |
-| `control_as_issues` | `hash_control_as_issues` | Active controls only |
+| `what` | `hash_what` | `what_details` from enrichment |
+| `why` | `hash_why` | `why_details` from enrichment |
+| `where` | `hash_where` | `where_details` from enrichment |
 
 Per-feature hashes are used at two points:
 1. **Ingestion delta detection** — compare incoming vs. existing hashes in PostgreSQL to detect changed model outputs
@@ -261,37 +276,34 @@ Per-feature hashes are used at two points:
 
 ## Feature Masks
 
-Feature masks are boolean flags that indicate whether a feature is **distinguishing** (the control's own text) or **inherited** (copied from its parent).
+Feature masks are boolean flags that determine whether a feature should be **embedded and indexed** in Qdrant.
 
-**Mask Columns:** `mask_control_title`, `mask_control_description`, `mask_evidence_description`, `mask_local_functional_information`, `mask_control_as_event`, `mask_control_as_issues`
+**Mask Columns:** `mask_what`, `mask_why`, `mask_where`
 
-### Computation (2-Pass Algorithm)
+### Computation
 
-The clean text model computes masks in two passes:
-
-1. **Pass 1:** Compute per-feature hashes for all controls and build a parent-child map
-2. **Pass 2:** For each control, compare its feature hashes against its parent's hashes
+The feature prep model uses a simple rule: only L1 Active Key controls are eligible for embedding and similarity.
 
 ```
 mask(feature) =
-    hash is None           → False  (no text, nothing to distinguish)
-    no parent              → True   (L1 controls are always distinguishing)
-    hash ≠ parent hash     → True   (child diverges from parent)
-    hash = parent hash     → False  (inherited from parent)
+    L1 Active Key control AND feature text is non-empty → True
+    otherwise                                            → False
 ```
+
+L2 controls get `mask = False` for all features — they are not embedded in Qdrant and do not participate in similarity scoring.
 
 ### How Masks Are Used
 
 | Component | How Masks Are Applied |
 |---|---|
-| **Embeddings** | `mask=False` → zero vector (no embedding generated for inherited features) |
-| **Qdrant Payload** | Masks stored alongside hashes for downstream consumers |
-| **Similar Controls** | Inherited features excluded from similarity scoring (`feature_valid` check) |
-| **Keyword Search (FTS)** | Masks NOT applied — FTS indexes all text including inherited (correct for findability) |
+| **Embeddings** | `mask=False` → zero vector (no embedding generated) |
+| **Qdrant Payload** | Masks stored alongside hashes for delta detection |
+| **Similar Controls** | Only L1 Active Key controls with `mask=True` participate in scoring |
+| **Keyword Search (FTS)** | Masks NOT applied — FTS indexes all text for all controls |
 | **Semantic Search** | Implicitly applied — zero vectors produce zero cosine similarity |
 
 :::info Why FTS Ignores Masks
-Keyword search intentionally indexes inherited text. A user searching for "reconciliation" should find both the L1 parent and its L2 children — even though the L2 inherited that title. Semantic search handles deduplication implicitly via zero vectors, while similarity scoring explicitly excludes inherited features.
+Keyword search intentionally indexes text for all controls including L2. A user searching for "reconciliation" should find both the L1 parent and its L2 children. Semantic search handles this implicitly via zero vectors.
 :::
 
 ---
@@ -324,7 +336,7 @@ flowchart LR
 
 | Category | Action | Qdrant Operation |
 |---|---|---|
-| **New** | Insert point with all 6 named vectors | `upsert` (full point) |
+| **New** | Insert point with all 3 named vectors | `upsert` (full point) |
 | **Changed** | Update only the vectors whose hash changed | `upsert` (changed vectors + updated payload) |
 | **Unchanged** | No Qdrant write | Skip |
 
@@ -332,14 +344,14 @@ flowchart LR
 
 ## Vector Indexing (Qdrant)
 
-Each control is stored as a single Qdrant point with 6 **named vectors** — one per searchable feature.
+Each L1 Active Key control is stored as a single Qdrant point with 3 **named vectors** — one per semantic feature.
 
 ### Collection Configuration
 
 | Setting | Value |
 |---|---|
 | **Collection** | `nfr_connect_controls` |
-| **Named Vectors** | 6 (one per feature) |
+| **Named Vectors** | 3 (`what`, `why`, `where`) |
 | **Embedding Dimension** | 3072 |
 | **Distance Metric** | Cosine |
 | **Storage** | On-disk |
@@ -352,28 +364,27 @@ Each point carries metadata in its payload for delta detection and downstream co
 ```json
 {
   "control_id": "CTRL-0000012345",
-  "hash_control_title": "CT-a3f8b2c1d4e5",
-  "hash_control_description": "CT-b7e2f4a9c1d3",
-  "hash_evidence_description": "CT-d1c4a8e3f2b7",
-  "hash_local_functional_information": null,
-  "hash_control_as_event": null,
-  "hash_control_as_issues": null,
-  "mask_control_title": false,
-  "mask_control_description": false,
-  "mask_evidence_description": true,
-  "mask_local_functional_information": true,
-  "mask_control_as_event": true,
-  "mask_control_as_issues": true
+  "hash_what": "CT-a3f8b2c1d4e5",
+  "hash_why": "CT-b7e2f4a9c1d3",
+  "hash_where": "CT-d1c4a8e3f2b7",
+  "mask_what": true,
+  "mask_why": true,
+  "mask_where": true
 }
 ```
-
-In this example, `control_title` and `control_description` are inherited (`mask=false`), so their embedding vectors are zero. The control is only searchable semantically via its own `evidence_description` and other distinguishing features.
 
 ---
 
 ## Search Algorithm
 
-The Explorer provides three search modes for controls, all operating on the 6-feature architecture.
+The Explorer provides three search modes for controls, using 3 semantic Qdrant vectors and 7 keyword FTS fields.
+
+### Search Fields
+
+| Channel | Fields | Storage |
+|---|---|---|
+| **Semantic** (Qdrant vectors) | `what`, `why`, `where` | 3 named vectors per point |
+| **Keyword** (PostgreSQL FTS) | `control_title`, `control_description`, `what`, `why`, `where`, `evidence_description`, `local_functional_information` | 7 tsvector columns |
 
 ### Search Modes
 
@@ -385,8 +396,8 @@ flowchart TB
     MODE -->|semantic| SEM[Qdrant Named Vectors]
     MODE -->|hybrid| HYB[Both in Parallel]
 
-    KW --> RANK_KW[Sum of ts_rank across features]
-    SEM --> RANK_SEM[RRF merge across 6 vectors]
+    KW --> RANK_KW[Sum of ts_rank across selected fields]
+    SEM --> RANK_SEM[RRF merge across 3 vectors]
     HYB --> MERGE[RRF merge keyword + semantic]
 
     RANK_KW --> RESULTS[Ranked Control IDs]
@@ -396,25 +407,25 @@ flowchart TB
 
 ### Keyword Search (PostgreSQL FTS)
 
-Searches `tsvector` columns in `ai_controls_model_clean_text` using `plainto_tsquery`.
+Searches `tsvector` columns in `ai_controls_model_feature_prep` using `plainto_tsquery`.
 
-- Each of the 6 features has a dedicated `ts_{feature}` tsvector column
+- 7 keyword fields have dedicated `ts_{field}` tsvector columns
 - A PostgreSQL trigger auto-generates tsvectors on insert/update
 - Partial GIN indexes on `tx_to IS NULL` ensure only current versions are searched
 - Ranking: sum of `ts_rank()` across selected fields
 - Limit: 2000 results
 
 :::info Inherited Text in FTS
-FTS indexes **all** clean text including inherited fields. An L2 control with an inherited title containing "reconciliation" is findable via keyword search. This is intentional — users expect to find all controls containing a term regardless of data sharing.
+FTS indexes text for **all** controls including L2. An L2 control with an inherited title containing "reconciliation" is findable via keyword search. This is intentional — users expect to find all controls containing a term regardless of hierarchy level.
 :::
 
 ### Semantic Search (Qdrant Named Vectors)
 
-Embeds the user's query via OpenAI `text-embedding-3-large` (3072-dim), then searches each named vector in parallel.
+Embeds the user's query via OpenAI `text-embedding-3-large` (3072-dim), then searches each of the 3 named vectors in parallel.
 
 - Searches each feature vector independently (up to 200 results per feature)
-- Results merged via Reciprocal Rank Fusion (RRF) across features
-- Controls with zero vectors for a feature naturally produce zero cosine similarity for that feature
+- Results merged via Reciprocal Rank Fusion (RRF) across 3 features
+- Only L1 Active Key controls have non-zero vectors; L2 controls naturally produce zero cosine similarity
 - Sidebar filter candidates are passed as a Qdrant `FieldCondition` on `control_id`
 
 ### Hybrid Search (RRF Merge)
@@ -433,49 +444,74 @@ Falls back to keyword-only if no OpenAI API key is configured.
 
 ### Search Mode Behavior for L1/L2
 
-| Search Mode | L1 Controls | L2 Controls |
+| Search Mode | L1 Active Key Controls | L2 Controls |
 |---|---|---|
-| **Keyword** | Found via own title/desc | Found via inherited title/desc AND own evidence/local_func |
-| **Semantic** | Found via own title/desc vectors | Found via own evidence/local_func vectors only (inherited = zero) |
-| **Hybrid** | Both channels contribute | Keyword channel finds inherited text; semantic finds own features |
+| **Keyword** | Found via title, desc, what, why, where | Found via title, desc, evidence, functional_info |
+| **Semantic** | Found via what/why/where vectors | Not found (zero vectors) |
+| **Hybrid** | Both channels contribute | Keyword channel only |
 
 ---
 
 ## Similar Controls
 
-Precomputed similar controls use a hybrid multi-feature scoring algorithm with two modes.
+Precomputed similar controls use a hybrid TF-IDF + embedding cosine scoring algorithm, restricted to **L1 Active Key controls only**.
+
+### Scope
+
+Only L1 Active Key controls participate in similarity scoring. L2 controls and non-key/inactive controls are excluded. The UI directs users to check the L1 parent for similarity information on L2 controls.
 
 ### Scoring Algorithm
 
-For each pair of controls `(i, j)`, the scorer computes a per-feature hybrid score:
+For each pair of L1 Active Key controls `(i, j)`, the scorer computes a per-feature score across the 3 semantic features (what, why, where):
 
 ```
-hybrid_f = 0.6 × cosine(embedding_i, embedding_j) + 0.4 × jaccard(tokens_i, tokens_j)
+For each feature f in [what, why, where]:
+    embed_cos_f = cosine(embedding_i[f], embedding_j[f])     # [0, 1]
+    tfidf_cos_f = cosine(tfidf_i[f], tfidf_j[f])             # [0, 1]
+    feature_score_f = (embed_cos_f + tfidf_cos_f) / 2.0
+
+final_score = mean(feature_score_what, feature_score_why, feature_score_where)  # [0, 1]
 ```
 
-With adjustments:
-- **Duplicate cap:** If `cosine > 0.99`, the feature score is capped at `0.3` (prevents inherited/copied text from dominating)
-- **Feature validity:** Features with zero-norm vectors (`< 0.01`) are skipped (inherited/empty features excluded)
-- **Diversity bonus:** `1.0 + 0.05 × n_diverse` multiplier rewards controls that are similar across multiple independent features
-- **Parent-child exclusion:** Direct parent-child pairs are always excluded from results
+The TF-IDF component uses scikit-learn's `TfidfVectorizer` to weight rare terms higher than common ones, providing better keyword-level discrimination than simple token overlap.
 
-Each control retains its top 4 most similar controls.
+### Categories and Thresholds
 
-### Full Rebuild vs. Incremental (Option D+)
+Each similar control is labeled with a category based on its score:
+
+| Category | Score Range | Meaning |
+|---|---|---|
+| **Near Duplicate** | >= 0.90 | Controls that are essentially the same |
+| **Weak Similar** | 0.60 - 0.89 | Controls with meaningful similarity |
+| *(discarded)* | < 0.60 | Not stored |
+
+Each control retains its **top 3** most similar controls (minimum score 0.60).
+
+**Parent-child exclusion:** Direct parent-child pairs are always excluded from results.
+
+### Full Rebuild vs. Incremental
 
 | Mode | Complexity | When Used |
 |---|---|---|
 | **Full Rebuild** | O(n²) | Initial load, monthly safety net |
 | **Incremental** | O(delta × n) | Daily delta uploads |
 
-**Incremental mode** (Option D+) operates in two phases:
+**Full rebuild** flow:
+1. Load embeddings NPZ (3 features) and normalize
+2. Load feature prep JSONL to extract what/why/where text
+3. Filter to L1 Active Key controls only
+4. Build 3 TF-IDF matrices (one per feature)
+5. For each control, find semantic neighbors via Qdrant, compute hybrid scores
+6. Keep top-3 per control with score >= 0.60, label categories
+7. Write to DB with temporal versioning
 
+**Incremental mode** operates in two phases:
 1. **DELETE phase:** Find controls that previously pointed to now-changed controls → rescan and re-rank their neighbors
-2. **INSERT phase:** Score new/changed controls against all controls, with reverse kth-score check to update existing top-4 lists that the new control beats
+2. **INSERT phase:** Score new/changed controls against all controls, with reverse kth-score check to update existing top-3 lists that the new control beats
 
 A hub guardrail falls back to full rebuild if the affected set exceeds 20,000 controls (prevents cascading rescans from hub nodes).
 
-Results are stored in `ai_controls_similar_controls` with temporal versioning, including per-feature breakdown scores.
+Results are stored in `ai_controls_similar_controls` with temporal versioning and a `category` column.
 
 ---
 
@@ -530,19 +566,19 @@ stateDiagram-v2
 | Table | Description | Key Columns |
 |---|---|---|
 | `ai_controls_model_taxonomy` | NFR risk theme classifications | `ref_control_id`, `hash`, `nfr_*` fields, `tx_from`, `tx_to` |
-| `ai_controls_model_enrichment` | Summaries, complexity, W-criteria | `ref_control_id`, `hash`, `summary`, `complexity_*`, `tx_from`, `tx_to` |
-| `ai_controls_model_clean_text` | Cleaned text + FTS tsvectors + per-feature hashes | `ref_control_id`, `{feature}`, `hash_{feature}`, `ts_{feature}`, `tx_from`, `tx_to` |
-| `ai_controls_similar_controls` | Precomputed top-4 similar controls | `ref_control_id`, `similar_control_id`, `score`, `tx_from`, `tx_to` |
+| `ai_controls_model_enrichment` | Summaries, complexity, W-criteria, narratives | `ref_control_id`, `hash`, `summary`, `roles`, `process`, `product`, `service`, `tx_from`, `tx_to` |
+| `ai_controls_model_feature_prep` | Semantic features + FTS tsvectors + per-feature hashes | `ref_control_id`, `what`, `why`, `where`, `hash_*`, `ts_*`, `tx_from`, `tx_to` |
+| `ai_controls_similar_controls` | Precomputed top-3 similar controls with categories | `ref_control_id`, `similar_control_id`, `score`, `category`, `tx_from`, `tx_to` |
 
 :::warning Embeddings Are Not in PostgreSQL
-Embedding vectors are stored exclusively in Qdrant (6 named vectors × 3072 dimensions per control). PostgreSQL only stores the per-feature hashes for delta detection and the tsvectors for keyword search.
+Embedding vectors are stored exclusively in Qdrant (3 named vectors × 3072 dimensions per control). PostgreSQL only stores the per-feature hashes for delta detection and the tsvectors for keyword search.
 :::
 
 ### Vector Store (Qdrant)
 
 | Collection | Points | Named Vectors | Dimension | Payload |
 |---|---|---|---|---|
-| `nfr_connect_controls` | 1 per control | 6 (one per feature) | 3072 | `control_id`, 6 hashes, 6 masks |
+| `nfr_connect_controls` | 1 per L1 Active Key control | 3 (`what`, `why`, `where`) | 3072 | `control_id`, 3 hashes, 3 masks |
 
 ---
 
@@ -560,10 +596,10 @@ DATA_INGESTED_PATH/
 │   │   └── UPL-2026-0002.jsonl
 │   ├── enrichment/
 │   │   └── ...
-│   ├── clean_text/
+│   ├── feature_prep/
 │   │   └── ...
 │   └── embeddings/
-│       ├── UPL-2026-0001.npz        # Binary embeddings
+│       ├── UPL-2026-0001.npz        # Binary embeddings (3 arrays)
 │       ├── UPL-2026-0001.index.jsonl # Per-control hashes + masks
 │       └── ...
 │

@@ -8,11 +8,17 @@ interface Props {
     controlId: string;
     score: number;
     rank: number;
+    category?: string | null;
     expanded: boolean;
     onToggle: () => void;
 }
 
-export const LinkedControlCard: React.FC<Props> = ({ controlId, score, rank, expanded, onToggle }) => {
+const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
+    near_duplicate: { label: 'Near Duplicate', className: 'bg-red-100 text-red-700' },
+    weak_similar: { label: 'Weak Similar', className: 'bg-amber-100 text-amber-700' },
+};
+
+export const LinkedControlCard: React.FC<Props> = ({ controlId, score, rank, category, expanded, onToggle }) => {
     const { getApiAccessToken } = useAuth();
     const [brief, setBrief] = useState<ControlBrief | null>(null);
     const [loading, setLoading] = useState(false);
@@ -48,7 +54,12 @@ export const LinkedControlCard: React.FC<Props> = ({ controlId, score, rank, exp
             >
                 <span className="text-[10px] text-text-sub w-4 text-right font-mono shrink-0">#{rank}</span>
                 <span className="text-[11px] font-mono text-text-main">{controlId}</span>
-                <span className="text-[10px] text-text-sub ml-auto mr-1 font-mono">
+                {category && CATEGORY_STYLES[category] && (
+                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-sm ml-auto ${CATEGORY_STYLES[category].className}`}>
+                        {CATEGORY_STYLES[category].label}
+                    </span>
+                )}
+                <span className={`text-[10px] text-text-sub ${category ? 'ml-1' : 'ml-auto'} mr-1 font-mono`}>
                     {(score * 100).toFixed(1)}%
                 </span>
                 {expanded

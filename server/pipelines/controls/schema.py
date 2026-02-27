@@ -2,10 +2,10 @@
 
 11 tables across 2 sections:
 - Source controls (8): ref_control, ver_control, 6 relation tables
-- AI model outputs (3): enrichment, taxonomy, clean_text (with FTS via tsvector)
+- AI model outputs (3): enrichment, taxonomy, feature_prep (with FTS via tsvector)
 
 Embeddings are stored exclusively in Qdrant (no Postgres table).
-FTS is provided via tsvector columns + GIN indexes on clean_text.
+FTS is provided via tsvector columns + GIN indexes on feature_prep.
 """
 
 from sqlalchemy import (
@@ -41,7 +41,7 @@ CONTROLS_TABLES = [
     # AI (3) — no embedding table, that's in Qdrant
     "ai_controls_model_enrichment",
     "ai_controls_model_taxonomy",
-    "ai_controls_model_clean_text",
+    "ai_controls_model_feature_prep",
     # AI (1) — precomputed similarity
     "ai_controls_similar_controls",
 ]
@@ -316,76 +316,79 @@ ai_controls_model_taxonomy = Table(
     Index("uq_ai_taxonomy_current", "ref_control_id", unique=True, postgresql_where=text("tx_to IS NULL")),
 )
 
-ai_controls_model_clean_text = Table(
-    "ai_controls_model_clean_text",
+ai_controls_model_feature_prep = Table(
+    "ai_controls_model_feature_prep",
     metadata,
     Column("ver_id", BigInteger, primary_key=True, autoincrement=True),
     Column("ref_control_id", Text, ForeignKey("src_controls_ref_control.control_id"), nullable=False),
     Column("model_run_timestamp", DateTime(timezone=True), nullable=False),
 
-    # Per-feature hashes (for embedding delta detection)
-    Column("hash_control_title", Text, nullable=True),
-    Column("hash_control_description", Text, nullable=True),
-    Column("hash_evidence_description", Text, nullable=True),
-    Column("hash_local_functional_information", Text, nullable=True),
-    Column("hash_control_as_event", Text, nullable=True),
-    Column("hash_control_as_issues", Text, nullable=True),
+    # Semantic feature texts (from enrichment _details — for Qdrant/similarity)
+    Column("what", Text, nullable=True),
+    Column("why", Text, nullable=True),
+    Column("where", Text, nullable=True),
 
-    # Clean text fields
+    # Per-feature hashes (for embedding delta detection)
+    Column("hash_what", Text, nullable=True),
+    Column("hash_why", Text, nullable=True),
+    Column("hash_where", Text, nullable=True),
+
+    # Keyword FTS text fields (pass-through from source)
     Column("control_title", Text, nullable=True),
     Column("control_description", Text, nullable=True),
     Column("evidence_description", Text, nullable=True),
     Column("local_functional_information", Text, nullable=True),
-    Column("control_as_event", Text, nullable=True),
-    Column("control_as_issues", Text, nullable=True),
 
     # tsvector columns for FTS (populated by trigger)
+    Column("ts_what", TSVECTOR, nullable=True),
+    Column("ts_why", TSVECTOR, nullable=True),
+    Column("ts_where", TSVECTOR, nullable=True),
     Column("ts_control_title", TSVECTOR, nullable=True),
     Column("ts_control_description", TSVECTOR, nullable=True),
     Column("ts_evidence_description", TSVECTOR, nullable=True),
     Column("ts_local_functional_information", TSVECTOR, nullable=True),
-    Column("ts_control_as_event", TSVECTOR, nullable=True),
-    Column("ts_control_as_issues", TSVECTOR, nullable=True),
 
     # Transaction-time versioning
     Column("tx_from", DateTime(timezone=True), nullable=False),
     Column("tx_to", DateTime(timezone=True), nullable=True),
 
-    CheckConstraint("tx_to IS NULL OR tx_to > tx_from", name="chk_tx_order_ai_clean_text"),
-    Index("idx_ai_clean_text_ref_txto", "ref_control_id", "tx_to"),
-    Index("uq_ai_clean_text_current", "ref_control_id", unique=True, postgresql_where=text("tx_to IS NULL")),
+    CheckConstraint("tx_to IS NULL OR tx_to > tx_from", name="chk_tx_order_ai_feature_prep"),
+    Index("idx_ai_feature_prep_ref_txto", "ref_control_id", "tx_to"),
+    Index("uq_ai_feature_prep_current", "ref_control_id", unique=True, postgresql_where=text("tx_to IS NULL")),
 
     # GIN indexes for FTS on current versions only
+    Index("idx_fts_what", "ts_what", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
+    Index("idx_fts_why", "ts_why", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
+    Index("idx_fts_where", "ts_where", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
     Index("idx_fts_control_title", "ts_control_title", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
     Index("idx_fts_control_description", "ts_control_description", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
     Index("idx_fts_evidence_description", "ts_evidence_description", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
     Index("idx_fts_local_functional_information", "ts_local_functional_information", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
-    Index("idx_fts_control_as_event", "ts_control_as_event", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
-    Index("idx_fts_control_as_issues", "ts_control_as_issues", postgresql_using="gin", postgresql_where=text("tx_to IS NULL")),
 )
 
 # FTS trigger SQL — to be executed in Alembic migration
 FTS_TRIGGER_SQL = """
-CREATE OR REPLACE FUNCTION update_clean_text_tsvectors() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION update_feature_prep_tsvectors() RETURNS trigger AS $$
 BEGIN
+    NEW.ts_what := to_tsvector('english', COALESCE(NEW.what, ''));
+    NEW.ts_why := to_tsvector('english', COALESCE(NEW.why, ''));
+    NEW.ts_where := to_tsvector('english', COALESCE(NEW.where, ''));
     NEW.ts_control_title := to_tsvector('english', COALESCE(NEW.control_title, ''));
     NEW.ts_control_description := to_tsvector('english', COALESCE(NEW.control_description, ''));
     NEW.ts_evidence_description := to_tsvector('english', COALESCE(NEW.evidence_description, ''));
     NEW.ts_local_functional_information := to_tsvector('english', COALESCE(NEW.local_functional_information, ''));
-    NEW.ts_control_as_event := to_tsvector('english', COALESCE(NEW.control_as_event, ''));
-    NEW.ts_control_as_issues := to_tsvector('english', COALESCE(NEW.control_as_issues, ''));
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_clean_text_tsvectors
-    BEFORE INSERT OR UPDATE ON ai_controls_model_clean_text
-    FOR EACH ROW EXECUTE FUNCTION update_clean_text_tsvectors();
+CREATE TRIGGER trg_feature_prep_tsvectors
+    BEFORE INSERT OR UPDATE ON ai_controls_model_feature_prep
+    FOR EACH ROW EXECUTE FUNCTION update_feature_prep_tsvectors();
 """
 
 FTS_TRIGGER_DROP_SQL = """
-DROP TRIGGER IF EXISTS trg_clean_text_tsvectors ON ai_controls_model_clean_text;
-DROP FUNCTION IF EXISTS update_clean_text_tsvectors();
+DROP TRIGGER IF EXISTS trg_feature_prep_tsvectors ON ai_controls_model_feature_prep;
+DROP FUNCTION IF EXISTS update_feature_prep_tsvectors();
 """
 
 
@@ -400,6 +403,7 @@ ai_controls_similar_controls = Table(
     Column("similar_control_id", Text, ForeignKey("src_controls_ref_control.control_id"), nullable=False),
     Column("rank", SmallInteger, nullable=False),
     Column("score", Float, nullable=False),
+    Column("category", Text, nullable=True),  # "near_duplicate" or "weak_similar"
     Column("feature_scores", JSONB, nullable=True),
     Column("tx_from", DateTime(timezone=True), nullable=False),
     Column("tx_to", DateTime(timezone=True), nullable=True),

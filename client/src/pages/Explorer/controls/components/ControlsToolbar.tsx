@@ -91,6 +91,7 @@ export const ControlsToolbar: React.FC<Props> = ({ state, dispatch, searchDisabl
                     searchMode={state.searchMode}
                     searchTags={state.searchTags}
                     semanticFeatures={state.semanticFeatures}
+                    keywordFields={state.keywordFields}
                     dispatch={dispatch}
                     disabled={searchDisabled}
                     onExecuteSearch={() => dispatch({ type: 'EXECUTE_SEARCH' })}

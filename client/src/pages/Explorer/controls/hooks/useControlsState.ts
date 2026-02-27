@@ -8,6 +8,7 @@ import {
     ControlGroup,
     GroupByField,
     SemanticFeature,
+    KeywordField,
     CommittedSearch,
     DateField,
     AppliedSidebarFilters,
@@ -18,9 +19,9 @@ import {
 const initialState: ControlsViewState = {
     searchQuery: '',
     searchMode: 'keyword',
-    semanticFeatures: new Set<SemanticFeature>([
-        'control_title',
-        'control_description',
+    semanticFeatures: new Set<SemanticFeature>(['what', 'why', 'where']),
+    keywordFields: new Set<KeywordField>([
+        'control_title', 'control_description', 'what', 'why', 'where',
     ]),
     groupBy: 'none',
     aiScoreMax: 14,
@@ -58,6 +59,15 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
                 next.add(action.payload);
             }
             return { ...state, semanticFeatures: next };
+        }
+        case 'TOGGLE_KEYWORD_FIELD': {
+            const next = new Set(state.keywordFields);
+            if (next.has(action.payload)) {
+                if (next.size > 1) next.delete(action.payload);
+            } else {
+                next.add(action.payload);
+            }
+            return { ...state, keywordFields: next };
         }
         case 'SET_GROUP_BY':
             return { ...state, groupBy: action.payload, expandedGroups: new Set<string>() };
@@ -123,6 +133,7 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
                     searchMode: state.searchMode,
                     searchTags: [...state.searchTags],
                     semanticFeatures: Array.from(state.semanticFeatures),
+                    keywordFields: Array.from(state.keywordFields),
                 },
             };
         case 'CLEAR_SEARCH':
@@ -131,7 +142,10 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
                 searchQuery: '',
                 searchMode: 'keyword',
                 searchTags: [],
-                semanticFeatures: new Set<SemanticFeature>(['control_title', 'control_description']),
+                semanticFeatures: new Set<SemanticFeature>(['what', 'why', 'where']),
+                keywordFields: new Set<KeywordField>([
+                    'control_title', 'control_description', 'what', 'why', 'where',
+                ]),
                 committedSearch: null,
             };
         case 'RESET_CONTROLS':
@@ -215,7 +229,10 @@ function buildSearchParams(
         if (cs.searchQuery.trim()) {
             params.search_query = cs.searchQuery.trim();
             params.search_mode = cs.searchMode;
-            params.search_fields = cs.semanticFeatures;
+            // Send both semantic and keyword fields — server filters by mode
+            params.search_fields = cs.searchMode === 'keyword'
+                ? cs.keywordFields
+                : [...cs.semanticFeatures, ...cs.keywordFields];
         }
     }
 

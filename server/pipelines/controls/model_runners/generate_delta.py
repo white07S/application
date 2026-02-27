@@ -5,7 +5,7 @@ Takes UPL-YYYY-0001 (full baseline) and produces UPL-YYYY-0002 with:
   - N controls mutated (text fields changed, last_modified_on bumped)
   - M new controls added
 
-Then re-runs all model runners (enrichment, clean_text, embeddings) on the
+Then re-runs all model runners (enrichment, feature_prep, embeddings) on the
 new full file so the delta detection in ingestion can exercise both:
   1. Changed records (existing control with updated text/hash)
   2. New records (control_id not seen before)
@@ -16,7 +16,7 @@ Usage:
         --num-changed 50 \
         --num-new 20
 
-This generates UPL-2026-0002.jsonl and runs enrichment/clean_text/embeddings
+This generates UPL-2026-0002.jsonl and runs enrichment/feature_prep/embeddings
 mock runners on it.
 """
 
@@ -263,10 +263,10 @@ def main() -> int:
             ],
         ),
         (
-            "clean_text",
+            "feature_prep",
             [
                 sys.executable, "-m",
-                "server.pipelines.controls.model_runners.run_clean_text_mock",
+                "server.pipelines.controls.model_runners.run_feature_prep_mock",
                 "--upload-id", delta_upload_id,
                 "--overwrite",
             ],
@@ -316,7 +316,7 @@ def main() -> int:
     print(f"  1. Ingest base:  upload_id={base_upload_id}")
     print(f"  2. Ingest delta: upload_id={delta_upload_id}")
     print(f"\nExpected delta detection:")
-    print(f"  - {args.num_changed} controls with changed clean_text hashes → Qdrant vector update")
+    print(f"  - {args.num_changed} controls with changed feature_prep hashes → Qdrant vector update")
     print(f"  - {args.num_new} new controls → Qdrant full point insert")
     print(f"  - ~{len(controls) - args.num_changed} unchanged controls → skip")
 

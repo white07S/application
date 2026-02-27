@@ -33,7 +33,7 @@ export interface ReadinessInfo {
     source_jsonl: boolean;
     taxonomy: boolean;
     enrichment: boolean;
-    clean_text: boolean;
+    feature_prep: boolean;
     embeddings: boolean;
     missing_models: string[];
     missing_control_ids: Record<string, string[]>;
