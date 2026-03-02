@@ -69,6 +69,22 @@ export const ControlsToolbar: React.FC<Props> = ({ state, dispatch, searchDisabl
                     </select>
                 </div>
 
+                {/* Has Similar toggle */}
+                <button
+                    type="button"
+                    aria-label="Filter controls with similar controls"
+                    title="Show only controls that have similar controls"
+                    onClick={() => dispatch({ type: 'TOGGLE_HAS_SIMILAR' })}
+                    className={`h-8 px-2.5 text-[10px] uppercase font-semibold tracking-wide rounded-sm border transition-colors flex items-center gap-1 flex-shrink-0 ${
+                        state.filterHasSimilar
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-white text-text-sub border-border-light hover:border-primary/40'
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-[14px]">hub</span>
+                    Similar
+                </button>
+
                 {/* Group By */}
                 <div className="flex items-center gap-1 flex-shrink-0 border-l border-border-light pl-1.5 ml-0.5">
                     <span className="text-[10px] text-text-sub font-medium whitespace-nowrap">Group</span>

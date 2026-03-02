@@ -228,7 +228,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                     <HierarchyFilter
                         nodes={funcTree.nodes}
                         selected={state.selectedFunctions}
-                        onToggle={(id) => dispatch({ type: 'TOGGLE_FUNCTION', payload: id })}
+                        onToggle={(id, descendantIds) => {
+                            const isSelected = state.selectedFunctions.has(id);
+                            dispatch({ type: 'TOGGLE_FUNCTION', payload: id });
+                            if (descendantIds.length > 0) {
+                                if (isSelected) {
+                                    dispatch({ type: 'DESELECT_MANY', payload: { section: 'selectedFunctions', ids: descendantIds } });
+                                } else {
+                                    dispatch({ type: 'SELECT_MANY', payload: { section: 'selectedFunctions', ids: descendantIds } });
+                                }
+                            }
+                        }}
                         onExpand={funcTree.loadChildren}
                         onSearchChange={funcTree.onSearchChange}
                         searchLoading={funcTree.searchLoading}
@@ -259,7 +269,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                     <HierarchyFilter
                         nodes={locTree.nodes}
                         selected={state.selectedLocations}
-                        onToggle={(id) => dispatch({ type: 'TOGGLE_LOCATION', payload: id })}
+                        onToggle={(id, descendantIds) => {
+                            const isSelected = state.selectedLocations.has(id);
+                            dispatch({ type: 'TOGGLE_LOCATION', payload: id });
+                            if (descendantIds.length > 0) {
+                                if (isSelected) {
+                                    dispatch({ type: 'DESELECT_MANY', payload: { section: 'selectedLocations', ids: descendantIds } });
+                                } else {
+                                    dispatch({ type: 'SELECT_MANY', payload: { section: 'selectedLocations', ids: descendantIds } });
+                                }
+                            }
+                        }}
                         onExpand={locTree.loadChildren}
                         onSearchChange={locTree.onSearchChange}
                         searchLoading={locTree.searchLoading}

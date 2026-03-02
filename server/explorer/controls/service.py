@@ -52,6 +52,7 @@ from server.pipelines.orgs.schema import (
     src_orgs_ver_function as ver_function,
     src_orgs_ver_location as ver_location,
     src_orgs_rel_cross_link as rel_cross_link,
+    src_orgs_rel_child as rel_child,
 )
 from server.pipelines.assessment_units.schema import src_au_ver_unit as ver_au
 from server.pipelines.controls.qdrant_service import control_id_to_uuid, NAMED_VECTORS
@@ -261,10 +262,44 @@ async def _resolve_sidebar_candidates(
     return result
 
 
+async def _expand_to_descendants(
+    conn, node_ids: list[str],
+) -> list[str]:
+    """Expand node_ids to include all descendant nodes via rel_child.
+
+    Iterative level-by-level traversal (max 10 levels) to avoid runaway recursion.
+    """
+    all_ids = set(node_ids)
+    current_level = set(node_ids)
+
+    for _ in range(10):
+        if not current_level:
+            break
+        q = (
+            select(rel_child.c.out_node_id)
+            .where(rel_child.c.in_node_id.in_(list(current_level)))
+            .where(_is_current(rel_child.c.tx_to))
+        )
+        rows = (await conn.execute(q)).fetchall()
+        children = {r[0] for r in rows} - all_ids
+        if not children:
+            break
+        all_ids.update(children)
+        current_level = children
+
+    return list(all_ids)
+
+
 async def _controls_by_org_nodes(
     conn, node_ids: list[str], org_type: str, scope: str,
 ) -> set[str]:
-    """Find control_ids linked to given org node_ids via owns/related tables."""
+    """Find control_ids linked to given org node_ids via owns/related tables.
+
+    Automatically expands node_ids to include all descendants (cascading).
+    """
+    # Expand selected nodes to include all children/grandchildren
+    expanded_ids = await _expand_to_descendants(conn, node_ids)
+
     queries = []
 
     if org_type == "function":
@@ -275,7 +310,7 @@ async def _controls_by_org_nodes(
     if scope in ("owns", "both"):
         q = (
             select(owns_tbl.c.control_id)
-            .where(owns_tbl.c.node_id.in_(node_ids))
+            .where(owns_tbl.c.node_id.in_(expanded_ids))
             .where(_is_current(owns_tbl.c.tx_to))
         )
         queries.append(q)
@@ -283,7 +318,7 @@ async def _controls_by_org_nodes(
     if scope in ("related", "both"):
         q = (
             select(related_tbl.c.control_id)
-            .where(related_tbl.c.node_id.in_(node_ids))
+            .where(related_tbl.c.node_id.in_(expanded_ids))
             .where(_is_current(related_tbl.c.tx_to))
         )
         queries.append(q)
@@ -513,6 +548,14 @@ async def _browse_all(
         elif toolbar.level1 and toolbar.level2:
             conditions.append(ver_control.c.hierarchy_level.in_(["Level 1", "Level 2"]))
         conditions.extend(_build_date_conditions(toolbar))
+        if toolbar.has_similar:
+            has_sim_subq = (
+                select(similar_controls.c.ref_control_id)
+                .where(_is_current(similar_controls.c.tx_to))
+                .distinct()
+                .scalar_subquery()
+            )
+            conditions.append(ver_control.c.ref_control_id.in_(has_sim_subq))
 
     q = (
         select(ver_control.c.ref_control_id)
@@ -561,6 +604,7 @@ def _has_toolbar_filters(toolbar) -> bool:
         or toolbar.ai_score_max is not None
         or toolbar.date_from is not None
         or toolbar.date_to is not None
+        or toolbar.has_similar is not None
     )
 
 
@@ -626,6 +670,17 @@ async def _apply_toolbar_filters(
     # AI score filter (if specified)
     if toolbar.ai_score_max is not None:
         matching_ids = await _filter_by_ai_score(conn, matching_ids, toolbar.ai_score_max)
+
+    # Has similar filter
+    if toolbar.has_similar:
+        q_sim = (
+            select(similar_controls.c.ref_control_id)
+            .where(_is_current(similar_controls.c.tx_to))
+            .where(similar_controls.c.ref_control_id.in_(list(matching_ids)))
+            .distinct()
+        )
+        rows_sim = (await conn.execute(q_sim)).fetchall()
+        matching_ids = {r[0] for r in rows_sim}
 
     # Preserve original order
     return [(cid, score) for cid, score in ranked if cid in matching_ids]

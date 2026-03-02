@@ -109,6 +109,7 @@ class ToolbarFilters(BaseModel):
     date_field: Literal["created_on", "last_modified_on"] = Field(
         default="created_on", description="Which date column to filter on",
     )
+    has_similar: bool | None = Field(default=None, description="Filter to controls with precomputed similar controls")
 
 
 class ControlsSearchParams(BaseModel):

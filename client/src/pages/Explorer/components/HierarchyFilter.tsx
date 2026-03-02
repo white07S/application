@@ -32,10 +32,34 @@ function stripTreePrefix(id: string): string {
     return idx >= 0 ? id.slice(idx + 1) : id;
 }
 
+/** Collect all descendant IDs from a tree node (not including the node itself). */
+function getDescendantIds(nodes: TreeNode[], targetId: string): string[] {
+    const ids: string[] = [];
+    function findAndCollect(list: TreeNode[]): boolean {
+        for (const node of list) {
+            if (node.id === targetId) {
+                // Found target — collect all children recursively
+                collectAll(node.children || []);
+                return true;
+            }
+            if (node.children && findAndCollect(node.children)) return true;
+        }
+        return false;
+    }
+    function collectAll(list: TreeNode[]) {
+        for (const node of list) {
+            ids.push(node.id);
+            if (node.children) collectAll(node.children);
+        }
+    }
+    findAndCollect(nodes);
+    return ids;
+}
+
 interface HierarchyFilterProps {
     nodes: TreeNode[];
     selected: Set<string>;
-    onToggle: (id: string) => void;
+    onToggle: (id: string, descendantIds: string[]) => void;
     onExpand?: (nodeId: string, level: number) => void;
     onSearchChange?: (query: string) => void;
     searchLoading?: boolean;
@@ -240,7 +264,7 @@ export const HierarchyFilter: React.FC<HierarchyFilterProps> = ({
                                         <input
                                             type="checkbox"
                                             checked={isChecked}
-                                            onChange={() => onToggle(node.id)}
+                                            onChange={() => onToggle(node.id, getDescendantIds(filteredNodes, node.id))}
                                             className="w-3 h-3 rounded-sm border-border-light text-primary focus:ring-primary/20 focus:ring-1 flex-shrink-0 accent-primary"
                                         />
                                         {node.node_type && (

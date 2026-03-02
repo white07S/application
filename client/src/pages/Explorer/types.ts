@@ -50,5 +50,6 @@ export type FilterAction =
     | { type: 'TOGGLE_AU'; payload: string }
     | { type: 'TOGGLE_RISK_THEME'; payload: string }
     | { type: 'SELECT_MANY'; payload: { section: 'selectedFunctions' | 'selectedLocations' | 'selectedCEs' | 'selectedAUs' | 'selectedRiskThemes'; ids: string[] } }
+    | { type: 'DESELECT_MANY'; payload: { section: 'selectedFunctions' | 'selectedLocations' | 'selectedCEs' | 'selectedAUs' | 'selectedRiskThemes'; ids: string[] } }
     | { type: 'CLEAR_SECTION'; payload: 'selectedFunctions' | 'selectedLocations' | 'selectedCEs' | 'selectedAUs' | 'selectedRiskThemes' }
     | { type: 'RESET_ALL' };

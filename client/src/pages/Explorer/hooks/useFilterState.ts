@@ -42,6 +42,14 @@ function filterReducer(state: FilterState, action: FilterAction): FilterState {
             }
             return { ...state, [action.payload.section]: next };
         }
+        case 'DESELECT_MANY': {
+            const current = state[action.payload.section];
+            const next = new Set(current);
+            for (const id of action.payload.ids) {
+                next.delete(id);
+            }
+            return { ...state, [action.payload.section]: next };
+        }
         case 'CLEAR_SECTION':
             return { ...state, [action.payload]: new Set<string>() };
         case 'RESET_ALL':

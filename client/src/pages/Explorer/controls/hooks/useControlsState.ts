@@ -29,6 +29,7 @@ const initialState: ControlsViewState = {
     filterActiveOnly: false,
     filterLevel1: true,
     filterLevel2: true,
+    filterHasSimilar: false,
     dateFrom: '',
     dateTo: '',
     dateField: 'created_on' as DateField,
@@ -83,6 +84,8 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
             return { ...state, filterLevel1: !state.filterLevel1 };
         case 'TOGGLE_LEVEL_2':
             return { ...state, filterLevel2: !state.filterLevel2 };
+        case 'TOGGLE_HAS_SIMILAR':
+            return { ...state, filterHasSimilar: !state.filterHasSimilar };
         case 'TOGGLE_GROUP': {
             const next = new Set(state.expandedGroups);
             if (next.has(action.payload)) {
@@ -243,6 +246,7 @@ function buildSearchParams(
         level1: state.filterLevel1,
         level2: state.filterLevel2,
         ai_score_max: state.aiScoreMax < 14 ? state.aiScoreMax : null,
+        has_similar: state.filterHasSimilar || null,
         date_from: state.dateFrom || null,
         date_to: state.dateTo ? `${state.dateTo}T23:59:59` : null,
         date_field: state.dateField,
@@ -282,6 +286,7 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
         activeOnly: state.filterActiveOnly,
         level1: state.filterLevel1,
         level2: state.filterLevel2,
+        hasSimilar: state.filterHasSimilar,
         aiScore: state.aiScoreMax,
         dateFrom: state.dateFrom,
         dateTo: state.dateTo,

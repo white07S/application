@@ -114,6 +114,7 @@ export interface ToolbarFiltersPayload {
     level1: boolean;
     level2: boolean;
     ai_score_max: number | null;
+    has_similar: boolean | null;
     date_from: string | null;
     date_to: string | null;
     date_field: 'created_on' | 'last_modified_on';

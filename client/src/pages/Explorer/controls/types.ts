@@ -129,6 +129,7 @@ export interface ControlsViewState {
     filterActiveOnly: boolean;
     filterLevel1: boolean;
     filterLevel2: boolean;
+    filterHasSimilar: boolean;
     dateFrom: string;
     dateTo: string;
     dateField: DateField;
@@ -156,6 +157,7 @@ export type ControlsAction =
     | { type: 'TOGGLE_ACTIVE_ONLY' }
     | { type: 'TOGGLE_LEVEL_1' }
     | { type: 'TOGGLE_LEVEL_2' }
+    | { type: 'TOGGLE_HAS_SIMILAR' }
     | { type: 'TOGGLE_GROUP'; payload: string }
     | { type: 'SET_DATE_FROM'; payload: string }
     | { type: 'SET_DATE_TO'; payload: string }
