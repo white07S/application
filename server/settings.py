@@ -114,6 +114,35 @@ class Settings(BaseSettings):
     # === Redis ===
     redis_url: str = Field(description="Redis connection URL (redis://host:port)")
 
+    # === Celery (for background tasks) ===
+    celery_broker_db: int = Field(
+        default=1,
+        description="Redis database number for Celery broker",
+        ge=0,
+        le=15,
+    )
+    celery_result_db: int = Field(
+        default=2,
+        description="Redis database number for Celery results",
+        ge=0,
+        le=15,
+    )
+    celery_max_tasks_per_child: int = Field(
+        default=5,
+        description="Max tasks before worker restart (prevents memory leaks)",
+        ge=1,
+    )
+    celery_task_time_limit: int = Field(
+        default=3600,
+        description="Hard time limit for tasks in seconds",
+        ge=60,
+    )
+    celery_task_soft_time_limit: int = Field(
+        default=3000,
+        description="Soft time limit for tasks in seconds",
+        ge=60,
+    )
+
     # === OpenAI (optional — for semantic search query embedding) ===
     openai_api_key: Optional[str] = Field(
         default=None,
@@ -174,6 +203,24 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> List[str]:
         return _split_csv(self.allowed_origins)
+
+    @property
+    def celery_broker_url(self) -> str:
+        """Get Celery broker URL with database number."""
+        # Parse Redis URL and append database number
+        base_url = self.redis_url.rstrip('/')
+        if '/' in base_url.split('://')[-1]:
+            # Remove existing DB number if present
+            base_url = '/'.join(base_url.split('/')[:-1])
+        return f"{base_url}/{self.celery_broker_db}"
+
+    @property
+    def celery_result_backend(self) -> str:
+        """Get Celery result backend URL with database number."""
+        base_url = self.redis_url.rstrip('/')
+        if '/' in base_url.split('://')[-1]:
+            base_url = '/'.join(base_url.split('/')[:-1])
+        return f"{base_url}/{self.celery_result_db}"
 
 
 @lru_cache()

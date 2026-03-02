@@ -37,7 +37,16 @@ CONTROLS_UUID_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 QDRANT_BATCH_SIZE = 64
 
 # Number of parallel workers (CPU cores)
-QDRANT_PARALLEL_WORKERS = 6
+# IMPORTANT: Must be 1 when running in Celery workers (daemon processes can't spawn children)
+import multiprocessing
+_current_process = multiprocessing.current_process()
+if hasattr(_current_process, '_config') and _current_process._config.get('daemon'):
+    # Running in a daemon process (like Celery worker), can't use multiprocessing
+    QDRANT_PARALLEL_WORKERS = 1
+    logger.info("Running in daemon process, Qdrant parallel workers set to 1")
+else:
+    # Normal execution, can use parallel workers
+    QDRANT_PARALLEL_WORKERS = 6
 
 # Threshold: only disable/re-enable HNSW for bulk loads above this size
 HNSW_TOGGLE_THRESHOLD = 500
