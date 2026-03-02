@@ -334,6 +334,13 @@ async def compute_similar_controls(
     changed_control_ids = changed_control_ids & l1_active_key_ids
     new_control_ids = new_control_ids & l1_active_key_ids
 
+    # No embedding delta for eligible controls means similarity state is unchanged.
+    if not force_full_rebuild and not changed_control_ids and not new_control_ids:
+        logger.info(
+            "Skipping similarity computation: no L1 Active Key embedding delta"
+        )
+        return
+
     # Decide mode
     delta_cids = changed_control_ids | new_control_ids
     use_incremental = (
