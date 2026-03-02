@@ -328,7 +328,7 @@ ENRICHMENT_KEYS = [
     "automation_level_yes_no", "automation_level_details",
     "followup_yes_no", "followup_details", "escalation_yes_no", "escalation_details",
     "evidence_yes_no", "evidence_details", "abbreviations_yes_no", "abbreviations_details",
-    "control_as_issues", "control_as_event",
+    # Removed in migration 014: "control_as_issues", "control_as_event",
 ]
 
 

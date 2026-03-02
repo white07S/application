@@ -277,8 +277,7 @@ ai_controls_model_enrichment = Table(
     Column("evidence_details", Text, nullable=True),
     Column("abbreviations_yes_no", Text, nullable=True),
     Column("abbreviations_details", Text, nullable=True),
-    Column("control_as_issues", Text, nullable=True),
-    Column("control_as_event", Text, nullable=True),
+    # Removed in migration 014: control_as_issues, control_as_event
 
     # Transaction-time versioning
     Column("tx_from", DateTime(timezone=True), nullable=False),

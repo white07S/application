@@ -196,8 +196,7 @@ class AIEnrichmentResponse(BaseModel):
     abbreviations_yes_no: str | None = None
     # Summary + narratives
     summary: str | None = None
-    control_as_event: str | None = None
-    control_as_issues: str | None = None
+    # Removed in migration 014: control_as_event, control_as_issues
     # Taxonomy
     primary_risk_theme_id: str | None = None
     secondary_risk_theme_id: str | None = None

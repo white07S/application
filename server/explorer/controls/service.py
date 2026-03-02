@@ -1068,8 +1068,7 @@ async def _load_enrichment(conn, control_ids: list[str]) -> dict[str, dict]:
     cols = [
         ai_enrichment.c.ref_control_id,
         ai_enrichment.c.summary,
-        ai_enrichment.c.control_as_event,
-        ai_enrichment.c.control_as_issues,
+        # Removed in migration 014: control_as_event, control_as_issues
     ]
     for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS:
         cols.append(getattr(ai_enrichment.c, col_name))
@@ -1088,8 +1087,7 @@ async def _load_enrichment(conn, control_ids: list[str]) -> dict[str, dict]:
         for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS:
             data[col_name] = r[col_name]
         data["summary"] = r["summary"]
-        data["control_as_event"] = r["control_as_event"]
-        data["control_as_issues"] = r["control_as_issues"]
+        # Removed in migration 014: control_as_event, control_as_issues
         result[cid] = data
     return result
 
@@ -1262,8 +1260,7 @@ async def _load_enrichment_with_details(conn, control_id: str) -> dict | None:
     cols = [
         ai_enrichment.c.ref_control_id,
         ai_enrichment.c.summary,
-        ai_enrichment.c.control_as_event,
-        ai_enrichment.c.control_as_issues,
+        # Removed in migration 014: control_as_event, control_as_issues
     ]
     for col_name in _L1_YES_NO_COLS + _L2_YES_NO_COLS + _DETAILS_COL_NAMES + _NARRATIVE_COLS:
         cols.append(getattr(ai_enrichment.c, col_name))
