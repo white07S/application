@@ -210,7 +210,7 @@ const Processing: FC = () => {
     };
 
     const handleDiscardBatch = async (batchId: number, uploadId: string) => {
-        if (!confirm(`Discard batch ${uploadId}? This will allow subsequent batches to proceed.`)) return;
+        if (!window.confirm(`Discard batch ${uploadId}? This will allow subsequent batches to proceed.`)) return;
         try {
             const token = await getApiAccessToken();
             if (!token) return;
