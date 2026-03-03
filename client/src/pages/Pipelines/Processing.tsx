@@ -209,12 +209,33 @@ const Processing: FC = () => {
         });
     };
 
+    const handleDiscardBatch = async (batchId: number, uploadId: string) => {
+        if (!confirm(`Discard batch ${uploadId}? This will allow subsequent batches to proceed.`)) return;
+        try {
+            const token = await getApiAccessToken();
+            if (!token) return;
+            const response = await fetch(`${appConfig.api.baseUrl}/api/v2/ingestion/batches/${batchId}/discard`, {
+                method: 'POST',
+                headers: { 'X-MS-TOKEN-AAD': token },
+            });
+            if (response.ok) {
+                fetchBatches();
+            } else {
+                const error = await response.json();
+                alert(`Failed to discard batch: ${error.detail}`);
+            }
+        } catch (err) {
+            console.error('Failed to discard batch:', err);
+        }
+    };
+
     const getStatusBadge = (status: string | null) => {
         if (!status) return null;
         const colors: Record<string, string> = {
             success: 'bg-green-100 text-green-700 border-green-200',
             completed: 'bg-green-100 text-green-700 border-green-200',
             failed: 'bg-red-100 text-red-700 border-red-200',
+            discarded: 'bg-gray-100 text-gray-500 border-gray-200',
             running: 'bg-blue-100 text-blue-700 border-blue-200',
             processing: 'bg-blue-100 text-blue-700 border-blue-200',
             pending: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -463,8 +484,18 @@ const Processing: FC = () => {
                                                         )}
                                                     </div>
 
-                                                    {/* Action Button */}
+                                                    {/* Action Buttons */}
                                                     <div className="flex items-center gap-2">
+                                                        {batch.status === 'failed' && (
+                                                            <button
+                                                                onClick={() => handleDiscardBatch(batch.batch_id, batch.upload_id)}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                                                                title="Discard this failed batch so subsequent batches can proceed"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
+                                                                Discard
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handleStartIngestion(batch.batch_id)}
                                                             disabled={!batch.can_ingest || isProcessing}

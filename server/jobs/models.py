@@ -64,7 +64,7 @@ class UploadBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
-        CheckConstraint("status IN ('pending', 'validating', 'validated', 'processing', 'success', 'failed')"),
+        CheckConstraint("status IN ('pending', 'validating', 'validated', 'processing', 'success', 'failed', 'discarded')"),
         CheckConstraint("data_type IN ('issues', 'controls', 'actions')"),
         Index('idx_upload_batches_status', 'status'),
     )

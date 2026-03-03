@@ -151,11 +151,12 @@ async def start_ingestion(
             detail=f"Batch {request.batch_id} is not in a re-runnable state (status: {batch.status})"
         )
 
-    # Check predecessor upload was successfully ingested
+    # Check predecessor upload was successfully ingested (skip discarded batches)
     predecessor = await db.execute(
         select(UploadBatch)
         .where(UploadBatch.upload_id < batch.upload_id)
         .where(UploadBatch.data_type == batch.data_type)
+        .where(UploadBatch.status != "discarded")
         .order_by(UploadBatch.upload_id.desc())
         .limit(1)
     )
@@ -167,7 +168,7 @@ async def start_ingestion(
             detail=(
                 f"Cannot ingest {batch.upload_id}: predecessor {prev_batch.upload_id} "
                 f"has status '{prev_batch.status}' (must be 'success'). "
-                f"Please ingest {prev_batch.upload_id} first."
+                f"Please ingest {prev_batch.upload_id} first or discard it."
             ),
         )
 
@@ -440,6 +441,43 @@ async def get_job_status(
             completed_at=None,
             error_message=None,
         )
+
+
+@router.post("/batches/{batch_id}/discard")
+async def discard_batch(
+    batch_id: int,
+    token: str = Depends(get_token_from_header),
+    db: AsyncSession = Depends(get_jobs_db),
+):
+    """Discard a failed batch so it no longer blocks subsequent ingestions."""
+    access = await get_access_control(token)
+
+    if not access.hasPipelinesAdminAccess:
+        raise HTTPException(
+            status_code=403,
+            detail="Pipelines admin access required to discard batches"
+        )
+
+    result = await db.execute(
+        select(UploadBatch).where(UploadBatch.id == batch_id)
+    )
+    batch = result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
+
+    if batch.status != "failed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only failed batches can be discarded (current status: {batch.status})"
+        )
+
+    batch.status = "discarded"
+    batch.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    logger.info("Discarded batch: batch_id={}, upload_id={}", batch_id, batch.upload_id)
+
+    return {"success": True, "message": f"Batch {batch.upload_id} discarded"}
 
 
 @router.delete("/job/{job_id}")
