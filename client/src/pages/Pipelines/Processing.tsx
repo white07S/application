@@ -486,11 +486,11 @@ const Processing: FC = () => {
 
                                                     {/* Action Buttons */}
                                                     <div className="flex items-center gap-2">
-                                                        {batch.status === 'failed' && (
+                                                        {(batch.status === 'failed' || (batch.status === 'validated' && !batch.readiness.ready)) && (
                                                             <button
                                                                 onClick={() => handleDiscardBatch(batch.batch_id, batch.upload_id)}
                                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-                                                                title="Discard this failed batch so subsequent batches can proceed"
+                                                                title="Discard this batch so subsequent batches can proceed"
                                                             >
                                                                 <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
                                                                 Discard

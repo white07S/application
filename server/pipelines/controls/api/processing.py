@@ -449,7 +449,7 @@ async def discard_batch(
     token: str = Depends(get_token_from_header),
     db: AsyncSession = Depends(get_jobs_db),
 ):
-    """Discard a failed batch so it no longer blocks subsequent ingestions."""
+    """Discard a failed or non-ingestable validated batch so it no longer blocks subsequent ingestions."""
     access = await get_access_control(token)
 
     if not access.hasPipelinesAdminAccess:
@@ -465,10 +465,16 @@ async def discard_batch(
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
 
-    if batch.status != "failed":
+    readiness = check_ingestion_readiness(batch.upload_id)
+    is_discardable = batch.status == "failed" or (batch.status == "validated" and not readiness.ready)
+
+    if not is_discardable:
         raise HTTPException(
             status_code=400,
-            detail=f"Only failed batches can be discarded (current status: {batch.status})"
+            detail=(
+                "Only failed batches or validated batches that are not ready for ingestion "
+                f"can be discarded (current status: {batch.status})"
+            )
         )
 
     batch.status = "discarded"
