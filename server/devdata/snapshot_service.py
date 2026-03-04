@@ -698,6 +698,8 @@ class PostgresSnapshotService:
         )
 
     # ----------------------------------------------------------- job status
+    STALE_JOB_TIMEOUT_SECONDS = 300  # 5 minutes
+
     async def get_job_status(
         self,
         db: AsyncSession,
@@ -707,14 +709,29 @@ class PostgresSnapshotService:
         if not job:
             return None
 
+        status = job.status
+        error_message = job.error_message
+
+        # Detect stale jobs: if pending/running for too long, the Celery task
+        # likely crashed without updating the DB.
+        if status in ("pending", "running") and job.started_at:
+            elapsed = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+            if status == "pending" and elapsed > self.STALE_JOB_TIMEOUT_SECONDS:
+                status = "failed"
+                error_message = "Job timed out — the background worker may have crashed. Please retry."
+                job.status = status
+                job.error_message = error_message
+                job.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
         return JobStatusResponse(
             job_id=job.id,
-            status=job.status,
+            status=status,
             progress_percent=job.progress_percent,
             current_step=job.current_step,
             started_at=job.started_at,
             completed_at=job.completed_at,
-            error_message=job.error_message,
+            error_message=error_message,
         )
 
 

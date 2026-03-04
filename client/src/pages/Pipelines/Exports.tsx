@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import PipelinesSidebar from './components/PipelinesSidebar';
 import { useAuth } from '../../auth/useAuth';
 import { appConfig } from '../../config/appConfig';
@@ -8,6 +8,17 @@ interface TemplateInfo {
     name: string;
     description: string;
 }
+
+interface ExportJob {
+    jobId: string;
+    status: 'queued' | 'running' | 'completed' | 'failed';
+    progressPercent: number;
+    currentStep: string;
+    fileReady: boolean;
+    errorMessage: string | null;
+}
+
+const POLL_INTERVAL_MS = 2000;
 
 const formatTemplateName = (name: string): string =>
     name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -18,9 +29,19 @@ const Exports: FC = () => {
     const [loading, setLoading] = useState(true);
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
     const [evaluationDate, setEvaluationDate] = useState<string>('');
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    // Job tracking
+    const [job, setJob] = useState<ExportJob | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+        };
+    }, []);
 
     const fetchTemplates = useCallback(async () => {
         try {
@@ -57,23 +78,104 @@ const Exports: FC = () => {
         fetchTemplates();
     }, [fetchTemplates]);
 
+    const triggerDownload = useCallback(async (templateName: string, evalDate: string) => {
+        try {
+            const token = await getApiAccessToken();
+            if (!token) return;
+
+            const response = await fetch(
+                `${appConfig.api.baseUrl}/api/v2/export/download?template_name=${encodeURIComponent(templateName)}&evaluation_date=${evalDate}`,
+                { headers: { 'X-MS-TOKEN-AAD': token } },
+            );
+
+            if (!response.ok) {
+                setError('Download failed. The file may have been removed.');
+                return;
+            }
+
+            const blob = await response.blob();
+            const filename = `${templateName}_${evalDate.replace(/-/g, '')}.xlsx`;
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            setSuccess(`Export downloaded: ${filename}`);
+        } catch (err) {
+            console.error('Download failed:', err);
+            setError('Download failed. Check your network connection.');
+        }
+    }, [getApiAccessToken]);
+
+    const startPolling = useCallback((jobId: string, templateName: string, evalDate: string) => {
+        if (pollRef.current) clearInterval(pollRef.current);
+
+        const poll = async () => {
+            try {
+                const token = await getApiAccessToken();
+                if (!token) return;
+
+                const response = await fetch(
+                    `${appConfig.api.baseUrl}/api/v2/export/job/${jobId}`,
+                    { headers: { 'X-MS-TOKEN-AAD': token } },
+                );
+
+                if (!response.ok) {
+                    setJob(prev => prev ? { ...prev, status: 'failed', errorMessage: 'Lost connection to job.' } : null);
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    return;
+                }
+
+                const data = await response.json();
+                const updatedJob: ExportJob = {
+                    jobId: data.job_id,
+                    status: data.status,
+                    progressPercent: data.progress_percent,
+                    currentStep: data.current_step,
+                    fileReady: data.file_ready,
+                    errorMessage: data.error_message,
+                };
+                setJob(updatedJob);
+
+                if (data.status === 'completed') {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    await triggerDownload(templateName, evalDate);
+                    setJob(null);
+                } else if (data.status === 'failed') {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    setError(data.error_message || 'Export failed.');
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        };
+
+        // First poll immediately
+        poll();
+        pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    }, [getApiAccessToken, triggerDownload]);
+
     const handleExport = async () => {
         if (!selectedTemplate || !evaluationDate) return;
 
-        // Validate date is not in the future (string compare avoids timezone issues)
         if (evaluationDate > todayStr) {
             setError('Evaluation date cannot be in the future.');
             return;
         }
 
-        setExporting(true);
         setError(null);
         setSuccess(null);
+        setJob({ jobId: '', status: 'queued', progressPercent: 0, currentStep: 'Submitting...', fileReady: false, errorMessage: null });
 
         try {
             const token = await getApiAccessToken();
             if (!token) {
                 setError('Authentication failed. Please sign in again.');
+                setJob(null);
                 return;
             }
 
@@ -89,45 +191,45 @@ const Exports: FC = () => {
                 }),
             });
 
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('content-disposition');
-                let filename = `${selectedTemplate}_${evaluationDate.replace(/-/g, '')}.xlsx`;
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename="?(.+?)"?$/);
-                    if (match) filename = match[1];
-                }
-
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                setSuccess(`Export downloaded: ${filename}`);
-            } else {
-                // Handle both JSON and non-JSON error responses
+            if (!response.ok) {
                 let message = `Export failed (HTTP ${response.status})`;
                 try {
                     const data = await response.json();
                     if (data.detail) message = data.detail;
                 } catch {
-                    // Response wasn't JSON — use status text
                     message = `Export failed: ${response.statusText || 'Server error'} (HTTP ${response.status})`;
                 }
                 setError(message);
+                setJob(null);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'completed') {
+                // Cache hit — download immediately
+                setJob(null);
+                await triggerDownload(selectedTemplate, evaluationDate);
+            } else {
+                // Job submitted or already running — start polling
+                setJob({
+                    jobId: data.job_id,
+                    status: data.status as ExportJob['status'],
+                    progressPercent: 0,
+                    currentStep: data.message,
+                    fileReady: false,
+                    errorMessage: null,
+                });
+                startPolling(data.job_id, selectedTemplate, evaluationDate);
             }
         } catch (err) {
             console.error('Export failed:', err);
             setError('Export failed. Unable to reach the server — check your network connection.');
-        } finally {
-            setExporting(false);
+            setJob(null);
         }
     };
 
+    const isExporting = job !== null;
     const selectedInfo = templates.find(t => t.name === selectedTemplate);
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -183,7 +285,7 @@ const Exports: FC = () => {
                                         <select
                                             value={selectedTemplate}
                                             onChange={e => setSelectedTemplate(e.target.value)}
-                                            disabled={exporting}
+                                            disabled={isExporting}
                                             className="w-full max-w-md px-3 py-2 text-sm border border-border-light rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
                                         >
                                             {templates.map(t => (
@@ -207,7 +309,7 @@ const Exports: FC = () => {
                                             value={evaluationDate}
                                             max={todayStr}
                                             onChange={e => { setEvaluationDate(e.target.value); setError(null); }}
-                                            disabled={exporting}
+                                            disabled={isExporting}
                                             className="w-full max-w-md px-3 py-2 text-sm border border-border-light rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
                                         />
                                         <p className="text-[11px] text-text-sub mt-1.5">
@@ -219,14 +321,14 @@ const Exports: FC = () => {
                                     <div className="pt-2">
                                         <button
                                             onClick={handleExport}
-                                            disabled={!selectedTemplate || !evaluationDate || exporting}
+                                            disabled={!selectedTemplate || !evaluationDate || isExporting}
                                             className={`flex items-center gap-2 px-5 py-2 text-xs font-medium rounded transition-colors ${
-                                                selectedTemplate && evaluationDate && !exporting
+                                                selectedTemplate && evaluationDate && !isExporting
                                                     ? 'bg-primary hover:bg-primary-dark text-white'
                                                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                             }`}
                                         >
-                                            {exporting ? (
+                                            {isExporting ? (
                                                 <>
                                                     <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
                                                     Generating...
@@ -242,6 +344,31 @@ const Exports: FC = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* Progress Card */}
+                        {job && (
+                            <div className="bg-white border border-border-light rounded shadow-card">
+                                <div className="px-5 py-3 border-b border-border-light bg-surface-light/50">
+                                    <h2 className="text-xs font-bold text-text-main uppercase tracking-wide flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-text-sub text-[16px] animate-spin">progress_activity</span>
+                                        Export Progress
+                                    </h2>
+                                </div>
+                                <div className="p-5 flex flex-col gap-3">
+                                    {/* Progress bar */}
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                        <div
+                                            className="bg-primary h-2 rounded-full transition-all duration-500"
+                                            style={{ width: `${job.progressPercent}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-text-sub">{job.currentStep}</span>
+                                        <span className="text-xs font-medium text-text-main">{job.progressPercent}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Success Message */}
                         {success && (
@@ -277,6 +404,7 @@ const Exports: FC = () => {
                                     </p>
                                     <p className="mt-2 text-blue-600 text-[10px]">
                                         Only active key controls with completed enrichment are included in the export.
+                                        Previously generated exports are cached and will download instantly.
                                     </p>
                                 </div>
                             </div>

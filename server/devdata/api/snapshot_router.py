@@ -3,12 +3,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
-from server.config.postgres import get_db_session, get_db_session_context
+from server.config.postgres import get_db_session
 from server.devdata.snapshot_models import (
     CreateSnapshotRequest,
     CreateSnapshotResponse,
@@ -50,11 +50,10 @@ async def _require_dev_data_write_access(token: str = Depends(get_token_from_hea
 @router.post("/create", response_model=CreateSnapshotResponse)
 async def create_snapshot(
     request: CreateSnapshotRequest,
-    background_tasks: BackgroundTasks,
     access=Depends(_require_dev_data_write_access),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Create a new PostgreSQL snapshot (background job)."""
+    """Create a new PostgreSQL snapshot (background job via Celery)."""
     try:
         job_id = str(uuid.uuid4())
         job = ProcessingJob(
@@ -77,15 +76,14 @@ async def create_snapshot(
             snapshot_service.backup_path, snapshot_service.ID_PREFIX
         )
 
-        background_tasks.add_task(
-            _run_snapshot_creation,
-            job_id=job_id,
-            name=request.name,
-            description=request.description,
-            user=access.user,
+        from server.workers.tasks.snapshots import create_pg_snapshot_task
+        create_pg_snapshot_task.apply_async(
+            args=[job_id, request.name, request.description, access.user],
+            task_id=job_id,
+            queue='snapshot',
         )
 
-        logger.info(f"Snapshot creation job {job_id} started by {access.user}")
+        logger.info(f"Snapshot creation job {job_id} submitted to Celery by {access.user}")
 
         return CreateSnapshotResponse(
             success=True,
@@ -99,20 +97,6 @@ async def create_snapshot(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to start snapshot creation: {str(e)}",
-        )
-
-
-async def _run_snapshot_creation(
-    job_id: str, name: str, description: str, user: str
-):
-    async with get_db_session_context() as db:
-        await snapshot_service.create_snapshot(
-            db=db,
-            job_id=job_id,
-            name=name,
-            description=description,
-            user=user,
-            is_scheduled=False,
         )
 
 
@@ -142,11 +126,10 @@ async def get_snapshot(
 async def restore_snapshot(
     snapshot_id: str,
     request: RestoreSnapshotRequest,
-    background_tasks: BackgroundTasks,
     access=Depends(_require_dev_data_write_access),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Restore database from a snapshot (background job).
+    """Restore database from a snapshot (background job via Celery).
 
     WARNING: This will replace the current database!
     """
@@ -177,16 +160,14 @@ async def restore_snapshot(
         db.add(job)
         await db.commit()
 
-        background_tasks.add_task(
-            _run_snapshot_restore,
-            job_id=job_id,
-            snapshot_id=snapshot_id,
-            user=access.user,
-            create_pre_restore_backup=request.create_pre_restore_backup,
-            force=request.force,
+        from server.workers.tasks.snapshots import restore_pg_snapshot_task
+        restore_pg_snapshot_task.apply_async(
+            args=[job_id, snapshot_id, access.user, request.create_pre_restore_backup, request.force],
+            task_id=job_id,
+            queue='snapshot',
         )
 
-        logger.info(f"Snapshot restore job {job_id} started by {access.user}")
+        logger.info(f"Snapshot restore job {job_id} submitted to Celery by {access.user}")
 
         return RestoreSnapshotResponse(
             success=True,
@@ -203,30 +184,6 @@ async def restore_snapshot(
             status_code=500,
             detail=f"Failed to start snapshot restore: {str(e)}",
         )
-
-
-async def _run_snapshot_restore(
-    job_id: str,
-    snapshot_id: str,
-    user: str,
-    create_pre_restore_backup: bool,
-    force: bool,
-):
-    async with get_db_session_context() as db:
-        pre_restore_id = await snapshot_service.restore_snapshot(
-            db=db,
-            job_id=job_id,
-            snapshot_id=snapshot_id,
-            user=user,
-            create_pre_restore_backup=create_pre_restore_backup,
-            force=force,
-        )
-
-        if pre_restore_id:
-            job = await db.get(ProcessingJob, job_id)
-            if job:
-                job.current_step = f"Restore completed. Pre-restore backup: {pre_restore_id}"
-                await db.commit()
 
 
 @router.delete("/{snapshot_id}", response_model=DeleteSnapshotResponse)

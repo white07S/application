@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     )
 
     # === Paths - ALL REQUIRED ===
+    # Export output directory
+    export_dir: Path = Field(description="Base path for generated export files")
+
     # Context providers (org charts + risk themes, date-partitioned)
     context_providers_path: Path = Field(description="Base path for context provider data")
 
@@ -178,6 +181,7 @@ class Settings(BaseSettings):
 
     # === Path Validators ===
     @field_validator(
+        'export_dir',
         'context_providers_path',
         'data_ingested_path',
         'postgres_backup_path',

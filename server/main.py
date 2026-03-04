@@ -236,9 +236,9 @@ async def _warm_up_caches():
             get_risk_taxonomies,
         )
         await asyncio.gather(
-            get_function_tree(),
-            get_location_tree(),
-            get_consolidated_entities(),
+            get_function_tree(None, None),
+            get_location_tree(None, None),
+            get_consolidated_entities(None, 1, 50),
             get_assessment_units(),
             get_risk_taxonomies(),
         )

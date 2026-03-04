@@ -18,7 +18,11 @@ celery_app = Celery(
     'nfr_connect',
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=['server.workers.tasks.ingestion']  # Auto-discover tasks
+    include=[
+        'server.workers.tasks.ingestion',
+        'server.workers.tasks.export',
+        'server.workers.tasks.snapshots',
+    ]
 )
 
 # Celery configuration
@@ -61,12 +65,16 @@ celery_app.conf.update(
         Queue('default', routing_key='default'),
         Queue('ingestion', routing_key='ingestion'),  # Heavy ingestion tasks
         Queue('compute', routing_key='compute'),  # Computation tasks
+        Queue('export', routing_key='export'),  # Export tasks
+        Queue('snapshot', routing_key='snapshot'),  # Snapshot tasks
     ),
 
     # Route specific tasks to specific queues
     task_routes={
         'server.workers.tasks.ingestion.*': {'queue': 'ingestion'},
         'server.workers.tasks.compute.*': {'queue': 'compute'},
+        'server.workers.tasks.export.*': {'queue': 'export'},
+        'server.workers.tasks.snapshots.*': {'queue': 'snapshot'},
     },
 
     # Redis-specific settings

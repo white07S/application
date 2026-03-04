@@ -3,12 +3,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
-from server.config.postgres import get_db_session, get_db_session_context
+from server.config.postgres import get_db_session
 from server.devdata.qdrant_snapshot_models import (
     CreateQdrantSnapshotRequest,
     CreateQdrantSnapshotResponse,
@@ -48,11 +48,10 @@ async def _require_dev_data_write_access(token: str = Depends(get_token_from_hea
 @router.post("/create", response_model=CreateQdrantSnapshotResponse)
 async def create_snapshot(
     request: CreateQdrantSnapshotRequest,
-    background_tasks: BackgroundTasks,
     access=Depends(_require_dev_data_write_access),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Create a new Qdrant snapshot (background job)."""
+    """Create a new Qdrant snapshot (background job via Celery)."""
     try:
         job_id = str(uuid.uuid4())
         job = ProcessingJob(
@@ -75,16 +74,14 @@ async def create_snapshot(
             qdrant_snapshot_service.backup_path, qdrant_snapshot_service.ID_PREFIX
         )
 
-        background_tasks.add_task(
-            _run_qdrant_snapshot_creation,
-            job_id=job_id,
-            name=request.name,
-            description=request.description,
-            user=access.user,
-            collection_name=request.collection_name,
+        from server.workers.tasks.snapshots import create_qdrant_snapshot_task
+        create_qdrant_snapshot_task.apply_async(
+            args=[job_id, request.name, request.description, access.user, request.collection_name],
+            task_id=job_id,
+            queue='snapshot',
         )
 
-        logger.info(f"Qdrant snapshot creation job {job_id} started by {access.user}")
+        logger.info(f"Qdrant snapshot creation job {job_id} submitted to Celery by {access.user}")
 
         return CreateQdrantSnapshotResponse(
             success=True,
@@ -98,20 +95,6 @@ async def create_snapshot(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to start Qdrant snapshot creation: {str(e)}",
-        )
-
-
-async def _run_qdrant_snapshot_creation(
-    job_id: str, name: str, description: str, user: str, collection_name: str
-):
-    async with get_db_session_context() as db:
-        await qdrant_snapshot_service.create_snapshot(
-            db=db,
-            job_id=job_id,
-            name=name,
-            description=description,
-            user=user,
-            collection_name=collection_name,
         )
 
 
@@ -175,11 +158,10 @@ async def get_snapshot(
 async def restore_snapshot(
     snapshot_id: str,
     request: RestoreQdrantSnapshotRequest,
-    background_tasks: BackgroundTasks,
     access=Depends(_require_dev_data_write_access),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Restore a Qdrant collection from a snapshot (background job).
+    """Restore a Qdrant collection from a snapshot (background job via Celery).
 
     WARNING: This will replace the Qdrant collection data!
     """
@@ -210,15 +192,14 @@ async def restore_snapshot(
         db.add(job)
         await db.commit()
 
-        background_tasks.add_task(
-            _run_qdrant_snapshot_restore,
-            job_id=job_id,
-            snapshot_id=snapshot_id,
-            user=access.user,
-            force=request.force,
+        from server.workers.tasks.snapshots import restore_qdrant_snapshot_task
+        restore_qdrant_snapshot_task.apply_async(
+            args=[job_id, snapshot_id, access.user, request.force],
+            task_id=job_id,
+            queue='snapshot',
         )
 
-        logger.info(f"Qdrant snapshot restore job {job_id} started by {access.user}")
+        logger.info(f"Qdrant snapshot restore job {job_id} submitted to Celery by {access.user}")
 
         return RestoreQdrantSnapshotResponse(
             success=True,
@@ -233,19 +214,6 @@ async def restore_snapshot(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to start Qdrant snapshot restore: {str(e)}",
-        )
-
-
-async def _run_qdrant_snapshot_restore(
-    job_id: str, snapshot_id: str, user: str, force: bool
-):
-    async with get_db_session_context() as db:
-        await qdrant_snapshot_service.restore_snapshot(
-            db=db,
-            job_id=job_id,
-            snapshot_id=snapshot_id,
-            user=user,
-            force=force,
         )
 
 
