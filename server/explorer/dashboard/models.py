@@ -174,3 +174,40 @@ class LifecycleMonthPoint(BaseModel):
 
 class LifecycleHeatmapResponse(BaseModel):
     months: list[LifecycleMonthPoint]
+
+
+# ── Concentration (Who / Where Month-over-Month) ─────────────────────
+
+
+class ConcentrationEntry(BaseModel):
+    value: str   # display name (most common original form)
+    count: int
+
+
+class ConcentrationMonthPoint(BaseModel):
+    month: str                        # "2025-01"
+    top: list[ConcentrationEntry]
+    others_count: int                 # sum of values outside top N
+
+
+class ConcentrationResponse(BaseModel):
+    dimension: str                                    # "who" or "where"
+    top_values: list[str]                             # global top N, sorted by total desc
+    months: list[ConcentrationMonthPoint]
+    grid: dict[str, dict[str, int]]                   # value -> {month -> count} for heatmap
+
+
+# ── Similarity Redundancy Month-over-Month ───────────────────────────
+
+
+class RedundancyMonthPoint(BaseModel):
+    month: str                      # "2025-01"
+    total_created: int
+    with_prior_near_duplicate: int  # similar score >= 0.90 created earlier
+    with_prior_weak_similar: int    # similar score 0.60–0.90 created earlier
+    with_prior_similar: int         # union count (each control counted once)
+    redundancy_pct: float           # with_prior_similar / total_created * 100
+
+
+class RedundancyResponse(BaseModel):
+    months: list[RedundancyMonthPoint]

@@ -116,6 +116,41 @@ export interface LifecycleHeatmapData {
     months: LifecycleMonthPoint[];
 }
 
+// ── Concentration (Who / Where Month-over-Month) ────────────────────────
+
+export interface ConcentrationEntry {
+    value: string;
+    count: number;
+}
+
+export interface ConcentrationMonthPoint {
+    month: string;
+    top: ConcentrationEntry[];
+    others_count: number;
+}
+
+export interface ConcentrationData {
+    dimension: string;
+    top_values: string[];
+    months: ConcentrationMonthPoint[];
+    grid: Record<string, Record<string, number>>;
+}
+
+// ── Similarity Redundancy Month-over-Month ──────────────────────────────
+
+export interface RedundancyMonthPoint {
+    month: string;
+    total_created: number;
+    with_prior_near_duplicate: number;
+    with_prior_weak_similar: number;
+    with_prior_similar: number;
+    redundancy_pct: number;
+}
+
+export interface RedundancyData {
+    months: RedundancyMonthPoint[];
+}
+
 // ── Dashboard UI Types ───────────────────────────────────────────────────
 
 export type DashboardTab =

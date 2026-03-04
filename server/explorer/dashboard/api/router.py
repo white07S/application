@@ -7,22 +7,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from server.auth.dependencies import get_token_from_header
 from server.auth.service import get_access_control
 from server.explorer.dashboard.models import (
+    ConcentrationResponse,
     DashboardFilters,
     DocQualityResponse,
     ExecutiveOverviewResponse,
     FilteredTrendRequest,
     HistoryChangeResponse,
     LifecycleHeatmapResponse,
+    RedundancyResponse,
     RegulatoryComplianceResponse,
     ScoreTrendResponse,
     SnapshotRebuildResponse,
     TrendResponse,
 )
 from server.explorer.dashboard.service import (
+    compute_concentration,
     compute_doc_quality,
     compute_executive_overview,
     compute_lifecycle_heatmap,
     compute_regulatory_compliance,
+    compute_similarity_redundancy,
     get_score_trends,
     get_snapshot_trends,
 )
@@ -78,6 +82,27 @@ async def get_lifecycle_heatmap(
 ):
     """Monthly created vs retired controls heatmap (last 12 months, filterable)."""
     return await compute_lifecycle_heatmap(filters)
+
+
+@router.post("/concentration/{dimension}", response_model=ConcentrationResponse)
+async def get_concentration(
+    dimension: str,
+    filters: DashboardFilters = DashboardFilters(),
+    token: str = Depends(_require_explorer_access),
+):
+    """Month-over-month concentration of Roles/Process/Product/Service from AI enrichment (L1 Active Key)."""
+    if dimension not in ("roles", "process", "product", "service"):
+        raise HTTPException(status_code=400, detail="dimension must be 'roles', 'process', 'product', or 'service'")
+    return await compute_concentration(filters, dimension)
+
+
+@router.post("/similarity-redundancy", response_model=RedundancyResponse)
+async def get_similarity_redundancy(
+    filters: DashboardFilters = DashboardFilters(),
+    token: str = Depends(_require_explorer_access),
+):
+    """Month-over-month: new controls that already have a prior-created similar control."""
+    return await compute_similarity_redundancy(filters)
 
 
 # ── Trend endpoints (from pre-computed snapshots) ─────────────────────────

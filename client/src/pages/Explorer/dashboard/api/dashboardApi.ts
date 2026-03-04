@@ -5,9 +5,11 @@
 
 import { appConfig } from '../../../../config/appConfig';
 import type {
+    ConcentrationData,
     DashboardFiltersPayload,
     ExecutiveOverviewData,
     LifecycleHeatmapData,
+    RedundancyData,
     RegulatoryComplianceData,
     ScoreTrendData,
     TrendData,
@@ -71,6 +73,25 @@ export const fetchLifecycleHeatmap = (
     filters?: DashboardFiltersPayload,
     signal?: AbortSignal,
 ) => dashboardFetch<LifecycleHeatmapData>('/lifecycle-heatmap', token, {
+    body: filters || {},
+    signal,
+});
+
+export const fetchConcentration = (
+    token: string,
+    dimension: 'roles' | 'process' | 'product' | 'service',
+    filters?: DashboardFiltersPayload,
+    signal?: AbortSignal,
+) => dashboardFetch<ConcentrationData>(`/concentration/${dimension}`, token, {
+    body: filters || {},
+    signal,
+});
+
+export const fetchSimilarityRedundancy = (
+    token: string,
+    filters?: DashboardFiltersPayload,
+    signal?: AbortSignal,
+) => dashboardFetch<RedundancyData>('/similarity-redundancy', token, {
     body: filters || {},
     signal,
 });

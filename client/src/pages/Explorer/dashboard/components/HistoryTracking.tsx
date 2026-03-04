@@ -1,18 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { AppliedSidebarFilters } from '../../controls/types';
-import type { LifecycleHeatmapData } from '../types';
+import type { ConcentrationData, LifecycleHeatmapData, RedundancyData } from '../types';
 import { CHART_SERIES } from '../chartColors';
 import { useTrends } from '../hooks/useTrends';
 import { buildDashboardFilters } from '../hooks/useDashboardFilters';
-import { fetchLifecycleHeatmap } from '../api/dashboardApi';
+import { fetchConcentration, fetchLifecycleHeatmap, fetchSimilarityRedundancy } from '../api/dashboardApi';
 import { useAuth } from '../../../../auth/useAuth';
 import SummaryCard from './cards/SummaryCard';
 import TrendLineChart from './charts/TrendLineChart';
 import LifecycleHeatmap from './charts/LifecycleHeatmap';
+import ConcentrationHeatmap from './charts/ConcentrationHeatmap';
+import RedundancyHeatmap from './charts/RedundancyHeatmap';
 
 interface HistoryTrackingProps {
     appliedFilters: AppliedSidebarFilters;
 }
+
+const CONC_DIMENSIONS = ['roles', 'process', 'product', 'service'] as const;
+type ConcDimension = typeof CONC_DIMENSIONS[number];
+
+const CONC_LABELS: Record<ConcDimension, string> = {
+    roles: 'Roles',
+    process: 'Process',
+    product: 'Product',
+    service: 'Service',
+};
+
+const CONC_COLORS: Record<ConcDimension, string> = {
+    roles: CHART_SERIES[0],
+    process: CHART_SERIES[2],
+    product: CHART_SERIES[3],
+    service: CHART_SERIES[4],
+};
 
 const HistoryTracking: React.FC<HistoryTrackingProps> = ({ appliedFilters }) => {
     const { trends, scoreTrends, loading, error } = useTrends();
@@ -20,6 +39,10 @@ const HistoryTracking: React.FC<HistoryTrackingProps> = ({ appliedFilters }) => 
 
     const [lifecycle, setLifecycle] = useState<LifecycleHeatmapData | null>(null);
     const [lifecycleLoading, setLifecycleLoading] = useState(false);
+    const [concData, setConcData] = useState<Partial<Record<ConcDimension, ConcentrationData>>>({});
+    const [redundancy, setRedundancy] = useState<RedundancyData | null>(null);
+    const [concLoading, setConcLoading] = useState(false);
+    const [activeConc, setActiveConc] = useState<ConcDimension>('roles');
     const abortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -29,24 +52,43 @@ const HistoryTracking: React.FC<HistoryTrackingProps> = ({ appliedFilters }) => 
 
         const load = async () => {
             setLifecycleLoading(true);
+            setConcLoading(true);
             try {
                 const token = await getApiAccessToken();
                 if (!token || controller.signal.aborted) return;
                 const filters = buildDashboardFilters(appliedFilters);
-                const result = await fetchLifecycleHeatmap(token, filters, controller.signal);
+                const [lifecycleResult, rolesResult, processResult, productResult, serviceResult, redundancyResult] = await Promise.all([
+                    fetchLifecycleHeatmap(token, filters, controller.signal),
+                    fetchConcentration(token, 'roles', filters, controller.signal),
+                    fetchConcentration(token, 'process', filters, controller.signal),
+                    fetchConcentration(token, 'product', filters, controller.signal),
+                    fetchConcentration(token, 'service', filters, controller.signal),
+                    fetchSimilarityRedundancy(token, filters, controller.signal),
+                ]);
                 if (!controller.signal.aborted) {
-                    setLifecycle(result);
+                    setLifecycle(lifecycleResult);
                     setLifecycleLoading(false);
+                    setConcData({
+                        roles: rolesResult,
+                        process: processResult,
+                        product: productResult,
+                        service: serviceResult,
+                    });
+                    setRedundancy(redundancyResult);
+                    setConcLoading(false);
                 }
             } catch (err: any) {
                 if (err?.name === 'AbortError') return;
                 setLifecycleLoading(false);
+                setConcLoading(false);
             }
         };
 
         load();
         return () => controller.abort();
     }, [appliedFilters, getApiAccessToken]);
+
+    const activeConcData = concData[activeConc] ?? null;
 
     return (
         <div className="space-y-4">
@@ -62,6 +104,61 @@ const HistoryTracking: React.FC<HistoryTrackingProps> = ({ appliedFilters }) => 
                 ) : (
                     <div className="flex items-center justify-center h-24 text-text-sub text-xs">
                         No lifecycle data available
+                    </div>
+                )}
+            </SummaryCard>
+
+            {/* AI Concentration — Month over Month (tabbed) */}
+            <div className="bg-white border border-border-light rounded-lg">
+                <div className="px-3 py-2 border-b border-border-light flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px] text-text-sub">analytics</span>
+                        <h3 className="text-xs font-medium text-text-main">AI Concentration — Month over Month</h3>
+                    </div>
+                    <div className="flex gap-0.5">
+                        {CONC_DIMENSIONS.map(dim => (
+                            <button
+                                key={dim}
+                                onClick={() => setActiveConc(dim)}
+                                className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                                    activeConc === dim
+                                        ? 'bg-[#008e97] text-white'
+                                        : 'text-text-sub hover:bg-gray-100'
+                                }`}
+                            >
+                                {CONC_LABELS[dim]}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="p-3">
+                    {concLoading ? (
+                        <div className="flex items-center justify-center h-24 text-text-sub">
+                            <span className="material-symbols-outlined animate-spin text-[16px] mr-2">progress_activity</span>
+                            <span className="text-xs">Loading concentration data...</span>
+                        </div>
+                    ) : activeConcData && activeConcData.top_values.length > 0 ? (
+                        <ConcentrationHeatmap data={activeConcData} color={CONC_COLORS[activeConc]} />
+                    ) : (
+                        <div className="flex items-center justify-center h-24 text-text-sub text-xs">
+                            No {CONC_LABELS[activeConc].toLowerCase()} concentration data available
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Similarity Redundancy — Month over Month */}
+            <SummaryCard title="Similarity Redundancy — Month over Month" icon="content_copy">
+                {concLoading ? (
+                    <div className="flex items-center justify-center h-24 text-text-sub">
+                        <span className="material-symbols-outlined animate-spin text-[16px] mr-2">progress_activity</span>
+                        <span className="text-xs">Loading redundancy data...</span>
+                    </div>
+                ) : redundancy && redundancy.months.length > 0 ? (
+                    <RedundancyHeatmap months={redundancy.months} />
+                ) : (
+                    <div className="flex items-center justify-center h-24 text-text-sub text-xs">
+                        No similarity redundancy data available
                     </div>
                 )}
             </SummaryCard>

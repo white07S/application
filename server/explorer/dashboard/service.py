@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +17,9 @@ from sqlalchemy import and_, case, func, or_, select, text
 from server.config.postgres import get_engine
 from server.explorer.dashboard.models import (
     AttributeDistribution,
+    ConcentrationEntry,
+    ConcentrationMonthPoint,
+    ConcentrationResponse,
     CriterionPassRate,
     DashboardFilters,
     DocQualityResponse,
@@ -25,6 +28,8 @@ from server.explorer.dashboard.models import (
     LifecycleHeatmapResponse,
     LifecycleMonthPoint,
     PortfolioSummary,
+    RedundancyMonthPoint,
+    RedundancyResponse,
     RegulatoryComplianceResponse,
     RiskThemeBreakdown,
     ScoreDistribution,
@@ -37,6 +42,7 @@ from server.explorer.dashboard.schema import dashboard_snapshots
 from server.logging_config import get_logger
 from server.pipelines.controls.schema import (
     ai_controls_model_enrichment as enr,
+    ai_controls_similar_controls as sim_tbl,
     src_controls_rel_owns_function as rel_owns_func,
     src_controls_rel_parent as rel_parent,
     src_controls_rel_risk_theme as rel_risk_theme,
@@ -652,6 +658,260 @@ async def compute_lifecycle_heatmap(
     ]
 
     return LifecycleHeatmapResponse(months=points)
+
+
+# ── Concentration (Roles/Process/Product/Service Month-over-Month) ────────
+
+
+_CONCENTRATION_COLUMNS = {
+    "roles": "roles",
+    "process": "process",
+    "product": "product",
+    "service": "service",
+}
+
+
+def _normalize_value(val: str) -> str:
+    """Lowercase, strip, collapse whitespace for grouping."""
+    return " ".join(val.lower().split())
+
+
+async def compute_concentration(
+    filters: DashboardFilters,
+    dimension: str,
+    top_n: int = 20,
+    months: int = 12,
+) -> ConcentrationResponse:
+    """For each of the last N months, count distinct Who/Where values
+    from AI enrichment on L1 Active Key controls, grouped by control_created_on."""
+
+    col_name = _CONCENTRATION_COLUMNS[dimension]
+    detail_col = getattr(enr.c, col_name)
+
+    engine = get_engine()
+    async with engine.connect() as conn:
+        candidates = await _resolve_candidates(conn, filters)
+
+        cutoff = func.date_trunc("month", func.now() - text(f"interval '{months} months'"))
+
+        q = (
+            select(
+                func.to_char(vc.c.control_created_on, "YYYY-MM").label("month"),
+                detail_col.label("raw_value"),
+                func.count().label("cnt"),
+            )
+            .select_from(
+                enr.join(vc, and_(
+                    vc.c.ref_control_id == enr.c.ref_control_id,
+                    _is_current(vc.c.tx_to),
+                ))
+            )
+            .where(_is_current(enr.c.tx_to))
+            .where(_active_key_only())
+            .where(vc.c.hierarchy_level == "Level 1")
+            .where(vc.c.control_created_on >= cutoff)
+            .where(vc.c.control_created_on.isnot(None))
+            .where(detail_col.isnot(None))
+            .where(detail_col != "")
+            .group_by(text("1"), detail_col)
+            .order_by(text("1"))
+        )
+        q = _apply_candidate_filter(q, enr.c.ref_control_id, candidates)
+
+        rows = (await conn.execute(q)).fetchall()
+
+    # ── Post-processing: normalize, deduplicate, rank ────────────────
+
+    # Accumulate: normalized_key -> {month -> count} and pick display name
+    key_month_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    key_display_votes: dict[str, Counter] = defaultdict(Counter)
+
+    for month_val, raw_value, cnt in rows:
+        if not month_val or not raw_value:
+            continue
+        norm = _normalize_value(raw_value)
+        if not norm:
+            continue
+        key_month_counts[norm][month_val] += cnt
+        key_display_votes[norm][raw_value.strip()] += cnt
+
+    # Pick display name: most frequent original form
+    display_names: dict[str, str] = {}
+    for norm, votes in key_display_votes.items():
+        display_names[norm] = votes.most_common(1)[0][0]
+
+    # Rank by total count across all months
+    totals = {norm: sum(mc.values()) for norm, mc in key_month_counts.items()}
+    ranked = sorted(totals, key=lambda k: totals[k], reverse=True)
+    top_keys = ranked[:top_n]
+
+    # Build ordered month list
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    all_months: list[str] = []
+    for i in range(months, 0, -1):
+        y = now.year
+        m = now.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        all_months.append(f"{y:04d}-{m:02d}")
+    all_months.append(f"{now.year:04d}-{now.month:02d}")
+
+    # Build grid (display_value -> {month -> count})
+    grid: dict[str, dict[str, int]] = {}
+    for norm in top_keys:
+        dname = display_names[norm]
+        grid[dname] = {mo: key_month_counts[norm].get(mo, 0) for mo in all_months}
+
+    # Build month points
+    month_points: list[ConcentrationMonthPoint] = []
+    for mo in all_months:
+        top_entries = []
+        top_sum = 0
+        for norm in top_keys:
+            c = key_month_counts[norm].get(mo, 0)
+            if c > 0:
+                top_entries.append(ConcentrationEntry(value=display_names[norm], count=c))
+                top_sum += c
+
+        # Others = total for this month minus top sum
+        month_total = sum(
+            mc.get(mo, 0) for mc in key_month_counts.values()
+        )
+        month_points.append(ConcentrationMonthPoint(
+            month=mo,
+            top=top_entries,
+            others_count=max(0, month_total - top_sum),
+        ))
+
+    top_values = [display_names[k] for k in top_keys]
+
+    return ConcentrationResponse(
+        dimension=dimension,
+        top_values=top_values,
+        months=month_points,
+        grid=grid,
+    )
+
+
+# ── Similarity Redundancy Month-over-Month ───────────────────────────────
+
+
+_NEAR_DUP_THRESHOLD = 0.90
+
+
+async def compute_similarity_redundancy(
+    filters: DashboardFilters,
+    months: int = 12,
+) -> RedundancyResponse:
+    """For controls created each month, count how many have a similar control
+    that was created earlier (prior-existing similar)."""
+
+    engine = get_engine()
+    async with engine.connect() as conn:
+        candidates = await _resolve_candidates(conn, filters)
+        cutoff = func.date_trunc("month", func.now() - text(f"interval '{months} months'"))
+
+        # Query A: total L1 Active Key controls created per month
+        total_q = (
+            select(
+                func.to_char(vc.c.control_created_on, "YYYY-MM").label("month"),
+                func.count().label("cnt"),
+            )
+            .where(_is_current(vc.c.tx_to))
+            .where(_active_key_only())
+            .where(vc.c.hierarchy_level == "Level 1")
+            .where(vc.c.control_created_on >= cutoff)
+            .where(vc.c.control_created_on.isnot(None))
+            .group_by(text("1"))
+        )
+        total_q = _apply_candidate_filter(total_q, vc.c.ref_control_id, candidates)
+
+        # Query B: controls with at least one prior-created similar control
+        vc_sim = vc.alias("vc_sim")
+        sim_q = (
+            select(
+                vc.c.ref_control_id,
+                func.to_char(vc.c.control_created_on, "YYYY-MM").label("month"),
+                sim_tbl.c.score,
+                sim_tbl.c.category,
+            )
+            .select_from(
+                vc
+                .join(sim_tbl, and_(
+                    sim_tbl.c.ref_control_id == vc.c.ref_control_id,
+                    _is_current(sim_tbl.c.tx_to),
+                ))
+                .join(vc_sim, and_(
+                    vc_sim.c.ref_control_id == sim_tbl.c.similar_control_id,
+                    _is_current(vc_sim.c.tx_to),
+                ))
+            )
+            .where(_is_current(vc.c.tx_to))
+            .where(_active_key_only())
+            .where(vc.c.hierarchy_level == "Level 1")
+            .where(vc.c.control_created_on >= cutoff)
+            .where(vc.c.control_created_on.isnot(None))
+            .where(vc_sim.c.control_created_on < vc.c.control_created_on)
+        )
+        sim_q = _apply_candidate_filter(sim_q, vc.c.ref_control_id, candidates)
+
+        total_rows, sim_rows = await asyncio.gather(
+            conn.execute(total_q),
+            conn.execute(sim_q),
+        )
+
+    total_by_month: dict[str, int] = {r[0]: r[1] for r in total_rows if r[0]}
+
+    # For each control, pick the highest-score prior-similar to determine category
+    # A control may have multiple prior-similar matches; count it once in union
+    control_best: dict[str, tuple[str, float]] = {}  # control_id -> (month, best_score)
+    for ref_id, month_val, score, _category in sim_rows:
+        if not month_val:
+            continue
+        prev = control_best.get(ref_id)
+        if prev is None or score > prev[1]:
+            control_best[ref_id] = (month_val, score)
+
+    # Group by month
+    month_near_dup: dict[str, int] = defaultdict(int)
+    month_weak_sim: dict[str, int] = defaultdict(int)
+    month_any: dict[str, int] = defaultdict(int)
+    for _ctrl_id, (mo, best_score) in control_best.items():
+        month_any[mo] += 1
+        if best_score >= _NEAR_DUP_THRESHOLD:
+            month_near_dup[mo] += 1
+        else:
+            month_weak_sim[mo] += 1
+
+    # Build ordered month list
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    all_months: list[str] = []
+    for i in range(months, 0, -1):
+        y = now.year
+        m = now.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        all_months.append(f"{y:04d}-{m:02d}")
+    all_months.append(f"{now.year:04d}-{now.month:02d}")
+
+    points = []
+    for mo in all_months:
+        total = total_by_month.get(mo, 0)
+        prior = month_any.get(mo, 0)
+        points.append(RedundancyMonthPoint(
+            month=mo,
+            total_created=total,
+            with_prior_near_duplicate=month_near_dup.get(mo, 0),
+            with_prior_weak_similar=month_weak_sim.get(mo, 0),
+            with_prior_similar=prior,
+            redundancy_pct=round(prior / total * 100, 1) if total > 0 else 0.0,
+        ))
+
+    return RedundancyResponse(months=points)
 
 
 # ── Trend Queries (from dashboard_snapshots) ─────────────────────────────
