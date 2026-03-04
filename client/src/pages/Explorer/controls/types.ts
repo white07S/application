@@ -73,6 +73,28 @@ export const SEMANTIC_FEATURES = [
 
 export type SemanticFeature = (typeof SEMANTIC_FEATURES)[number]['key'];
 
+/** L1 WS criteria (7 W-criteria for Level 1 controls). */
+export const L1_WS_CRITERIA = [
+    { key: 'what', label: 'What' },
+    { key: 'where', label: 'Where' },
+    { key: 'who', label: 'Who' },
+    { key: 'when', label: 'When' },
+    { key: 'why', label: 'Why' },
+    { key: 'what_why', label: 'What-Why' },
+    { key: 'risk_theme', label: 'Risk Theme' },
+] as const;
+
+/** L2 WS criteria (7 operational criteria for Level 2 controls). */
+export const L2_WS_CRITERIA = [
+    { key: 'frequency', label: 'Frequency' },
+    { key: 'preventative_detective', label: 'Prev./Det.' },
+    { key: 'automation_level', label: 'Automation' },
+    { key: 'followup', label: 'Follow-up' },
+    { key: 'escalation', label: 'Escalation' },
+    { key: 'evidence', label: 'Evidence' },
+    { key: 'abbreviations', label: 'Abbreviations' },
+] as const;
+
 /** Keyword searchable fields (PostgreSQL FTS) */
 export const KEYWORD_FIELDS = [
     { key: 'control_title', label: 'Title', group: 'L1' },
@@ -124,7 +146,7 @@ export interface ControlsViewState {
     semanticFeatures: Set<SemanticFeature>;
     keywordFields: Set<KeywordField>;
     groupBy: GroupByField;
-    aiScoreMax: number;
+    wsFilter: Set<string>;
     filterKeyControl: boolean;
     filterActiveOnly: boolean;
     filterLevel1: boolean;
@@ -152,7 +174,8 @@ export type ControlsAction =
     | { type: 'TOGGLE_SEMANTIC_FEATURE'; payload: SemanticFeature }
     | { type: 'TOGGLE_KEYWORD_FIELD'; payload: KeywordField }
     | { type: 'SET_GROUP_BY'; payload: GroupByField }
-    | { type: 'SET_AI_SCORE_MAX'; payload: number }
+    | { type: 'TOGGLE_WS_FILTER'; payload: string }
+    | { type: 'CLEAR_WS_FILTER' }
     | { type: 'TOGGLE_KEY_CONTROL' }
     | { type: 'TOGGLE_ACTIVE_ONLY' }
     | { type: 'TOGGLE_LEVEL_1' }

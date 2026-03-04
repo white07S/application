@@ -6,6 +6,7 @@ import { useLocationTree } from '../hooks/useLocationTree';
 import { useCESearch } from '../hooks/useCESearch';
 import { useFilterData } from '../hooks/useFilterData';
 import { useCascadeSuggestions, CascadeSuggestion } from '../hooks/useCascadeSuggestions';
+import { useSourceDates } from '../hooks/useSourceDates';
 import { FilterSection } from './FilterSection';
 import { HierarchyFilter } from './HierarchyFilter';
 import { FlatListFilter } from './FlatListFilter';
@@ -91,6 +92,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
     const locTree = useLocationTree();
     const ceSearch = useCESearch();
     const { aus, riskThemes } = useFilterData();
+    const sourceDates = useSourceDates();
 
     // Cascade suggestions
     const { suggestions, dismiss } = useCascadeSuggestions(
@@ -224,6 +226,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                     loading={funcTree.loading}
                     expanded={expanded.functions}
                     onToggle={() => toggleSection('functions')}
+                    lastUpdated={sourceDates.function}
                 >
                     <HierarchyFilter
                         nodes={funcTree.nodes}
@@ -257,6 +260,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                     loading={locTree.loading}
                     expanded={expanded.locations}
                     onToggle={() => toggleSection('locations')}
+                    lastUpdated={sourceDates.location}
                 >
                     {bannersFor('selectedLocations').map((s) => (
                         <CascadeBanner
@@ -298,6 +302,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({ state, dispatch, o
                     loading={ceSearch.loading}
                     expanded={expanded.ces}
                     onToggle={() => toggleSection('ces')}
+                    lastUpdated={sourceDates.consolidated}
                 >
                     {bannersFor('selectedCEs').map((s) => (
                         <CascadeBanner

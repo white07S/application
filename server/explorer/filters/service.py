@@ -22,6 +22,7 @@ from server.pipelines.orgs.schema import (
     src_orgs_ver_location,
     src_orgs_ver_consolidated,
     src_orgs_rel_child,
+    src_orgs_meta_source_date,
 )
 from server.pipelines.risks.schema import (
     src_risks_ref_taxonomy,
@@ -646,3 +647,28 @@ async def get_risk_taxonomies() -> list[RiskTaxonomyResponse]:
             for t in tax_rows
         ]
         return taxonomies
+
+
+# ---------------------------------------------------------------------------
+# Source dates (context-provider freshness)
+# ---------------------------------------------------------------------------
+
+@cached(namespace="explorer", ttl=3600)
+async def get_source_dates() -> dict[str, object]:
+    """Return source-data timestamps for function/location/consolidated."""
+    engine = get_engine()
+    async with engine.connect() as conn:
+        q = select(
+            src_orgs_meta_source_date.c.tree,
+            src_orgs_meta_source_date.c.source_date,
+        )
+        rows = (await conn.execute(q)).mappings().all()
+        result: dict[str, object] = {
+            "function": None,
+            "location": None,
+            "consolidated": None,
+        }
+        for r in rows:
+            if r["tree"] in result:
+                result[r["tree"]] = r["source_date"]
+        return result

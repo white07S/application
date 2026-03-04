@@ -1,5 +1,5 @@
-import React from 'react';
-import { ControlsViewState, ControlsAction, GroupByField, DateField } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { ControlsViewState, ControlsAction, GroupByField, DateField, L1_WS_CRITERIA, L2_WS_CRITERIA } from '../types';
 import { ControlsSearchBar } from './ControlsSearchBar';
 
 interface Props {
@@ -15,7 +15,31 @@ const GROUP_OPTIONS: { value: GroupByField; label: string }[] = [
 ];
 
 export const ControlsToolbar: React.FC<Props> = ({ state, dispatch, searchDisabled }) => {
-    const AI_SCORE_OPTIONS = Array.from({ length: 14 }, (_, i) => i + 1);
+    const [wsOpen, setWsOpen] = useState(false);
+    const wsRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        if (!wsOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (wsRef.current && !wsRef.current.contains(e.target as Node)) setWsOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [wsOpen]);
+
+    // Build visible WS criteria based on L1/L2 toggle state
+    const showL1 = state.filterLevel1;
+    const showL2 = state.filterLevel2;
+    const visibleCriteria: { group: string; items: readonly { key: string; label: string }[] }[] = [];
+    if (showL1 || showL2) {
+        visibleCriteria.push({ group: 'L1', items: L1_WS_CRITERIA });
+    }
+    if (showL2) {
+        visibleCriteria.push({ group: 'L2', items: L2_WS_CRITERIA });
+    }
+
+    const wsCount = state.wsFilter.size;
 
     return (
         <div className="flex flex-col gap-2 pb-3 border-b border-border-light">
@@ -53,20 +77,71 @@ export const ControlsToolbar: React.FC<Props> = ({ state, dispatch, searchDisabl
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* AI score threshold */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-[10px] text-text-sub uppercase font-medium tracking-wide whitespace-nowrap">AI ≤</span>
-                    <select
-                        aria-label="AI score max"
-                        value={state.aiScoreMax}
-                        onChange={(e) => dispatch({ type: 'SET_AI_SCORE_MAX', payload: Number(e.target.value) })}
-                        className="h-8 w-[70px] text-xs border border-border-light rounded-sm px-1.5 bg-white text-text-main focus:ring-1 focus:ring-primary focus:border-primary"
-                        title="Show controls with AI score less than or equal to selected value"
+                {/* WS Filter dropdown */}
+                <div ref={wsRef} className="relative flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setWsOpen((v) => !v)}
+                        className={`h-8 px-2.5 text-[10px] uppercase font-semibold tracking-wide rounded-sm border transition-colors flex items-center gap-1 ${
+                            wsCount > 0
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-white text-text-sub border-border-light hover:border-primary/40'
+                        }`}
+                        title="Filter by WS criteria where value is No"
                     >
-                        {AI_SCORE_OPTIONS.map((score) => (
-                            <option key={score} value={score}>{score}</option>
-                        ))}
-                    </select>
+                        <span className="material-symbols-outlined text-[14px]">checklist</span>
+                        WS
+                        {wsCount > 0 && (
+                            <span className="bg-white/25 text-[9px] font-bold px-1 py-px rounded-sm ml-0.5">
+                                {wsCount}
+                            </span>
+                        )}
+                        <span className={`material-symbols-outlined text-[12px] transition-transform ${wsOpen ? 'rotate-180' : ''}`}>
+                            expand_more
+                        </span>
+                    </button>
+                    {wsOpen && (
+                        <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-border-light rounded-sm shadow-lg z-50 max-h-72 overflow-y-auto">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-light">
+                                <span className="text-[10px] font-semibold text-text-sub uppercase tracking-wide">Filter WS = No</span>
+                                {wsCount > 0 && (
+                                    <button
+                                        onClick={() => dispatch({ type: 'CLEAR_WS_FILTER' })}
+                                        className="text-[10px] text-primary hover:text-primary/80 font-medium"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                            {visibleCriteria.length === 0 && (
+                                <div className="px-3 py-2 text-[11px] text-text-sub">
+                                    Enable L1 or L2 to see criteria.
+                                </div>
+                            )}
+                            {visibleCriteria.map(({ group, items }) => (
+                                <div key={group}>
+                                    <div className="px-3 pt-2 pb-1 text-[9px] font-bold text-text-sub uppercase tracking-wider">
+                                        {group}
+                                    </div>
+                                    {items.map((ws) => (
+                                        <label
+                                            key={ws.key}
+                                            className="flex items-center gap-2 px-3 py-1 hover:bg-surface-light cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={state.wsFilter.has(ws.key)}
+                                                onChange={() => dispatch({ type: 'TOGGLE_WS_FILTER', payload: ws.key })}
+                                                className="w-3.5 h-3.5 rounded-sm border-border-light text-primary focus:ring-primary/40"
+                                            />
+                                            <span className="text-xs text-text-main">{ws.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Has Similar toggle */}

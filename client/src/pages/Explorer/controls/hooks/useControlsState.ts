@@ -24,7 +24,7 @@ const initialState: ControlsViewState = {
         'control_title', 'control_description', 'what', 'why', 'where',
     ]),
     groupBy: 'none',
-    aiScoreMax: 14,
+    wsFilter: new Set<string>(),
     filterKeyControl: false,
     filterActiveOnly: false,
     filterLevel1: true,
@@ -72,10 +72,17 @@ function reducer(state: ControlsViewState, action: ControlsAction): ControlsView
         }
         case 'SET_GROUP_BY':
             return { ...state, groupBy: action.payload, expandedGroups: new Set<string>() };
-        case 'SET_AI_SCORE_MAX': {
-            const capped = Math.min(14, Math.max(1, action.payload));
-            return { ...state, aiScoreMax: capped };
+        case 'TOGGLE_WS_FILTER': {
+            const next = new Set(state.wsFilter);
+            if (next.has(action.payload)) {
+                next.delete(action.payload);
+            } else {
+                next.add(action.payload);
+            }
+            return { ...state, wsFilter: next };
         }
+        case 'CLEAR_WS_FILTER':
+            return { ...state, wsFilter: new Set<string>() };
         case 'TOGGLE_KEY_CONTROL':
             return { ...state, filterKeyControl: !state.filterKeyControl };
         case 'TOGGLE_ACTIVE_ONLY':
@@ -245,7 +252,7 @@ function buildSearchParams(
         key_control: state.filterKeyControl ? true : null,
         level1: state.filterLevel1,
         level2: state.filterLevel2,
-        ai_score_max: state.aiScoreMax < 14 ? state.aiScoreMax : null,
+        ws_filter_no: state.wsFilter.size > 0 ? Array.from(state.wsFilter) : [],
         has_similar: state.filterHasSimilar || null,
         date_from: state.dateFrom || null,
         date_to: state.dateTo ? `${state.dateTo}T23:59:59` : null,
@@ -287,7 +294,7 @@ export function useControlsState(appliedFilters: AppliedSidebarFilters = EMPTY_S
         level1: state.filterLevel1,
         level2: state.filterLevel2,
         hasSimilar: state.filterHasSimilar,
-        aiScore: state.aiScoreMax,
+        wsFilter: Array.from(state.wsFilter),
         dateFrom: state.dateFrom,
         dateTo: state.dateTo,
         dateField: state.dateField,

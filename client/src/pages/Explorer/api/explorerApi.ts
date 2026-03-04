@@ -94,6 +94,14 @@ export const fetchAUs = (token: string) => apiFetch<FlatItemsResponse>('/assessm
 
 export const fetchRiskThemes = (token: string) => apiFetch<RiskTaxonomiesResponse>('/risk-themes', token);
 
+export interface SourceDatesResponse {
+    function: string | null;
+    location: string | null;
+    consolidated: string | null;
+}
+
+export const fetchSourceDates = (token: string) => apiFetch<SourceDatesResponse>('/source-dates', token);
+
 // ──────────────────────────────────────────────────────────────────────
 // Controls search API
 // ──────────────────────────────────────────────────────────────────────
@@ -113,7 +121,7 @@ export interface ToolbarFiltersPayload {
     key_control: boolean | null;
     level1: boolean;
     level2: boolean;
-    ai_score_max: number | null;
+    ws_filter_no: string[];
     has_similar: boolean | null;
     date_from: string | null;
     date_to: string | null;

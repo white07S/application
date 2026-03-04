@@ -58,6 +58,13 @@ class RiskTaxonomiesResponse(BaseModel):
     taxonomies: list[RiskTaxonomyResponse]
 
 
+class SourceDatesResponse(BaseModel):
+    """Source-data freshness timestamps for organization context providers."""
+    function: datetime | None = None
+    location: datetime | None = None
+    consolidated: datetime | None = None
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Controls search request / response models
 # ──────────────────────────────────────────────────────────────────────
@@ -102,7 +109,7 @@ class ToolbarFilters(BaseModel):
     key_control: bool | None = None
     level1: bool = False
     level2: bool = False
-    ai_score_max: int | None = Field(default=None, ge=0, le=14)
+    ws_filter_no: list[str] = Field(default_factory=list, description="WS criteria keys to filter controls where value is No")
     # Date range filter
     date_from: datetime | None = Field(default=None, description="Start of date range (inclusive)")
     date_to: datetime | None = Field(default=None, description="End of date range (inclusive)")

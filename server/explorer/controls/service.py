@@ -95,6 +95,10 @@ _L2_YES_NO_COLS = [
     "automation_level_yes_no", "followup_yes_no",
     "escalation_yes_no", "evidence_yes_no", "abbreviations_yes_no",
 ]
+# Mapping: WS criterion key -> DB column name
+_WS_KEY_TO_COL = {col.replace("_yes_no", ""): col for col in _L1_YES_NO_COLS + _L2_YES_NO_COLS}
+_L1_KEYS = {col.replace("_yes_no", "") for col in _L1_YES_NO_COLS}
+_L2_KEYS = {col.replace("_yes_no", "") for col in _L2_YES_NO_COLS}
 
 # _details narrative columns on enrichment (for detail overlay)
 _DETAILS_COL_NAMES = [
@@ -565,10 +569,10 @@ async def _browse_all(
     rows = (await conn.execute(q)).fetchall()
     ranked = [(r[0], 0.0) for r in rows]
 
-    # AI score filter requires enrichment data — handle in Python with batching
-    if toolbar and toolbar.ai_score_max is not None:
+    # WS criteria filter requires enrichment data — handle in Python with batching
+    if toolbar and toolbar.ws_filter_no:
         control_ids = {cid for cid, _ in ranked}
-        passing = await _filter_by_ai_score(conn, control_ids, toolbar.ai_score_max)
+        passing = await _filter_by_ws_criteria(conn, control_ids, toolbar.ws_filter_no)
         ranked = [(cid, s) for cid, s in ranked if cid in passing]
 
     return ranked
@@ -601,7 +605,7 @@ def _has_toolbar_filters(toolbar) -> bool:
         or toolbar.key_control is not None
         or toolbar.level1
         or toolbar.level2
-        or toolbar.ai_score_max is not None
+        or toolbar.ws_filter_no
         or toolbar.date_from is not None
         or toolbar.date_to is not None
         or toolbar.has_similar is not None
@@ -667,9 +671,9 @@ async def _apply_toolbar_filters(
         rows = (await conn.execute(q)).fetchall()
         matching_ids.update(r[0] for r in rows)
 
-    # AI score filter (if specified)
-    if toolbar.ai_score_max is not None:
-        matching_ids = await _filter_by_ai_score(conn, matching_ids, toolbar.ai_score_max)
+    # WS criteria filter (if specified)
+    if toolbar.ws_filter_no:
+        matching_ids = await _filter_by_ws_criteria(conn, matching_ids, toolbar.ws_filter_no)
 
     # Has similar filter
     if toolbar.has_similar:
@@ -686,18 +690,24 @@ async def _apply_toolbar_filters(
     return [(cid, score) for cid, score in ranked if cid in matching_ids]
 
 
-async def _filter_by_ai_score(
-    conn, control_ids: set[str], max_score: int,
+async def _filter_by_ws_criteria(
+    conn, control_ids: set[str], ws_keys: list[str],
 ) -> set[str]:
-    """Filter controls where AI effective score <= max_score.
+    """Filter controls where ALL specified WS criteria have 'No' value.
 
-    Effective score = count of 'yes' in the 7 relevant yes_no fields.
-    L1 controls: count of L1 W-criteria.
-    L2 controls: count of L2 operational criteria + parent's L1 score.
+    For L1 controls: checks L1 criteria from the control's own enrichment.
+    For L2 controls: L1 criteria are checked against the parent's enrichment,
+                     L2 criteria are checked against the control's own enrichment.
 
     Uses batched IN clauses to stay within asyncpg's 32 767 parameter limit.
     """
-    if not control_ids:
+    if not control_ids or not ws_keys:
+        return control_ids
+
+    # Validate keys and split into L1/L2 sets
+    requested_l1 = [k for k in ws_keys if k in _L1_KEYS]
+    requested_l2 = [k for k in ws_keys if k in _L2_KEYS]
+    if not requested_l1 and not requested_l2:
         return control_ids
 
     id_list = list(control_ids)
@@ -718,6 +728,15 @@ async def _filter_by_ai_score(
         rows = (await conn.execute(q)).mappings().all()
         all_enrichment_rows.extend(rows)
 
+    # Build raw enrichment map: cid -> {col_name: "yes"/"no"/...}
+    enrichment_raw: dict[str, dict[str, str]] = {}
+    for r in all_enrichment_rows:
+        cid = r["ref_control_id"]
+        enrichment_raw[cid] = {
+            col: (r.get(col) or "").strip().lower()
+            for col in _L1_YES_NO_COLS + _L2_YES_NO_COLS
+        }
+
     # Fetch hierarchy_level in batches
     level_map: dict[str, str] = {}
     for i in range(0, len(id_list), _BATCH_SIZE):
@@ -730,42 +749,70 @@ async def _filter_by_ai_score(
         vc_rows = (await conn.execute(vc_q)).mappings().all()
         level_map.update({r["ref_control_id"]: r["hierarchy_level"] for r in vc_rows})
 
-    enrichment_map = {}
-    for r in all_enrichment_rows:
-        cid = r["ref_control_id"]
-        l1_count = sum(1 for c in _L1_YES_NO_COLS if (r.get(c) or "").lower() == "yes")
-        l2_count = sum(1 for c in _L2_YES_NO_COLS if (r.get(c) or "").lower() == "yes")
-        enrichment_map[cid] = (l1_count, l2_count)
+    # Get parent enrichment for L2 controls that need L1 criteria checked
+    parent_enrichment: dict[str, dict[str, str]] = {}  # child_id -> parent enrichment
+    if requested_l1:
+        l2_ids = [cid for cid in control_ids if level_map.get(cid) == "Level 2"]
+        if l2_ids:
+            parent_map: dict[str, str] = {}
+            for i in range(0, len(l2_ids), _BATCH_SIZE):
+                batch = l2_ids[i : i + _BATCH_SIZE]
+                parent_q = (
+                    select(rel_parent.c.child_control_id, rel_parent.c.parent_control_id)
+                    .where(_is_current(rel_parent.c.tx_to))
+                    .where(rel_parent.c.child_control_id.in_(batch))
+                )
+                parent_rows = (await conn.execute(parent_q)).fetchall()
+                for child_id, pid in parent_rows:
+                    parent_map[child_id] = pid
+            # Fetch parent enrichment for any parents not already loaded
+            missing_parents = set(parent_map.values()) - set(enrichment_raw.keys())
+            if missing_parents:
+                mp_list = list(missing_parents)
+                for i in range(0, len(mp_list), _BATCH_SIZE):
+                    batch = mp_list[i : i + _BATCH_SIZE]
+                    pq = (
+                        select(*cols_to_select)
+                        .where(_is_current(ai_enrichment.c.tx_to))
+                        .where(ai_enrichment.c.ref_control_id.in_(batch))
+                    )
+                    p_rows = (await conn.execute(pq)).mappings().all()
+                    for r in p_rows:
+                        enrichment_raw[r["ref_control_id"]] = {
+                            col: (r.get(col) or "").strip().lower()
+                            for col in _L1_YES_NO_COLS + _L2_YES_NO_COLS
+                        }
+            for child_id, pid in parent_map.items():
+                if pid in enrichment_raw:
+                    parent_enrichment[child_id] = enrichment_raw[pid]
 
-    # Get parent relationships for L2 controls (batched)
-    l2_ids = [cid for cid in control_ids if level_map.get(cid) == "Level 2"]
-    parent_l1_scores: dict[str, int] = {}
-    if l2_ids:
-        for i in range(0, len(l2_ids), _BATCH_SIZE):
-            batch = l2_ids[i : i + _BATCH_SIZE]
-            parent_q = (
-                select(rel_parent.c.child_control_id, rel_parent.c.parent_control_id)
-                .where(_is_current(rel_parent.c.tx_to))
-                .where(rel_parent.c.child_control_id.in_(batch))
-            )
-            parent_rows = (await conn.execute(parent_q)).fetchall()
-            for child_id, parent_id in parent_rows:
-                if parent_id in enrichment_map:
-                    parent_l1_scores[child_id] = enrichment_map[parent_id][0]
-
+    # Filter: a control passes only if ALL requested criteria are "no"
     result = set()
     for cid in control_ids:
         level = level_map.get(cid)
-        l1_count, l2_count = enrichment_map.get(cid, (0, 0))
+        own = enrichment_raw.get(cid, {})
+        passes = True
 
-        if level == "Level 1":
-            score = l1_count
-        elif level == "Level 2":
-            score = l2_count + parent_l1_scores.get(cid, 0)
-        else:
-            score = l1_count + l2_count
+        for key in requested_l1:
+            col = _WS_KEY_TO_COL[key]
+            if level == "Level 2":
+                # L1 criteria come from parent for L2 controls
+                val = parent_enrichment.get(cid, {}).get(col, "")
+            else:
+                val = own.get(col, "")
+            if val == "yes":
+                passes = False
+                break
 
-        if score <= max_score:
+        if passes:
+            for key in requested_l2:
+                col = _WS_KEY_TO_COL[key]
+                val = own.get(col, "")
+                if val == "yes":
+                    passes = False
+                    break
+
+        if passes:
             result.add(cid)
 
     return result

@@ -60,6 +60,7 @@ from server.pipelines.orgs.schema import (  # noqa: E402
     src_orgs_ver_location,
     src_orgs_ver_consolidated,
     src_orgs_rel_child,
+    src_orgs_meta_source_date,
 )
 from server.pipelines.risks.schema import (  # noqa: E402
     src_risks_ref_taxonomy,
@@ -90,6 +91,7 @@ VER_TABLE_MAP = {
 TREE_CONFIGS = {
     "function": {
         "file": "functions.jsonl",
+        "date_file": "function_date.json",
         "id_field": "id",               # field holding the node identifier
         "ver_table": src_orgs_ver_function,
         "name_field": "name",            # field in the JSONL row
@@ -98,6 +100,7 @@ TREE_CONFIGS = {
     },
     "location": {
         "file": "locations.jsonl",
+        "date_file": "location_date.json",
         "id_field": "id",
         "ver_table": src_orgs_ver_location,
         "name_field": "location_name",
@@ -106,6 +109,7 @@ TREE_CONFIGS = {
     },
     "consolidated": {
         "file": "consolidated.jsonl",
+        "date_file": "consolidated_date.json",
         "id_field": "location_id",       # consolidated uses location_id
         "ver_table": src_orgs_ver_consolidated,
         "name_field": "location_name",
@@ -1342,6 +1346,37 @@ async def ingest_assessment_units(
 
 
 # ---------------------------------------------------------------------------
+# Source-date metadata
+# ---------------------------------------------------------------------------
+
+async def _upsert_source_dates(engine: AsyncEngine, date_dir: Path) -> None:
+    """Read *_date.json files from *date_dir* and upsert into src_orgs_meta_source_date."""
+    for tree, cfg in TREE_CONFIGS.items():
+        date_file = date_dir / cfg["date_file"]
+        if not date_file.exists():
+            logger.warning("Source date file not found: {}", date_file)
+            continue
+        try:
+            raw = orjson.loads(date_file.read_bytes())
+            source_date = _parse_iso(raw["date"])
+        except Exception as exc:
+            logger.error("Failed to parse {}: {}", date_file, exc)
+            continue
+
+        stmt = pg_insert(src_orgs_meta_source_date).values(
+            tree=tree,
+            source_date=source_date,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tree"],
+            set_={"source_date": source_date, "ingested_at": func.now()},
+        )
+        async with engine.begin() as conn:
+            await conn.execute(stmt)
+        logger.info("Upserted source date for '{}': {}", tree, source_date.isoformat())
+
+
+# ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
@@ -1403,6 +1438,10 @@ async def run_ingestion(
                 except Exception as exc:
                     logger.error("Failed ingesting tree '{}': {}", tree, exc, exc_info=True)
                     tree_stats.add_error(str(exc))
+
+            # Upsert source-date metadata from *_date.json files
+            if not dry_run:
+                await _upsert_source_dates(engine, org_date_dir)
 
         # ----- Risk themes -----
         if risk_date_dir:

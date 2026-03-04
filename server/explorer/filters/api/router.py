@@ -9,6 +9,7 @@ from server.explorer.shared.models import (
     TreeNodesResponse,
     FlatItemsResponse,
     RiskTaxonomiesResponse,
+    SourceDatesResponse,
 )
 from server.explorer.filters.service import (
     get_function_tree,
@@ -16,6 +17,7 @@ from server.explorer.filters.service import (
     get_consolidated_entities,
     get_assessment_units,
     get_risk_taxonomies,
+    get_source_dates,
 )
 
 logger = get_logger(name=__name__)
@@ -81,3 +83,12 @@ async def risk_themes(
     """Get all risk taxonomies with their active themes."""
     taxonomies = await get_risk_taxonomies()
     return RiskTaxonomiesResponse(taxonomies=taxonomies)
+
+
+@router.get("/source-dates", response_model=SourceDatesResponse)
+async def source_dates(
+    _=Depends(_require_explorer_access),
+):
+    """Get source-data freshness timestamps for org context providers."""
+    result = await get_source_dates()
+    return SourceDatesResponse(**result)

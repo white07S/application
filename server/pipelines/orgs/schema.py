@@ -222,6 +222,25 @@ src_orgs_rel_cross_link = Table(
     ),
 )
 
+# ── 7. src_orgs_meta_source_date ──────────────────────────────────────────────
+
+src_orgs_meta_source_date = Table(
+    "src_orgs_meta_source_date",
+    metadata,
+    Column("tree", Text, primary_key=True),
+    Column("source_date", DateTime(timezone=True), nullable=False),
+    Column(
+        "ingested_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    CheckConstraint(
+        "tree IN ('function', 'location', 'consolidated')",
+        name="ck_meta_source_date_tree",
+    ),
+)
+
 # ── Backward-compatible list of table names ─────────────────────────────────
 
 ORGS_TABLES = [
@@ -231,4 +250,5 @@ ORGS_TABLES = [
     "src_orgs_ver_consolidated",
     "src_orgs_rel_child",
     "src_orgs_rel_cross_link",
+    "src_orgs_meta_source_date",
 ]

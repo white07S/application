@@ -949,6 +949,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
     print(f"  consolidated.jsonl: {n:,} rows")
 
+    # --- Source date metadata files ---
+    source_date_payload = json.dumps({"date": f"{date_str}T00:00:00Z"})
+    for name in ("function_date.json", "location_date.json", "consolidated_date.json"):
+        (out_dir / name).write_text(source_date_payload + "\n")
+    print("  wrote function_date.json, location_date.json, consolidated_date.json")
+
     # --- Assessment units (reads the just-generated org files) ---
     au_dir = ctx_path / "assessment_unit" / date_str
     au_dir.mkdir(parents=True, exist_ok=True)
